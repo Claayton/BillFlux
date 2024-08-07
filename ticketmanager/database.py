@@ -1,4 +1,4 @@
-from sqlmodel import create_engine
+from sqlmodel import create_engine, Session
 from ticketmanager.config import settings
 from ticketmanager.models import *
 
@@ -12,3 +12,7 @@ def create_db():
     base = SQLModel.metadata.create_all(engine)
 
     return base
+
+
+def get_session():
+    return Session(engine)
