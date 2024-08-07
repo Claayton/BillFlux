@@ -1,0 +1,5 @@
+name = "ticketmanager"
+
+
+[database]
+url = "sqlite:///ticketmanager.db"
