@@ -15,7 +15,7 @@
       "**/*.pyc": true
     },
     "editor.mouseWheelZoom": true,
-    "python.linting.pylintEnabled": true,
-    "python.linting.flake8Enabled": true,
-    "python.linting.enabled": true
+    "python.linting.pylint": true,
+    "python.linting.flake8": true,
+    "python.formatting.black": true
     }
