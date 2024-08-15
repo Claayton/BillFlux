@@ -1,0 +1,27 @@
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style-home.css') }}" rel="stylesheet">
+
+{% extends 'base.html' %}
+
+{% block title %}{{ super() }} - Home{% endblock %}
+
+{% block content %}
+
+<main id="main">
+    <div class="main-container">
+        <div id="title">
+            <h2>Bem vindo ao MitMirroR!</h2>
+        </div>
+        <div id="buttons">
+            <form action="/">
+                    <button class="button" type="submit" >Login</button>
+            </form>
+            <form action="/">
+                    <button class="button" type="submit">I want to register</button>
+            </form>
+        </div>
+        
+        </form>
+    </div>
+</main>
+
+{% endblock %}
