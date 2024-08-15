@@ -1,0 +1,187 @@
+@charset 'UTF8';
+
+@import url('https://fonts.googleapis.com/css2?family=Fjalla+One&family=Staatliches&display=swap');
+
+:root {
+    --color1: #5021FA;
+    --color2: #1D27DE;
+    --color3: #2B6CF5;
+    --color4: #1D8DDE;
+    --color5: #21D8FA;
+    --color6: #292a2d;
+    --color7: #101011;
+    --color8: #eee;
+    --shadow-color: rgba(0, 0, 0, 0.2);
+    --hover-background: #333;
+    --hover-border: #eee;
+    --header-background: #171718;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: #5021FA;
+    color: #101011;
+    font-family: 'Roboto', sans-serif;
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+main {
+    display: flex;
+    flex-direction: row;
+    height: 94%;
+}
+
+.navbar-1 {
+    width: 17%;
+    height: 100%;
+    background-color: #21D8FA;
+}
+
+.navbar-2 {
+    height: 100%;
+    width: 83%;
+    background-color: #eee;
+}
+
+.navbar-2 h1 {
+    padding: 40px;
+}
+
+.navbar-2 .options {
+    padding: 0px 20px 20px 20px;
+    display: flex;
+    flex-direction: row;
+}
+
+.navbar-2 .options button {
+    background-color: #6c6f6c; /* Cor de fundo */
+    color: white; /* Cor do texto */
+    padding:4px 12px; /* Espaçamento interno */
+    margin: 0px 5px;
+    border: none; /* Remover a borda padrão */
+    border-radius: 50%; /* Deixar o botão redondo */
+    text-align: center; /* Centralizar o texto */
+    text-decoration: none; /* Remover sublinhado */
+    display: inline-block; /* Manter o botão inline */
+    font-size: 30px; /* Tamanho da fonte */
+    cursor: pointer; /* Mostrar cursor de ponteiro */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Sombra */
+    transition: border-color 0.3s ease; /* Transição suave da cor da borda */
+}
+
+.navbar-2 .options button:hover {
+    background-color: #4d4d4d; /* Cor de fundo */
+}
+
+main .search {
+    margin: 0px 5px;
+    width: 100%;
+    height: 45px;
+    border: 1px solid rgba(0, 0, 0, 0.096);
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    font-size: 16px;;
+}
+
+main .search:hover {
+    box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.233);
+}
+
+main .search label i {
+    color: rgb(139, 139, 139);
+    padding: 15px;
+}
+
+main .search input { 
+    background-color: transparent;
+    color: black;
+    width: 100%;
+    border: transparent;
+    font-size: 20px; /* Tamanho da fonte */
+}
+
+main .search input:focus { 
+    outline: none;
+}
+
+main .search:hover {
+    box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.233);
+}
+
+.options select {
+    width: 50px;
+    margin: 0px 5px;
+    appearance: none; /* Remove o estilo padrão do select */
+    background-color: #f0f0f0; /* Cor de fundo */
+    border: 2px solid #a3a3a3; /* Borda */
+    border-radius: 25px; /* Bordas arredondadas */
+    font-size: 16px; /* Tamanho da fonte */
+    cursor: pointer; /* Mostra o cursor de ponteiro */
+}
+
+.select-container::after {
+    content: '\25BC'; /* Código Unicode para a seta para baixo */
+    position: absolute;
+    top: 50%;
+    right: 20px;
+    transform: translateY(-50%);
+    pointer-events: none; /* Faz com que a seta não interfira nas ações do usuário */
+    font-size: 16px; /* Tamanho da seta */
+    color: #333; /* Cor da seta */
+}
+
+.select-container select:focus {
+    border-color: #4CAF50; /* Cor da borda ao focar */
+    outline: none; /* Remove a borda padrão do foco */
+}
+
+#vazio {
+    width: 20%;
+}
+
+.tabela-estilosa {
+    width: 100%;
+    border-collapse: collapse; /* Remove o espaçamento entre as bordas */
+    margin: 25px 0;
+    font-size: 18px;
+    font-family: Arial, sans-serif;
+    text-align: left;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.15); /* Sombra ao redor da tabela */
+}
+
+.tabela-estilosa tr {
+    background-color: #009879; /* Cor de fundo do cabeçalho */
+    color: #ffffff; /* Cor do texto do cabeçalho */
+    text-align: left;
+    font-weight: bold;
+    font-size: 10px;
+}
+
+.tabela-estilosa th, .tabela-estilosa td {
+    padding: 12px 15px; /* Espaçamento interno das células */
+}
+
+.tabela-estilosa tbody tr {
+    border-bottom: 1px solid #dddddd; /* Linha divisória entre as linhas */
+}
+
+.tabela-estilosa tbody tr:nth-of-type(even) {
+    background-color: #f3f3f3; /* Cor de fundo para linhas pares */
+}
+
+.tabela-estilosa tbody tr:last-of-type {
+    border-bottom: 2px solid #009879; /* Linha mais grossa na última linha */
+}
+
+.tabela-estilosa tbody tr:hover {
+    background-color: #01be98; /* Cor de fundo do cabeçalho */
+}

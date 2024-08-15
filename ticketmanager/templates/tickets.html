@@ -1,0 +1,104 @@
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tickets.css') }}" rel="stylesheet">
+
+
+{% extends 'base.html' %}
+
+{% block title %}{{ super() }} - Home{% endblock %}
+
+{% block content %}
+
+<main id="main">
+
+    <div class="navbar-1">
+    </div>
+
+    <div class="navbar-2">
+        <h1>Contas a Pagar</h1>
+        <div class="options">
+            <button>+</button>
+            <div class="search">
+                <label for="search"><i class="fas fa-search"></i></label>
+                <input type="text" name="search" id="search">
+            </div>
+            <select name="options" id="options">
+                <option value="Imprimir">Imprimir</option>
+                <option value="Exportar">Exportar</option>
+                <option value="Agrupar">Agrupar por coluna</option>
+            </select>
+
+            <select name="filter" id="options">
+                <option value="Todas">Todas</option>
+                <option value="Não Pagas">Não Pagas</option>
+                <option value="Vencidas">Vencidas</option>
+                <option value="À vencer">À vencer</option>
+                <option value="Hoje">Hoje</option>
+                <option value="Pagas">Pagas</option>
+            </select>
+
+            <div id="vazio">
+            </div>
+        </div>
+
+        <section class="conteudo">
+            <div class="tabela">
+                <div class="tickets-items">
+
+                    {% for message in task_message %}
+                    
+                    <table class="tabela-estilosa">
+                        <tr>
+                            <th></th>
+                            <th>Ação</th>
+                            <th>Status</th>
+                            <th>Vencimento</th>
+                            <th>Valor</th>
+                            <th>Referente a</th>
+                            <th>Fornecedor</th>
+                            <th>Tipo</th>
+                            <th>Dias</th>
+                            <th>Pago em</th>
+                            <th>Valor pago</th>
+                            <th>Número do documento</th>
+                            <th>Observações</th>
+                            <th>Lançado em</th>
+                        </tr>
+                        <tr>
+                            <th>
+                                <div class="options">
+                                    <label for="options-ticket">┆</label>
+                                    <select name="options" id="options">
+                                        <option value="Pagar">Pagar</option>
+                                        <option value="Excluir">Excluir</option>
+                                        <option value="Editar">Editar</option>
+                                    </select>
+                                <div>
+                            </th>
+                            <th>
+                                <button>Editar</button>
+                            </th>
+                            <th>foo bar</th>
+                            <th>foo bar</th>
+                            <th>foo bar</th>
+                            <th>foo bar</th>
+                            <th>foo bar</th>
+                            <th>foo bar</th>
+                            <th>foo bar</th>
+                            <th>foo bar</th>
+                            <th>foo bar</th>
+                            <th>foo bar</th>
+                            <th>foo bar</th>
+                            <th>foo bar</th>
+                        </tr>
+                    </table>
+
+                    {% endfor %}
+
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+</main>
+
+{% endblock %}
