@@ -2,7 +2,7 @@ from typing import Optional, List
 from datetime import datetime
 from sqlmodel import select
 from ticketmanager.database import get_session
-from ticketmanager.models import Ticket
+from ticketmanager.infra.entities.models import Ticket
 
 
 def add_ticket_to_database(

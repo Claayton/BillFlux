@@ -1,6 +1,6 @@
 from sqlmodel import create_engine, Session
 from ticketmanager.config import settings
-from ticketmanager.models import *
+from ticketmanager.infra.entities.models import *
 
 
 engine = create_engine(settings.database.url)
