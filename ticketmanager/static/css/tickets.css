@@ -24,8 +24,8 @@
 }
 
 body {
-    background-color: #5021FA;
-    color: #101011;
+    background-color: var(--color1);
+    color: var(--color7);
     font-family: 'Roboto', sans-serif;
     width: 100%;
     min-height: 100vh;
@@ -36,27 +36,27 @@ body {
 main {
     display: flex;
     flex-direction: row;
-    height: 94%;
+    height: 84%;
 }
 
 .navbar-1 {
     width: 17%;
     height: 100%;
-    background-color: #21D8FA;
+    background-color: var(--color5);
 }
 
 .navbar-2 {
     height: 100%;
     width: 83%;
-    background-color: #eee;
+    background-color: var(--color8);
 }
 
 .navbar-2 h1 {
-    padding: 40px;
+    padding: 20 80;
 }
 
 .navbar-2 .options {
-    padding: 0px 20px 20px 20px;
+    padding: 20px;
     display: flex;
     flex-direction: row;
 }
@@ -64,7 +64,7 @@ main {
 .navbar-2 .options button {
     background-color: #6c6f6c; /* Cor de fundo */
     color: white; /* Cor do texto */
-    padding:4px 12px; /* Espaçamento interno */
+    padding: 0px 13px; /* Espaçamento interno */
     margin: 0px 5px;
     border: none; /* Remover a borda padrão */
     border-radius: 50%; /* Deixar o botão redondo */
@@ -73,23 +73,23 @@ main {
     display: inline-block; /* Manter o botão inline */
     font-size: 30px; /* Tamanho da fonte */
     cursor: pointer; /* Mostrar cursor de ponteiro */
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Sombra */
-    transition: border-color 0.3s ease; /* Transição suave da cor da borda */
+    box-shadow: 0 2px 4px var(--shadow-color); /* Sombra */
+    transition: background-color 0.3s ease; /* Transição suave da cor de fundo */
 }
 
 .navbar-2 .options button:hover {
-    background-color: #4d4d4d; /* Cor de fundo */
+    background-color: #4d4d4d; /* Cor de fundo no hover */
 }
 
 main .search {
     margin: 0px 5px;
     width: 100%;
     height: 45px;
-    border: 1px solid rgba(0, 0, 0, 0.096);
+    border: 1px solid rgba(0, 0, 0, 0.227);
     border-radius: 20px;
     display: flex;
     align-items: center;
-    font-size: 16px;;
+    font-size: 16px;
 }
 
 main .search:hover {
@@ -104,7 +104,7 @@ main .search label i {
 main .search input { 
     background-color: transparent;
     color: black;
-    width: 100%;
+    width: 94%;
     border: transparent;
     font-size: 20px; /* Tamanho da fonte */
 }
@@ -113,35 +113,52 @@ main .search input:focus {
     outline: none;
 }
 
-main .search:hover {
-    box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.233);
-}
-
 .options select {
     width: 50px;
+    height: 100%;
+    background-color: #6c6f6c; /* Cor de fundo */
+    color: transparent; /* Torna o texto transparente */
+    padding: 0px 13px; /* Espaçamento interno */
     margin: 0px 5px;
-    appearance: none; /* Remove o estilo padrão do select */
-    background-color: #f0f0f0; /* Cor de fundo */
-    border: 2px solid #a3a3a3; /* Borda */
-    border-radius: 25px; /* Bordas arredondadas */
-    font-size: 16px; /* Tamanho da fonte */
-    cursor: pointer; /* Mostra o cursor de ponteiro */
+    border: none; /* Remover a borda padrão */
+    border-radius: 50%; /* Deixar o botão redondo */
+    text-align: center; /* Centralizar o texto */
+    font-size: 20px; /* Tamanho da fonte */
+    cursor: pointer; /* Mostrar cursor de ponteiro */
+    box-shadow: 0 2px 4px var(--shadow-color); /* Sombra */
+    transition: background-color 0.3s ease; /* Transição suave da cor de fundo */
+    appearance: none;    
+    text-indent: 9999px; /* Move o texto para fora da área visível */
 }
 
-.select-container::after {
-    content: '\25BC'; /* Código Unicode para a seta para baixo */
+.options select:hover {
+    background-color: #4d4d4d; /* Cor de fundo no hover */
+}
+
+.options select:focus { 
+    outline: none;
+}
+
+.options select option {
+    color: white; /* Cor do texto */
+    padding: 5px;
+    font-size: 15px; /* Tamanho da fonte */
+    text-align: left;
+}
+
+.option-1-container, .option-2-container {
+    position: relative;
+}
+
+.option-1-container label i,
+.option-2-container label i {
+    color: white;
+    font-size: 20px;
     position: absolute;
     top: 50%;
-    right: 20px;
-    transform: translateY(-50%);
-    pointer-events: none; /* Faz com que a seta não interfira nas ações do usuário */
-    font-size: 16px; /* Tamanho da seta */
-    color: #333; /* Cor da seta */
-}
-
-.select-container select:focus {
-    border-color: #4CAF50; /* Cor da borda ao focar */
-    outline: none; /* Remove a borda padrão do foco */
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
 }
 
 #vazio {
@@ -158,7 +175,7 @@ main .search:hover {
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.15); /* Sombra ao redor da tabela */
 }
 
-.tabela-estilosa tr {
+.tabela-estilosa thead tr {
     background-color: #009879; /* Cor de fundo do cabeçalho */
     color: #ffffff; /* Cor do texto do cabeçalho */
     text-align: left;
@@ -183,5 +200,5 @@ main .search:hover {
 }
 
 .tabela-estilosa tbody tr:hover {
-    background-color: #01be98; /* Cor de fundo do cabeçalho */
+    background-color: #01be98; /* Cor de fundo ao passar o mouse */
 }

@@ -1,4 +1,5 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tickets.css') }}" rel="stylesheet">
+<script src="https://kit.fontawesome.com/c996c5ea01.js" crossorigin="anonymous"></script>
 
 
 {% extends 'base.html' %}
@@ -20,20 +21,26 @@
                 <label for="search"><i class="fas fa-search"></i></label>
                 <input type="text" name="search" id="search">
             </div>
-            <select name="options" id="options">
-                <option value="Imprimir">Imprimir</option>
-                <option value="Exportar">Exportar</option>
-                <option value="Agrupar">Agrupar por coluna</option>
-            </select>
-
-            <select name="filter" id="options">
-                <option value="Todas">Todas</option>
-                <option value="Não Pagas">Não Pagas</option>
-                <option value="Vencidas">Vencidas</option>
-                <option value="À vencer">À vencer</option>
-                <option value="Hoje">Hoje</option>
-                <option value="Pagas">Pagas</option>
-            </select>
+            <div class="option-1-container">
+                <label for="option-1""><i>▼</i></label>
+                <select id="option-1" class="hidden-select">
+                    <option value="Imprimir">Imprimir</option>
+                    <option value="Exportar">Exportar</option>
+                    <option value="Agrupar">Agrupar por coluna</option>
+                </select>
+            </div>
+            
+            <div class="option-2-container">
+                <label for="option-2""><i>🌪️</i></label>
+                <select id="option-2" class="hidden-select">
+                    <option value="Todas">Todas</option>
+                    <option value="Não Pagas">Não Pagas</option>
+                    <option value="Vencidas">Vencidas</option>
+                    <option value="À vencer">À vencer</option>
+                    <option value="Hoje">Hoje</option>
+                    <option value="Pagas">Pagas</option>
+                </select>
+            </div>
 
             <div id="vazio">
             </div>
@@ -46,49 +53,50 @@
                     {% for message in task_message %}
                     
                     <table class="tabela-estilosa">
-                        <tr>
-                            <th></th>
-                            <th>Ação</th>
-                            <th>Status</th>
-                            <th>Vencimento</th>
-                            <th>Valor</th>
-                            <th>Referente a</th>
-                            <th>Fornecedor</th>
-                            <th>Tipo</th>
-                            <th>Dias</th>
-                            <th>Pago em</th>
-                            <th>Valor pago</th>
-                            <th>Número do documento</th>
-                            <th>Observações</th>
-                            <th>Lançado em</th>
-                        </tr>
-                        <tr>
-                            <th>
-                                <div class="options">
-                                    <label for="options-ticket">┆</label>
-                                    <select name="options" id="options">
-                                        <option value="Pagar">Pagar</option>
-                                        <option value="Excluir">Excluir</option>
-                                        <option value="Editar">Editar</option>
-                                    </select>
-                                <div>
-                            </th>
-                            <th>
-                                <button>Editar</button>
-                            </th>
-                            <th>foo bar</th>
-                            <th>foo bar</th>
-                            <th>foo bar</th>
-                            <th>foo bar</th>
-                            <th>foo bar</th>
-                            <th>foo bar</th>
-                            <th>foo bar</th>
-                            <th>foo bar</th>
-                            <th>foo bar</th>
-                            <th>foo bar</th>
-                            <th>foo bar</th>
-                            <th>foo bar</th>
-                        </tr>
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th>Ação</th>
+                                <th>Status</th>
+                                <th>Vencimento</th>
+                                <th>Valor</th>
+                                <th>Referente a</th>
+                                <th>Fornecedor</th>
+                                <th>Tipo</th>
+                                <th>Dias</th>
+                                <th>Pago em</th>
+                                <th>Valor pago</th>
+                                <th>Número do documento</th>
+                                <th>Observações</th>
+                                <th>Lançado em</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <th>
+                                    <div class="options">
+                                        <label for="options-ticket">┆</label>
+                                        <select name="options" id="options">
+                                            <option value="Pagar">Pagar</option>
+                                            <option value="Excluir">Excluir</option>
+                                            <option value="Editar">Editar</option>
+                                        </select>
+                                    </div>
+                                </th>
+                                <th><button>Editar</button></th>
+                                <th>foo bar</th>
+                                <th>foo bar</th>
+                                <th>foo bar</th>
+                                <th>foo bar</th>
+                                <th>foo bar</th>
+                                <th>foo bar</th>
+                                <th>foo bar</th>
+                                <th>foo bar</th>
+                                <th>foo bar</th>
+                                <th>foo bar</th>
+                                <th>foo bar</th>
+                            </tr>
+                        </tbody>
                     </table>
 
                     {% endfor %}
