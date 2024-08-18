@@ -4,6 +4,7 @@ from flask.templating import render_template
 bp = Blueprint("bp_home", __name__)
 
 
+@bp.route("/home/")
 @bp.route("/home")
 @bp.route("/")
 def index():
