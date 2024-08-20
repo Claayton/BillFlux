@@ -1,4 +1,4 @@
-from ticketmanager.cli import main
+from billflux.cli import main
 
 if __name__ == "__main__":
     main()

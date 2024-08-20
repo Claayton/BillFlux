@@ -1,6 +1,6 @@
 from sqlmodel import create_engine, Session
-from ticketmanager.config import settings
-from ticketmanager.infra.entities.models import *
+from billflux.config import settings
+from billflux.infra.entities.models import *  # noqa: F405
 
 
 engine = create_engine(settings.database.url)

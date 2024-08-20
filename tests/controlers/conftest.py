@@ -1,11 +1,12 @@
 import pytest
-from ticketmanager import create_app
-from ticketmanager.infra.config.database import create_db
+from billflux import create_app
+from billflux.infra.config.database import create_db
 
 
 @pytest.fixture
 def client():
     app = create_app()
+    app.testing = True
     app.config["TESTING"] = True
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 

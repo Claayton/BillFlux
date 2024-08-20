@@ -1,8 +1,8 @@
 """Testes para a classe TicketRepository"""
 
-from ticketmanager.infra.repository.tickets_repository import TicketRepository
-from ticketmanager.infra.config.database import get_session
-from ticketmanager.infra.entities.models import Ticket
+from billflux.infra.repository.tickets_repository import TicketRepository
+from billflux.infra.config.database import get_session
+from billflux.infra.entities.models import Ticket
 from sqlmodel import select
 
 

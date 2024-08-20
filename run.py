@@ -1,3 +1,3 @@
-from ticketmanager import create_app
+from billflux import create_app
 
 app = create_app()

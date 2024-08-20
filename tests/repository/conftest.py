@@ -1,5 +1,5 @@
 from pytest import fixture
-from ticketmanager.infra.repository.tickets_repository import TicketRepository
+from billflux.infra.repository.tickets_repository import TicketRepository
 
 
 @fixture

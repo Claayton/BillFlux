@@ -1,6 +1,6 @@
 from flask.blueprints import Blueprint
 from flask.templating import render_template
-from ticketmanager.infra.repository.tickets_repository import TicketRepository
+from billflux.infra.repository.tickets_repository import TicketRepository
 
 
 bp = Blueprint("bp_tickets", __name__)

@@ -1,5 +1,5 @@
-# 💸 Ticket Manager
-[![MIT License](https://img.shields.io/badge/license-MIT-007EC7.svg?style=flat-square)](/LICENSE) ![GitHub issues](https://img.shields.io/github/issues/Claayton/TicketManager.svg) ![GitHub stars](https://img.shields.io/github/stars/Claayton/TicketManager.svg) ![GitHub last commit](https://img.shields.io/github/last-commit/Claayton/TicketManager.svg) [![Code Style Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black/)
+# 💸 BillFlux
+[![MIT License](https://img.shields.io/badge/license-MIT-007EC7.svg?style=flat-square)](/LICENSE) ![GitHub issues](https://img.shields.io/github/issues/Claayton/BillFlux.svg) ![GitHub stars](https://img.shields.io/github/stars/Claayton/BillFlux.svg) ![GitHub last commit](https://img.shields.io/github/last-commit/Claayton/BillFlux.svg) [![Code Style Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black/)
 
 ## 📋 Features
 

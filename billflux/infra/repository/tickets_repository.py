@@ -1,9 +1,9 @@
 from typing import Optional, List
 from datetime import datetime
 from sqlmodel import select
-from ticketmanager.infra.config.database import get_session
-from ticketmanager.infra.entities.models import Ticket as TicketModel
-from ticketmanager.domain.models.tickets import Ticket
+from billflux.infra.config.database import get_session
+from billflux.infra.entities.models import Ticket as TicketModel
+from billflux.domain.models.tickets import Ticket
 
 
 class TicketRepository:

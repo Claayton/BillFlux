@@ -1,5 +1,5 @@
 from flask import Flask
-from ticketmanager.controlers import home, tickets
+from billflux.controlers import home, tickets
 
 
 def create_app():

@@ -2,11 +2,11 @@ import typer
 from rich.table import Table
 from rich.console import Console
 from typing import Optional, List
-from ticketmanager.infra.repository.tickets_repository import (
+from billflux.infra.repository.tickets_repository import (
     add_ticket_to_database,
     get_tickets_from_database,
 )
-from ticketmanager.infra.entities.models import Ticket
+from billflux.infra.entities.models import Ticket
 
 main = typer.Typer(help="Ticket Manager Aplication")
 console = Console()
