@@ -50,8 +50,6 @@
             <div class="tabela">
                 <div class="tickets-items">
 
-                    <!--{% for message in task_message %}-->
-                    
                     <table class="tabela-estilosa">
                         <thead>
                             <tr>
@@ -71,6 +69,9 @@
                                 <th>Lançado em</th>
                             </tr>
                         </thead>
+
+                        {% for ticket in tickets_list %}
+
                         <tbody>
                             <tr>
                                 <th>
@@ -84,27 +85,27 @@
                                     </div>
                                 </th>
                                 <th><button>Editar</button></th>
-                                <th>foo bar</th>
-                                <th>foo bar</th>
-                                <th>foo bar</th>
-                                <th>foo bar</th>
-                                <th>foo bar</th>
-                                <th>foo bar</th>
-                                <th>foo bar</th>
-                                <th>foo bar</th>
-                                <th>foo bar</th>
-                                <th>foo bar</th>
-                                <th>foo bar</th>
+                                <th>{{ ticket.status }}</th>
+                                <th>{{ ticket.due_date }}</th>
+                                <th>{{ ticket.value }}</th>
+                                <th>{{ ticket.reference }}</th>
+                                <th>{{ ticket.suplyer }}</th>
+                                <th>{{ ticket.type }}</th>
+                                <th>{{ ticket.days }}</th>
+                                <th>{{ ticket.paid_in }}</th>
+                                <th>{{ ticket.amout_paid }}</th>
+                                <th>{{ ticket.document_number }}</th>
+                                <th>{{ ticket.obs }}</th>
+                                <th>{{ ticket.release_date }}</th>
                             </tr>
                         </tbody>
+
+                        {% endfor %}
+
                     </table>
-
-                    <!--{% endfor %}-->
-
                 </div>
             </div>
         </section>
-
     </div>
 
 </main>
