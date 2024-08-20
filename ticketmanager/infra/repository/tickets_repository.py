@@ -35,5 +35,5 @@ class TicketRepository:
     def get_tickets(self) -> List[Ticket]:
 
         with self.__session as session:
-            sql = select(Ticket)
+            sql = select(TicketModel)
             return list(session.exec(sql))
