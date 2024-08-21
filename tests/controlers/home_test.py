@@ -2,7 +2,7 @@
 
 
 def test_home_route_1(client):
-    """Testando a rota /"""
+    """Testing the / rote"""
 
     url = """/"""
 
@@ -12,7 +12,7 @@ def test_home_route_1(client):
 
 
 def test_home_rotue_2(client):
-    """Testando a rota /home"""
+    """Testing the /home route"""
 
     url = """/home"""
 
@@ -22,7 +22,7 @@ def test_home_rotue_2(client):
 
 
 def test_home_rotue_3(client):
-    """Testando a rota /home/"""
+    """Testing the /home/ route"""
 
     url = """/home/"""
 

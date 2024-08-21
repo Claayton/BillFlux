@@ -1,14 +1,13 @@
 """Tests for the BillRepository Class"""
 
-from billflux.infra.repository.bill_repository import BillRepository
+from sqlmodel import select
 from billflux.infra.config.database import get_session
 from billflux.infra.entities.bill import Bill
-from sqlmodel import select
 
 
-def test_insert_Bill(fake_bill, bill_repository):
+def test_insert_bill(fake_bill, bill_repository):
     """
-    Testando o metodo insert_bill()
+    Testando o metodo insert_bill
     """
 
     response = bill_repository.insert_bill(
@@ -31,7 +30,7 @@ def test_insert_Bill(fake_bill, bill_repository):
             select(Bill).where(Bill.bar_code == fake_bill.bar_code)
         ).one()
 
-    # Testando se as informacoes enviadas pelo metodo estao no db.
+    # Testing if the information sent by the metod is in database.
     assert response.bar_code == query_user.bar_code
     assert response.bill_type == query_user.bill_type
     assert response.suplyer == query_user.suplyer

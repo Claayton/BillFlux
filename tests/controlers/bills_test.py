@@ -2,7 +2,7 @@
 
 
 def test_bills_1(client):
-    """Testing /bills"""
+    """Testing /bills route"""
 
     url = "/bills"
 
@@ -12,7 +12,7 @@ def test_bills_1(client):
 
 
 def test_bills_2(client):
-    """Testing /bills/"""
+    """Testing /bills/ route"""
 
     url = "/bills/"
 
