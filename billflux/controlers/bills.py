@@ -11,6 +11,7 @@ bp = Blueprint("bp_bills", __name__)
 @bp.route("/bills/", methods=["GET", "POST"])
 @bp.route("/bills", methods=["GET", "POST"])
 def bills():
+    """Mount bills route"""
 
     bills_repository = BillRepository()
     bills_list = bills_repository.get_bills()
