@@ -16,6 +16,8 @@ class BillRepository:
 
     def insert_bill(
         self,
+        status: bool = False,
+        due_date: datetime = datetime.now,
         value: int = None,
         reference: str = None,
         suplyer: str = None,
@@ -27,10 +29,26 @@ class BillRepository:
         obs: str = None,
         date_from_add: datetime = datetime.now,
     ) -> Bill:
+        """
+        Inserts a new bill into the Bill table.
+        :param value: Value from bill.
+        :param reference: Reference from bill.
+        :param suplyer: Possible bill supplier.
+        :param bill_type: Type from bill.
+        :param days: Days to pay the bill or days late.
+        :param payday: Bill payment day.
+        :param value_from_payment: Amount paid.
+        :param bar_code: Bar code from bill.
+        :param obs: Optional Observation.
+        :param date_from_add: Date the bill was added.
+        :return: The Registerer Bill.
+        """
 
         with self.__session as session:
 
             bill = BillModel(
+                status=status,
+                due_date=due_date,
                 value=value,
                 reference=reference,
                 suplyer=suplyer,
@@ -40,20 +58,23 @@ class BillRepository:
                 value_from_payment=value_from_payment,
                 bar_code=bar_code,
                 obs=obs,
+                date_from_add=date_from_add,
             )
+
             session.add(bill)
             session.commit()
             session.refresh(bill)
-            print()
-            print()
-            print(Bill)
-            print()
-            print(bill)
 
             return Bill(**dict(bill))
 
     def get_bills(self) -> List[Bill]:
+        """
+        Performs a search for all Bills registered in the system.
+        :return: A list with all Bills and their data.
+        """
 
         with self.__session as session:
+
             sql = select(BillModel)
+
             return list(session.exec(sql))

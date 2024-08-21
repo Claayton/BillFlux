@@ -12,6 +12,8 @@ def test_insert_Bill(fake_bill, bill_repository):
     """
 
     response = bill_repository.insert_bill(
+        status=fake_bill.status,
+        due_date=fake_bill.due_date,
         value=fake_bill.value,
         reference=fake_bill.reference,
         suplyer=fake_bill.suplyer,
@@ -21,6 +23,7 @@ def test_insert_Bill(fake_bill, bill_repository):
         value_from_payment=fake_bill.value_from_payment,
         bar_code=fake_bill.bar_code,
         obs=fake_bill.obs,
+        date_from_add=fake_bill.date_from_add,
     )
 
     with get_session() as session:
