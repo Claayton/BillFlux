@@ -1,4 +1,4 @@
-"""Arquivo de inicializacao do modulo config"""
+"""Module inicialization file config"""
 
 import os
 from dynaconf import Dynaconf

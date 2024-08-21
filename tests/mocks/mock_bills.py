@@ -1,7 +1,7 @@
 """Module for mock bills"""
 
-from faker import Faker
 from collections import namedtuple
+from faker import Faker
 
 
 fake = Faker()
