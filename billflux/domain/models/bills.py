@@ -4,5 +4,19 @@ from collections import namedtuple
 
 Bill = namedtuple(
     "Bill",
-    ["id", "bar_code", "suplyer", "type", "due_date", "payday", "is_paid_out"],
+    [
+        "id",
+        "status",
+        "due_date",
+        "value",
+        "reference",
+        "suplyer",
+        "bill_type",
+        "days",
+        "payday",
+        "value_from_payment",
+        "bar_code",
+        "obs",
+        "date_from_add",
+    ],
 )

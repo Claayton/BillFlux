@@ -21,7 +21,7 @@ app/tests.sqlite3
 storage.db
 tests.db
 mitmirror.db
-ticketmanager.db
+billmanager.db
 
 # Ignore dynaconf secret files
 .secrets.*

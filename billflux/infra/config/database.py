@@ -2,7 +2,7 @@
 
 from sqlmodel import create_engine, Session
 from billflux.config import settings
-from billflux.infra.entities.models import *  # noqa: F405
+from billflux.infra.entities.bill import *  # noqa: F405
 
 
 engine = create_engine(settings.database.url)
