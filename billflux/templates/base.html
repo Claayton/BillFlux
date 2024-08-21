@@ -7,7 +7,7 @@
   <meta name="description" content="Gerenciador de Boletos.">
   <meta name="keywords" content="palavras-chave, separadas, por, vírgula">
   <meta name="author" content="Clayton Garcia da Silva">
-  <title>{% block title %}TM.{% endblock %}</title>
+  <title>{% block title %}BillFlux{% endblock %}</title>
   <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}" sizes="any">
   <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style-base.css') }}">
@@ -16,13 +16,13 @@
   <header id="header-main">
     <div id="header-container">
       <h1 class="title-main">
-        <a href="/home">TicketManager</a>
+        <a href="/home">BillFlux</a>
       </h1>
       <nav class="navbar-main" role="navigation" aria-label="Main Navigation">
         <ul>
           <li><a href="/home" aria-label="Home">Home</a></li>
           <li><a href="/" aria-label="About">About</a></li>
-          <li><a href="/tickets" aria-label="Profile">Tickets</a></li>
+          <li><a href="/bills" aria-label="Profile">Bills</a></li>
         </ul>
       </nav>
     </div>

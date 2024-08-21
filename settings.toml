@@ -2,4 +2,4 @@ name = "ticketmanager"
 
 
 [database]
-url = "sqlite:///ticketmanager.db"
+url = "sqlite:///billmanager.db"

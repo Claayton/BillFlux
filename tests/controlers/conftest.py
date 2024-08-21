@@ -1,3 +1,5 @@
+"""Conftest from tests/controlers"""
+
 import pytest
 from billflux import create_app
 from billflux.infra.config.database import create_db

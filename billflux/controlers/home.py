@@ -1,3 +1,5 @@
+"""Module to instantiate the blueprint for the home page"""
+
 from flask.blueprints import Blueprint
 from flask.templating import render_template
 

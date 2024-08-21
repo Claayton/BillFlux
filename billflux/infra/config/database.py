@@ -1,3 +1,5 @@
+"""Module for database configuration and creation"""
+
 from sqlmodel import create_engine, Session
 from billflux.config import settings
 from billflux.infra.entities.models import *  # noqa: F405

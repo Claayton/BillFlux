@@ -2,7 +2,7 @@ import typer
 from rich.table import Table
 from rich.console import Console
 from typing import Optional, List
-from billflux.infra.repository.tickets_repository import (
+from billflux.infra.repository.bill_repository import (
     add_ticket_to_database,
     get_tickets_from_database,
 )

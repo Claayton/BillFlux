@@ -1,4 +1,4 @@
-"""Teste para a Rota Home"""
+"""Tests from home routes"""
 
 
 def test_home_route_1(client):

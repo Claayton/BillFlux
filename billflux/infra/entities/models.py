@@ -1,9 +1,11 @@
+"""Module for model Bill"""
+
 from typing import Optional
 from sqlmodel import SQLModel, Field
 from datetime import datetime
 
 
-class Ticket(SQLModel, table=True):
+class Bill(SQLModel, table=True):
 
     id: Optional[int] = Field(primary_key=True, default=None, nullable=False)
     bar_code: int

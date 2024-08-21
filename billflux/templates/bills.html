@@ -1,10 +1,10 @@
-<link rel="stylesheet" href="{{ url_for('static', filename='css/tickets.css') }}" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/bills.css') }}" rel="stylesheet">
 <script src="https://kit.fontawesome.com/c996c5ea01.js" crossorigin="anonymous"></script>
 
 
 {% extends 'base.html' %}
 
-{% block title %}{{ super() }} - Tickets{% endblock %}
+{% block title %}{{ super() }} - Bills{% endblock %}
 
 {% block content %}
 
@@ -70,7 +70,7 @@
                             </tr>
                         </thead>
 
-                        {% for ticket in tickets_list %}
+                        {% for bill in bills_list %}
 
                         <tbody>
                             <tr>
@@ -85,18 +85,18 @@
                                     </div>
                                 </th>
                                 <th><button>Editar</button></th>
-                                <th>{{ ticket.status }}</th>
-                                <th>{{ ticket.due_date }}</th>
-                                <th>{{ ticket.value }}</th>
-                                <th>{{ ticket.reference }}</th>
-                                <th>{{ ticket.suplyer }}</th>
-                                <th>{{ ticket.type }}</th>
-                                <th>{{ ticket.days }}</th>
-                                <th>{{ ticket.paid_in }}</th>
-                                <th>{{ ticket.amout_paid }}</th>
-                                <th>{{ ticket.document_number }}</th>
-                                <th>{{ ticket.obs }}</th>
-                                <th>{{ ticket.release_date }}</th>
+                                <th>{{ bill.status }}</th>
+                                <th>{{ bill.due_date }}</th>
+                                <th>{{ bill.value }}</th>
+                                <th>{{ bill.reference }}</th>
+                                <th>{{ bill.suplyer }}</th>
+                                <th>{{ bill.type }}</th>
+                                <th>{{ bill.days }}</th>
+                                <th>{{ bill.paid_in }}</th>
+                                <th>{{ bill.amout_paid }}</th>
+                                <th>{{ bill.document_number }}</th>
+                                <th>{{ bill.obs }}</th>
+                                <th>{{ bill.release_date }}</th>
                             </tr>
                         </tbody>
 

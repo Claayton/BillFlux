@@ -1,11 +1,13 @@
-from pytest import fixture
-from tests.mocks.mock_tickets import mock_ticket
+"""Conftest for tests"""
 
-ticket = mock_ticket()
+from pytest import fixture
+from tests.mocks.mock_bills import mock_bill
+
+ticket = mock_bill()
 
 
 @fixture(scope="module")
-def fake_ticket():
+def fake_bill():
     """Mock de usuario"""
 
     return ticket
