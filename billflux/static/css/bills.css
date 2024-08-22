@@ -160,6 +160,22 @@ main .search input:focus {
     pointer-events: none;
 }
 
+#vazio {
+    width: 20%;
+}
+
+.table-estilosa thead tr {
+    background-color: #009879; /* Cor de fundo do cabeçalho */
+    color: #ffffff; /* Cor do texto do cabeçalho */
+    text-align: center;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.table-container th {
+    margin: 0px 10px;
+}
+
 .options-bill-container {
     position: relative;
 }
@@ -208,8 +224,28 @@ tr:hover .options-bill-container label svg {
     color: white;
 }
 
-#vazio {
-    width: 20%;
+.table-estilosa tbody button {
+    width: 100%;
+    color: black;
+    padding: 5px 10px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 14px;
+    margin: 4px 2px;
+    cursor: pointer;
+}
+
+th #pago {
+    color: green;
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3); /* Sombra no texto do <p> */
+}
+
+th #pagar {
+    color: red;
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3); /* Sombra no texto do <p> */
 }
 
 .table-container {
@@ -219,8 +255,7 @@ tr:hover .options-bill-container label svg {
 
 .table-estilosa {
     width: 100%;
-    border-collapse: collapse; /* Remove o espaçamento entre as bordas */
-    margin: 25px 0;
+    border-collapse: collapse;
     font-size: 18px;
     font-family: Arial, sans-serif;
     text-align: left;
@@ -228,24 +263,11 @@ tr:hover .options-bill-container label svg {
     display: inline-table; /* Faz a tabela respeitar o tamanho do conteúdo */
 }
 
-.table-estilosa thead tr {
-    background-color: #009879; /* Cor de fundo do cabeçalho */
-    color: #ffffff; /* Cor do texto do cabeçalho */
-    text-align: left;
-    font-weight: bold;
-    font-size: 12px;
-}
-
-.table-estilosa th, .tabela-estilosa td {
-    padding: 0px 10px; /* Espaçamento interno das células */
-}
-
-.table-estilosa tbody tr {
+.table-estilosa th {
+    font-weight: lighter;
     font-size: 15px;
-    padding: 0px;
-    border-bottom: 1px solid #dddddd; /* Linha divisória entre as linhas */
+    padding: 0px 10px;
 }
-
 
 /* Estilo da caixa de diálogo */
 .modal {
@@ -311,8 +333,4 @@ tr:hover .options-bill-container label svg {
 
 .table-estilosa tbody tr:hover {
     background-color: #01be98; /* Cor de fundo ao passar o mouse */
-}
-
-.table-estilosa tbody tr th {
-    padding: 0px;
 }

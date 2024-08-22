@@ -89,7 +89,12 @@
                                     </div>
                                 </th>
                                 <th><button>Editar</button></th>
-                                <th>{{ bill.status }}</th>
+                                <th>{% if bill.status %}
+                                    <p id="pago"><span class="checkmark">✔</span>Pago</p>
+                                    {% else %}
+                                    <p id="pagar"><span class="xmark">✘</span>Pagar</p>
+                                    {% endif %}
+                                </th>
                                 <th>{{ bill.due_date }}</th>
                                 <th>{{ bill.value }}</th>
                                 <th>
