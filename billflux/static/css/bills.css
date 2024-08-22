@@ -238,13 +238,11 @@ tr:hover .options-bill-container label svg {
 
 th #pago {
     color: green;
-    font-weight: bold;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3); /* Sombra no texto do <p> */
 }
 
 th #pagar {
     color: red;
-    font-weight: bold;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3); /* Sombra no texto do <p> */
 }
 
@@ -328,7 +326,7 @@ th #pagar {
 }
 
 .table-estilosa tbody tr:last-of-type {
-    border-bottom: 2px solid #009879; /* Linha mais grossa na última linha */
+    border-bottom: 1px solid #85858550; /* Linha mais grossa na última linha */
 }
 
 .table-estilosa tbody tr:hover {

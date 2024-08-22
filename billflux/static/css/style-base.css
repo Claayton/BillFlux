@@ -93,7 +93,6 @@ body {
     background-color: var(--header-background);
     color: var(--color8);
     width: 100%;
-    padding: 10px 0;
     z-index: 1000; /* Garante que o footer fique acima de outros conteúdos */
 }
 #flash {
