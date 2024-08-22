@@ -165,41 +165,38 @@ main .search input:focus {
 }
 
 .options-bill-container select {
-    width: 50px;
-    height: 100%;
-    background-color: #6c6f6c; /* Cor de fundo */
+    width: 20px;
+    height: 35px;
+    background-color: transparent;
     color: transparent; /* Torna o texto transparente */
     padding: 0px 13px; /* Espaçamento interno */
     margin: 0px 5px;
     border: none; /* Remover a borda padrão */
-    border-radius: 50%; /* Deixar o botão redondo */
+    border-radius: 25%; /* Deixar o botão redondo */
     text-align: center; /* Centralizar o texto */
     font-size: 20px; /* Tamanho da fonte */
     cursor: pointer; /* Mostrar cursor de ponteiro */
-    box-shadow: 0 2px 4px var(--shadow-color); /* Sombra */
-    transition: background-color 0.3s ease; /* Transição suave da cor de fundo */
     appearance: none;    
     text-indent: 9999px; /* Move o texto para fora da área visível */
 }
 
-.options-bill-container select:hover {
-    background-color: #4d4d4d; /* Cor de fundo no hover */
-}
 
 .options-bill-container select:focus { 
     outline: none;
+    color: white;
 }
 
 .options-bill-container select option {
+    background-color: #4d4d4d; /* Cor de fundo no hover */
     color: white; /* Cor do texto */
-    padding: 5px;
     font-size: 15px; /* Tamanho da fonte */
     text-align: left;
 }
 
-.options-bill-container label svg, .options-bill-container label i {
-    color: white;
-    font-size: 20px;
+.options-bill-container label svg {
+    color: black;
+    width: 25px;
+    height: 25px;
     position: absolute;
     top: 50%;
     left: 50%;
@@ -207,6 +204,9 @@ main .search input:focus {
     pointer-events: none;
 }
 
+tr:hover .options-bill-container label svg {
+    color: white;
+}
 
 #vazio {
     width: 20%;
