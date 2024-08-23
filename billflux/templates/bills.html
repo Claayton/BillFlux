@@ -1,7 +1,6 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/bills.css') }}" rel="stylesheet">
 <script src="https://kit.fontawesome.com/c996c5ea01.js" crossorigin="anonymous"></script>
 
-
 {% extends 'base.html' %}
 
 {% block title %}{{ super() }} - Bills{% endblock %}
@@ -16,7 +15,50 @@
     <div class="navbar-2">
         <h1>Contas a Pagar</h1>
         <div class="options">
-            <button>+</button>
+            <button id="openInsertModalBtn">+</button>
+
+            <!-- Modal -->
+            <div id="insert-modal" class="insert-modal">
+                <div class="insert-modal-content">
+                    <span class="close">&times;</span>
+                    <h2>Cadastrar Nova Conta</h2>
+                    <form id="insert-boletoForm" class="insert-boletoForm">
+
+                        <label for="bar_code">Código de Barras:</label>
+                        <input type="text" id="bar_code" name="bar_code">
+                        
+                        <div class="valor-vencimento-container">
+                            <div>
+                                <label for="value">Valor:</label>
+                                <input type="text" id="value" name="value" step="0.01" min="0" placeholder="R$: 0.00" required>
+                            </div>
+                            <div>
+                                <label for="vencimento" id="vencimento">Vencimento:</label>
+                                <input type="date" id="vencimento" name="vencimento" required>
+                            </div>
+
+                        </div>
+
+                        <label for="reference">Referente á:</label>
+                        <input type="text" id="reference" name="reference">
+
+                        <label for="suplyer">Fornecedor:</label>
+                        <input type="text" id="suplyer" name="suplyer">
+
+                        <label for="bill_type">Tipo:</label>
+                        <input type="text" id="bill_type" name="bill_type">
+
+                        <label for="obs">Observações:</label>
+                        <input type="text" id="obs" name="obs">
+
+                        <!-- Adicione outros campos conforme necessário -->
+
+                        <button id="insert-save-button" type="submit">Salvar</button>
+                        
+                    </form>
+                </div>
+            </div>
+
             <div class="search">
                 <label for="search"><i class="fas fa-search"></i></label>
                 <input type="text" name="search" id="search">
@@ -90,9 +132,9 @@
                                 </th>
                                 <th><button>Editar</button></th>
                                 <th>{% if bill.status %}
-                                    <p id="pago"><span class="checkmark">✔</span>Pago</p>
+                                    <p id="pago"><span class="checkmark">✔</span></p>
                                     {% else %}
-                                    <p id="pagar"><span class="xmark">✘</span>Pagar</p>
+                                    <p id="pagar"><span class="xmark">✘</span></p>
                                     {% endif %}
                                 </th>
                                 <th>{{ bill.due_date }}</th>
@@ -129,34 +171,6 @@
 
 </main>
 
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-    const modal = document.getElementById('modal');
-    const btns = document.querySelectorAll('.view-details-btn');
-    const span = document.getElementsByClassName('close')[0];
-    const modalText = document.getElementById('modal-text');
-
-    btns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            // Define o conteúdo do modal
-            const text = btn.getAttribute('data-details');
-            modalText.innerText = text;
-
-            modal.style.display = 'block';
-        });
-    });
-
-    span.addEventListener('click', () => {
-        modal.style.display = 'none';
-    });
-
-    window.addEventListener('click', (event) => {
-        if (event.target === modal) {
-            modal.style.display = 'none';
-        }
-    });
-});
-
-</script>
+<script type="text/javascript" src="{{ url_for('static', filename='js/bills.js') }}"></script>
 
 {% endblock %}
