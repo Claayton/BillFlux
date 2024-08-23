@@ -32,6 +32,15 @@ body {
     
 }
 
+.logo-img {
+    display: inline-block;
+    height: 300px; /* Mantém o tamanho da logo */
+    width: auto;
+    vertical-align: middle;
+    margin: 0; /* Remove qualquer margem */
+}
+  
+
 #header-main {
     display: flex;
     align-items: center;
@@ -42,15 +51,18 @@ body {
     width: 100%;
     z-index: 1000;
     box-shadow: 0 4px 6px var(--shadow-color);
+    height: 100px; /* Define uma altura fixa */
+    padding: 0; /* Remove o padding */
 }
+
 
 #header-container {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    width: 15100%;
-    padding: 10px 2%;
-    
+    width: 100%;
+    height: 100%; /* Garante que o container ocupe toda a altura do header */
+    padding: 0 20px; /* Apenas padding lateral, para espaçamento horizontal */
 }
 
 .title-main a {
