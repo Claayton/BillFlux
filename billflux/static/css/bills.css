@@ -36,7 +36,11 @@ body {
 main {
     display: flex;
     flex-direction: row;
-    height: 87%;
+    height: 88%;
+    position: fixed;
+    top: 9%;
+    right: 0;
+    left: 0;
 }
 
 .navbar-1 {
@@ -254,6 +258,7 @@ main .search input:focus {
     text-align: center;
     font-weight: bold;
     font-size: 12px;
+    min-height: 100%;
 }
 
 .table-container th {
@@ -334,6 +339,9 @@ th #pagar {
 
 .table-container {
     overflow-x: auto; /* Permite scroll horizontal */
+    min-height: 70%;
+    max-height: 400px;
+    overflow-y: auto;
     white-space: nowrap; /* Impede quebra de linha na tabela */
 }
 
