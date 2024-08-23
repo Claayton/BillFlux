@@ -3,17 +3,17 @@
 
 :root {
     --color1: #5021FA;
-    --color2: #1D27DE;
+    --color2: #0b418b;
     --color3: #2B6CF5;
     --color4: #1D8DDE;
-    --color5: #21D8FA;
-    --color6: #292a2d;
-    --color7: #101011;
-    --color8: #eee;
+    --color5: #24608D;
+    --color6: #266696;
+    --color7: #000000;
+    --color8: #000000;
     --shadow-color: rgba(0, 0, 0, 0.2);
-    --hover-background: #333;
-    --hover-border: #eee;
-    --header-background: #171718;
+    --hover-background: #266696;
+    --hover-border: #000000;
+    --header-background: rgb(255, 255, 255);
 }
 
 * {
@@ -23,18 +23,19 @@
 }
 
 body {
-    background-image: linear-gradient(to left, var(--color6), #000);
+    background-color: var(#266696);
     font-family: 'Roboto', sans-serif;
     width: 100%;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    
 }
 
 #header-main {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     position: sticky;
     top: 0;
     background-color: var(--header-background);
@@ -47,8 +48,9 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    width: 100%;
+    width: 15100%;
     padding: 10px 2%;
+    
 }
 
 .title-main a {
@@ -57,6 +59,7 @@ body {
     color: var(--color4);
     font-size: 1.8rem;
     text-shadow: 1px 1px 1px var(--shadow-color);
+    justify-content: center;
 }
 
 .navbar-main ul {

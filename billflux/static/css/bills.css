@@ -24,8 +24,8 @@
 }
 
 body {
-    background-color: var(--color1);
-    color: var(--color7);
+    background-color: var(#eee);
+    color: var(#eee);
     font-family: 'Roboto', sans-serif;
     width: 100%;
     min-height: 100vh;
@@ -39,15 +39,15 @@ main {
 }
 
 .navbar-1 {
-    width: 17%;
-    height: 100%;
-    background-color: var(--color5);
+    width: 0%;
+    height: 0%;
+    background-color: var(#eee);
 }
 
 .navbar-2 {
     height: 100%;
-    width: 83%;
-    background-color: var(--color8);
+    width: 100%;
+    background-color: var(#eee);
 }
 
 .navbar-2 h1 {
@@ -64,7 +64,7 @@ main {
     background-color: #6c6f6c; /* Cor de fundo */
     color: white; /* Cor do texto */
     padding: 0px 13px; /* Espaçamento interno */
-    margin: 0px 5px;
+    margin: 0px 0px;
     border: none; /* Remover a borda padrão */
     border-radius: 50%; /* Deixar o botão redondo */
     text-align: center; /* Centralizar o texto */
@@ -165,11 +165,11 @@ main .search input:focus {
 }
 
 .table-estilosa thead tr {
-    background-color: #009879; /* Cor de fundo do cabeçalho */
-    color: #ffffff; /* Cor do texto do cabeçalho */
+    background-color: #24608d; /* Cor de fundo do cabeçalho */
+    color: #000000; /* Cor do texto do cabeçalho */
     text-align: center;
     font-weight: bold;
-    font-size: 12px;
+    font-size: 14px;
 }
 
 .table-container th {
@@ -239,6 +239,11 @@ tr:hover .options-bill-container label svg {
 th #pago {
     color: green;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3); /* Sombra no texto do <p> */
+    text-align: center; /* Centraliza o texto horizontalmente */
+    font-size: 32px; /* Ajusta o tamanho do texto; altere conforme necessário */
+   
+    
+
 }
 
 th #pagar {
@@ -311,9 +316,10 @@ th #pagar {
     text-align: center;
     text-decoration: none;
     display: inline-block;
-    font-size: 14px;
+    font-size: 12px;
     margin: 4px 2px;
     cursor: pointer;
+    border-radius: 6px;
 }
 
 
@@ -330,5 +336,5 @@ th #pagar {
 }
 
 .table-estilosa tbody tr:hover {
-    background-color: #01be98; /* Cor de fundo ao passar o mouse */
+    background-color: #92bef7; /* Cor de fundo ao passar o mouse */
 }

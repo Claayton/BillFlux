@@ -20,7 +20,7 @@ class BillRepository:
         due_date: datetime = datetime.now,
         value: int = None,
         reference: str = None,
-        suplyer: str = None,
+        suplyer: str = None, 
         bill_type: str = None,
         days: int = None,
         payday: datetime = None,
@@ -78,3 +78,4 @@ class BillRepository:
             sql = select(BillModel)
 
             return list(session.exec(sql))
+ 

@@ -14,7 +14,7 @@
     </div>
 
     <div class="navbar-2">
-        <h1>Contas a Pagar</h1>
+        <h1>Fluxo De Contas</h1>
         <div class="options">
             <button>+</button>
             <div class="search">
@@ -90,7 +90,7 @@
                                 </th>
                                 <th><button>Editar</button></th>
                                 <th>{% if bill.status %}
-                                    <p id="pago"><span class="checkmark">✔</span>Pago</p>
+                                    <p id="pago"><span class="checkmark">✔</span></p>
                                     {% else %}
                                     <p id="pagar"><span class="xmark">✘</span>Pagar</p>
                                     {% endif %}
@@ -98,7 +98,7 @@
                                 <th>{{ bill.due_date }}</th>
                                 <th>{{ bill.value }}</th>
                                 <th>
-                                    <button class="view-details-btn" data-details="{{ bill.reference }}">Ver detalhes</button>
+                                    <button class="view-details-btn" data-details="{{ bill.reference }}">Detalhes</button>
                                 </th>
                                 <th>{{ bill.suplyer }}</th>
                                 <th>{{ bill.bill_type }}</th>
@@ -107,7 +107,7 @@
                                 <th>{{ bill.value_from_payment }}</th>
                                 <th>{{ bill.bar_code }}</th>
                                 <th>
-                                    <button class="view-details-btn" data-details="{{ bill.obs }}">Ver detalhes</button>
+                                    <button class="view-details-btn" data-details="{{ bill.obs }}">Detalhes</button>
                                 </th>
                                 <th>{{ bill.date_from_add }}</th>
                             </tr>
