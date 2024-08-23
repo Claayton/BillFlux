@@ -17,7 +17,7 @@ class BillRepository:
     def insert_bill(
         self,
         status: bool = False,
-        due_date: datetime = datetime.now,
+        due_date: datetime = None,
         value: int = None,
         reference: str = None,
         suplyer: str = None, 
@@ -27,7 +27,7 @@ class BillRepository:
         value_from_payment: int = None,
         bar_code: int = None,
         obs: str = None,
-        date_from_add: datetime = datetime.now,
+        date_from_add: datetime = datetime.now(),
     ) -> Bill:
         """
         Inserts a new bill into the Bill table.
