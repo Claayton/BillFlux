@@ -6,7 +6,7 @@
     --color3: #2B6CF5;
     --color4: #1D8DDE;
     --color5: #21D8FA;
-    --color6: #292a2d;
+    --color6: #487fa8;
     --color7: #1d1e1f;
     --color8: #eee;
 }
@@ -30,8 +30,8 @@ body {
     padding: 50px;
     max-width: 600px;
     height: auto;
-    background-image: linear-gradient(to bottom, var(--color3), var(--color2));
-    box-shadow: 2px 2px 2px rgba(0, 0, 0, 0.5);
+    background-color: #0b1c41;
+    box-shadow: 2px 2px 2px rgba(10, 9, 9, 0.5);
     text-shadow: 1px 1px 1px rgba(0, 0, 0, 2);
     border-radius: 10px;
 
@@ -59,7 +59,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    background-image: linear-gradient(to bottom, var(--color5), var(--color3));
+    background-color: #24608D;
     color: #eee;
     height: 30px;
     width: 99%;
