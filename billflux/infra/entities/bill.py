@@ -10,7 +10,7 @@ class Bill(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     status: bool = Field(default=False)
-    due_date: datetime = Field(nullable=False)
+    due_date: datetime = Field(nullable=True)
     value: Optional[int] = Field(nullable=True)
     reference: Optional[str] = Field(nullable=True)
     suplyer: Optional[str] = Field(nullable=True)

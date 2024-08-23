@@ -2,7 +2,7 @@
 
 from flask import Flask
 from dynaconf import FlaskDynaconf
-from billflux.controlers import home, bills
+from billflux.controlers import home, bills, insert_bill
 
 
 def create_app():
@@ -12,4 +12,5 @@ def create_app():
     FlaskDynaconf(app)
     app.register_blueprint(home.bp)
     app.register_blueprint(bills.bp)
+    app.register_blueprint(insert_bill.bp)
     return app
