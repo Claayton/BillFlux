@@ -18,10 +18,10 @@ build/
 *.egg-info/
 
 app/tests.sqlite3
-storage.db
 tests.db
-mitmirror.db
 billflux.db
+
+.vscode/
 
 # Ignore dynaconf secret files
 .secrets.*
