@@ -3,6 +3,7 @@
 from typing import List
 from datetime import datetime
 from sqlmodel import select
+from billflux.errors import DefaultError
 from billflux.infra.config.database import get_session
 from billflux.infra.entities.bill import Bill as BillModel
 from billflux.domain.models.bills import Bill
@@ -78,3 +79,25 @@ class BillRepository:
             sql = select(BillModel)
 
             return [Bill(**dict(bill)) for bill in session.exec(sql)]
+
+    def delete_bill(self, bill_id: int) -> Bill:
+        """
+        Deletes a bill from the database.
+        :param id: Id from bill to delete.
+        :return: The deleted Bill.
+        """
+
+        with self.__session() as session:
+
+            bill = session.exec(
+                select(BillModel).where(BillModel.id == bill_id)
+            ).one_or_none()
+
+            if not bill:
+
+                raise DefaultError(message="Bill not found!", type_error=404)
+
+            session.delete(bill)
+            session.commit()
+
+            return Bill(**dict(bill))
