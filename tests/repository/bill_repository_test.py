@@ -7,7 +7,7 @@ from billflux.infra.entities.bill import Bill
 
 def test_insert_bill(fake_bill, bill_repository):
     """
-    Testando o metodo insert_bill
+    Testing the insert_bill method.
     """
 
     response = bill_repository.insert_bill(
@@ -26,11 +26,25 @@ def test_insert_bill(fake_bill, bill_repository):
     )
 
     with get_session() as session:
-        query_user = session.exec(
+        query_bill = session.exec(
             select(Bill).where(Bill.bar_code == fake_bill.bar_code)
         ).one()
 
-    # Testing if the information sent by the metod is in database.
-    assert response.bar_code == query_user.bar_code
-    assert response.bill_type == query_user.bill_type
-    assert response.suplyer == query_user.suplyer
+    # Testing if the information sent by the method is in database.
+    assert response.bar_code == query_bill.bar_code
+    assert response.bill_type == query_bill.bill_type
+    assert response.suplyer == query_bill.suplyer
+
+
+def test_delete_bill(fake_bill, bill_repository_with_one_bill):
+    """Testing the delete_bill method"""
+
+    with get_session() as session:
+        query_bill = session.exec(select(Bill).where(Bill.id == fake_bill.id)).one()
+
+    response = bill_repository_with_one_bill.delete_bill(bill_id=fake_bill.id)
+
+    # Testing if the information sent by the method is in database.
+    assert response.bar_code == query_bill.bar_code
+    assert response.bill_type == query_bill.bill_type
+    assert response.suplyer == query_bill.suplyer
