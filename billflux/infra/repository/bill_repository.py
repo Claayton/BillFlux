@@ -1,9 +1,8 @@
 """Model for repository to Bill"""
 
-from dynaconf import settings
 from typing import List
 from datetime import datetime
-from sqlmodel import select
+from sqlmodel import select, create_engine
 from billflux.errors import DefaultError
 from billflux.infra.config.database import get_session
 from billflux.infra.entities.bill import Bill as BillModel
@@ -13,8 +12,14 @@ from billflux.domain.models.bills import Bill
 class BillRepository:
     """Bill table data manipulation"""
 
+    def __init__(self, database_url: str):
+
+        self.database_url = database_url
+
     def __session(self):
-        return get_session()
+
+        engine = create_engine(self.database_url)
+        return get_session(engine)
 
     def insert_bill(
         self,
