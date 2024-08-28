@@ -3,10 +3,10 @@
 # flake8: noqa: F405
 
 from sqlmodel import create_engine, Session
-from billflux.config import settings
+from dynaconf import settings
 from billflux.infra.entities.bill import *  # pylint: disable=W0401, W0614
 
-engine = create_engine(settings.database.url)
+engine = create_engine(settings.DATABASE_URL)
 
 
 def create_db():
