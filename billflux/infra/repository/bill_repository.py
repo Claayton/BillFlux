@@ -11,16 +11,16 @@ from billflux.domain.models.bills import Bill
 class BillRepository:
     """Bill table data manipulation"""
 
-    def __init__(self) -> None:
-        self.__session = get_session()
+    def __session(self):
+        return get_session()
 
     def insert_bill(
         self,
         status: bool = False,
         due_date: datetime = None,
-        value: int = None,
+        value: float = None,
         reference: str = None,
-        suplyer: str = None, 
+        suplyer: str = None,
         bill_type: str = None,
         days: int = None,
         payday: datetime = None,
@@ -44,7 +44,7 @@ class BillRepository:
         :return: The Registerer Bill.
         """
 
-        with self.__session as session:
+        with self.__session() as session:
 
             bill = BillModel(
                 status=status,
@@ -73,9 +73,8 @@ class BillRepository:
         :return: A list with all Bills and their data.
         """
 
-        with self.__session as session:
+        with self.__session() as session:
 
             sql = select(BillModel)
 
-            return list(session.exec(sql))
- 
+            return [Bill(**dict(bill)) for bill in session.exec(sql)]
