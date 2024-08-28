@@ -1,5 +1,6 @@
 """Model for repository to Bill"""
 
+from dynaconf import settings
 from typing import List
 from datetime import datetime
 from sqlmodel import select
