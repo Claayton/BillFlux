@@ -1,27 +1,49 @@
 """Conftest for tests/repository"""
 
 from pytest import fixture
-from sqlmodel import delete
+from sqlmodel import delete, create_engine
 from billflux.infra.repository.bill_repository import BillRepository
 from billflux.infra.entities.bill import Bill as BillModel
 from billflux.infra.config.database import get_session
+from billflux.config import settings
 
 
 @fixture(scope="function")
-def bill_repository():
+def get_test_session():
+    """Fixture to get a session test"""
+
+    engine = create_engine(settings["testing"].DATABASE_URL)
+
+    return get_session(engine)
+
+
+@fixture(scope="function")
+def clean_database(get_test_session):
+    """Fixture to clean database"""
+
+    with get_test_session as session:
+        session.exec(delete(BillModel))
+        session.commit()
+
+
+@fixture(scope="function")
+def bill_repository(clean_database):  # pylint: disable=W0621
     """Fixture para montar o objeto UserRepository"""
 
-    with get_session() as session:
+    try:
+        yield BillRepository(database_url=settings["testing"].DATABASE_URL)
 
-        with session.begin():
-            yield BillRepository()
+    finally:
+        clean_database
 
 
 @fixture(scope="function")
-def bill_repository_with_one_bill(bill_repository, fake_bill):  # pylint: disable=W0621
+def bill_repository_with_one_bill(
+    bill_repository, fake_bill, get_test_session, clean_database
+):  # pylint: disable=W0621
     """Fixture to show a object UserRepository whit one bill added."""
 
-    with get_session() as session:
+    with get_test_session as session:
 
         bill = BillModel(
             id=fake_bill.id,
@@ -45,10 +67,4 @@ def bill_repository_with_one_bill(bill_repository, fake_bill):  # pylint: disabl
         try:
             yield bill_repository
         finally:
-            try:
-                # Limpar dados das tabelas
-                session.exec(delete(BillModel))
-                session.commit()
-            except Exception as e:
-                session.rollback()
-                raise e
+            clean_database

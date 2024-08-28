@@ -1,11 +1,10 @@
 """Tests for the BillRepository Class"""
 
 from sqlmodel import select
-from billflux.infra.config.database import get_session
 from billflux.infra.entities.bill import Bill
 
 
-def test_insert_bill(fake_bill, bill_repository):
+def test_insert_bill(fake_bill, bill_repository, get_test_session):
     """
     Testing the insert_bill method.
     """
@@ -25,7 +24,7 @@ def test_insert_bill(fake_bill, bill_repository):
         date_from_add=fake_bill.date_from_add,
     )
 
-    with get_session() as session:
+    with get_test_session as session:
         query_bill = session.exec(
             select(Bill).where(Bill.bar_code == fake_bill.bar_code)
         ).one()
@@ -36,10 +35,10 @@ def test_insert_bill(fake_bill, bill_repository):
     assert response.suplyer == query_bill.suplyer
 
 
-def test_delete_bill(fake_bill, bill_repository_with_one_bill):
+def test_delete_bill(fake_bill, bill_repository_with_one_bill, get_test_session):
     """Testing the delete_bill method"""
 
-    with get_session() as session:
+    with get_test_session as session:
         query_bill = session.exec(select(Bill).where(Bill.id == fake_bill.id)).one()
 
     response = bill_repository_with_one_bill.delete_bill(bill_id=fake_bill.id)
