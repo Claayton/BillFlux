@@ -21,7 +21,7 @@ def create_db():
         SQLModel.metadata.create_all(engine)
 
     else:
-        print("Data base found!")
+        print("Database found!")
 
     if not os.path.exists(database_url_testing.replace("sqlite:///", "")):
 

@@ -6,7 +6,7 @@ from billflux.infra.repository.bill_repository import BillRepository
 from billflux.config import settings
 
 
-bp = Blueprint("bp_bills", __name__)
+bp = Blueprint("bp_get_bills", __name__)
 
 database_url = settings["development"].DATABASE_URL
 

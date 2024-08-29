@@ -38,4 +38,4 @@ def insert_bill():
         obs=obs,
     )
 
-    return redirect(url_for("bp_bills.bills"))
+    return redirect(url_for("bp_get_bills.bills"))
