@@ -5,12 +5,14 @@ from flask import Flask
 from dynaconf import FlaskDynaconf
 from dotenv import load_dotenv
 from billflux.controlers import home, bills, insert_bill
+from billflux.infra.config.database import create_db
 
 
 def create_app():
     """Function that creates the app"""
 
     load_dotenv()
+    create_db()
 
     app = Flask(__name__)
 
