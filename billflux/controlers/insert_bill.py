@@ -4,9 +4,12 @@ from datetime import datetime
 from flask import request, redirect, url_for
 from flask.blueprints import Blueprint
 from billflux.infra.repository.bill_repository import BillRepository
+from billflux.config import settings
 
 
 bp = Blueprint("bp_insert_bill", __name__)
+
+database_url = settings["development"].DATABASE_URL
 
 
 @bp.route("/insert_bill/", methods=["GET", "POST"])
@@ -24,7 +27,7 @@ def insert_bill():
 
     formated_vencimento = datetime.strptime(vencimento, "%Y-%m-%d")
 
-    bill_repository = BillRepository()
+    bill_repository = BillRepository(database_url)
     bill_repository.insert_bill(
         bar_code=bar_code,
         value=value,

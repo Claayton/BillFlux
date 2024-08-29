@@ -1,12 +1,15 @@
-# 💸 BillFlux
-[![MIT License](https://img.shields.io/badge/license-MIT-007EC7.svg?style=flat-square)](/LICENSE) ![GitHub issues](https://img.shields.io/github/issues/Claayton/BillFlux.svg) ![GitHub stars](https://img.shields.io/github/stars/Claayton/BillFlux.svg) ![GitHub last commit](https://img.shields.io/github/last-commit/Claayton/BillFlux.svg) [![Code Style Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black/)
+<p align="center">
+  <img src="billflux/static/img/logo.png" alt="Logo" width="250"/>
+</p>
+
+  [![MIT License](https://img.shields.io/badge/license-MIT-007EC7.svg?style=flat-square)](/LICENSE) ![GitHub issues](https://img.shields.io/github/issues/Claayton/BillFlux.svg) ![GitHub stars](https://img.shields.io/github/stars/Claayton/BillFlux.svg) ![GitHub last commit](https://img.shields.io/github/last-commit/Claayton/BillFlux.svg) [![Code Style Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black/)
+
 
 ## 📋 Features
 
 - Sistema para gerenciamento e administração de boletos e contas a pagar, com o objetivo de ser simples, direto e usual. As principais funcionalidades incluem:
   - Desenvolvido em Python/Flask
-  - Realizar CRUD de usuários
-  - Geração de código de barras para facilitar o pagamento, evitando a necessidade de digitar o código manualmente no smartphone ou de utilizar o boleto em papel
+  - Geração de código de barras para facilitar o pagamento, evitando a necessidade de digitar o código manualmente no smartphone ou de utilizar o boleto em papel.
 
 ## 🚀 Quick Start
 
@@ -33,10 +36,18 @@ source venv/bin/activate
 ```
 pip3 install -r requirements.txt
 ```
+*Você vai precisar de um arquivo para alocar suas `variáveis de ambiente`, use o comando abaixo para criá-lo e exportar as variáveis:*
+```
+echo 'FLASK_ENV=development
+FLASK_DEBUG=true
+FLASK_APP=billflux
+' > .env
+
+```
 
 *🎉 O projeto já está configurado e pronto para ser testado em modo de desenvolvedor:*
 ```
-flask --app run run --debug
+flask run
 ```
 
 ## ⚙️ Tests
@@ -44,7 +55,10 @@ flask --app run run --debug
 Utilizar para esse projeto o pytest para fazer os testes necessários, para executar os testes utilize:
 
 ```
+  # Rodar o testes da forma padrão + cobertura:
+  pytest --cov
+
   # Rodar os testes + cobertura, mostrando os detalhes caso ocorra algum erro:
-  pytest -v
+  pytest -v --cov
 
 ```

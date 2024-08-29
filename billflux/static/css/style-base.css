@@ -34,12 +34,11 @@ body {
 
 .logo-img {
     display: inline-block;
-    height: 300px; /* Mantém o tamanho da logo */
-    width: auto;
+    width: 80%;
+    height: auto;
     vertical-align: middle;
     margin: 0; /* Remove qualquer margem */
 }
-  
 
 #header-main {
     display: flex;

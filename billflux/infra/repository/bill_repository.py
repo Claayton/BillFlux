@@ -2,7 +2,8 @@
 
 from typing import List
 from datetime import datetime
-from sqlmodel import select
+from sqlmodel import select, create_engine
+from billflux.errors import DefaultError
 from billflux.infra.config.database import get_session
 from billflux.infra.entities.bill import Bill as BillModel
 from billflux.domain.models.bills import Bill
@@ -11,16 +12,22 @@ from billflux.domain.models.bills import Bill
 class BillRepository:
     """Bill table data manipulation"""
 
-    def __init__(self) -> None:
-        self.__session = get_session()
+    def __init__(self, database_url: str):
+
+        self.database_url = database_url
+
+    def __session(self):
+
+        engine = create_engine(self.database_url)
+        return get_session(engine)
 
     def insert_bill(
         self,
         status: bool = False,
         due_date: datetime = None,
-        value: int = None,
+        value: float = None,
         reference: str = None,
-        suplyer: str = None, 
+        suplyer: str = None,
         bill_type: str = None,
         days: int = None,
         payday: datetime = None,
@@ -44,7 +51,7 @@ class BillRepository:
         :return: The Registerer Bill.
         """
 
-        with self.__session as session:
+        with self.__session() as session:
 
             bill = BillModel(
                 status=status,
@@ -73,9 +80,30 @@ class BillRepository:
         :return: A list with all Bills and their data.
         """
 
-        with self.__session as session:
+        with self.__session() as session:
 
             sql = select(BillModel)
 
-            return list(session.exec(sql))
- 
+            return [Bill(**dict(bill)) for bill in session.exec(sql)]
+
+    def delete_bill(self, bill_id: int) -> Bill:
+        """
+        Deletes a bill from the database.
+        :param id: Id from bill to delete.
+        :return: The deleted Bill.
+        """
+
+        with self.__session() as session:
+
+            bill = session.exec(
+                select(BillModel).where(BillModel.id == bill_id)
+            ).one_or_none()
+
+            if not bill:
+
+                raise DefaultError(message="Bill not found!", type_error=404)
+
+            session.delete(bill)
+            session.commit()
+
+            return Bill(**dict(bill))

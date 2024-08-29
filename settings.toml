@@ -1,5 +1,5 @@
-name = "ticketmanager"
+[development]
+DATABASE_URL="sqlite:///billflux.db"
 
-
-[database]
-url = "sqlite:///billflux.db"
+[testing]
+DATABASE_URL="sqlite:///teste.db"
