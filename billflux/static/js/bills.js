@@ -51,3 +51,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+/// Script para excluir linha da tabela:
+document.addEventListener('DOMContentLoaded', function() {
+
+    document.querySelectorAll('#option-bill').forEach(function(selectElement) {
+        selectElement.addEventListener('change', function(event) {
+            var action = event.target.value;
+            var row = event.target.closest('tr'); // Encontra a linha mais próxima do select
+            const billId = this.getAttribute('data-id');
+            var id = row.getAttribute('data-id'); // Obtém o ID da linha
+            
+            // Verifica a ação selecionada
+            if (action === 'Excluir') {
+                if (confirm('Tem certeza que deseja excluir este item?')) {
+                    // Envia uma requisição para o backend para excluir o item
+                    fetch(`/delete_bill/${billId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    }).then(response => {
+                        if (response.ok) {
+                            row.remove(); // Remove a linha da tabela
+                        } else {
+                            alert('Erro ao excluir o item.');
+                        }
+                    }).catch(error => {
+                        console.error('Erro:', error);
+                        alert('Erro ao excluir o item.');
+                    });
+                }
+            }
+            // Adicione mais ações aqui para 'Pagar' e 'Editar' se necessário
+        });
+    });
+});
