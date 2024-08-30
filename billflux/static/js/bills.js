@@ -4,10 +4,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const modal = document.getElementById('insert-modal');
     const openModalBtn = document.getElementById('openInsertModalBtn');
     const closeModalBtn = document.querySelector('.close');
+    const barCodeInput = document.getElementById('bar_code');
 
     // Abre o modal
     openModalBtn.addEventListener('click', () => {
         modal.style.display = 'block';
+        barCodeInput.focus();
     });
 
     // Fecha o modal quando o usuário clica no "X"
@@ -86,4 +88,56 @@ document.addEventListener('DOMContentLoaded', function() {
             // Adicione mais ações aqui para 'Pagar' e 'Editar' se necessário
         });
     });
+});
+
+/// Script para pegar o codigo do boleto e extrair as informações necessarias
+document.addEventListener('DOMContentLoaded', (event) => {
+    const barCodeInput = document.getElementById('bar_code');
+    const valueInput = document.getElementById('value');
+    const vencimentoInput = document.getElementById('vencimento-input');
+    const referenceInput = document.getElementById('reference'); // Campo "Referente a"
+
+    if (barCodeInput) {
+        // Evento para quando o campo perde o foco
+        barCodeInput.addEventListener('blur', function() {
+            const barCodeValue = barCodeInput.value.replace(/\D/g, '');
+            console.log('Código de barras:', barCodeValue);
+            // Aqui você pode fazer o que quiser com o valor do código de barras
+
+            if (barCodeValue.length !== 47) {
+                throw new Error('Linha digitável inválida. Deve conter 47 dígitos.');
+            }
+
+            // Data base: 7 de outubro de 1997
+            const BASE_DATE = new Date(1997, 9, 7); 
+            const fatorVencimento = parseInt(barCodeValue.substring(33, 37), 10);
+            const valorBoleto = barCodeValue.substring(37, 47);
+
+            // Calcula a data de vencimento
+            const vencimentoDate = new Date(BASE_DATE.getTime() + (fatorVencimento * 24 * 60 * 60 * 1000));
+            // Formata o valor do boleto
+            const valor = (parseFloat(valorBoleto) / 100).toFixed(2);
+
+            // Verifica se a data de vencimento é válida
+            if (isNaN(vencimentoDate.getTime())) {
+                alert('Data de vencimento inválida.');
+                return;
+            }
+
+            function formatDateForInput(date) {
+                const day = String(date.getDate()).padStart(2, '0');
+                const month = String(date.getMonth() + 1).padStart(2, '0'); // Meses são zero-indexados
+                const year = date.getFullYear();
+                return `${year}-${month}-${day}`;
+            }
+
+            // Atualiza os campos de valor e vencimento
+            valueInput.value = valor;
+            vencimentoInput.value = formatDateForInput(vencimentoDate);
+        
+            // Define o foco no campo "Referente a"
+            referenceInput.focus();
+
+        });
+    }
 });
