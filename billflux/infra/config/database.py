@@ -5,7 +5,7 @@
 import os
 from sqlmodel import create_engine, Session
 from billflux.config import settings
-from billflux.infra.entities.bill import *  # pylint: disable=W0401, W0614
+from billflux.infra.entities.bills import *  # pylint: disable=W0401, W0614
 
 
 def create_db():

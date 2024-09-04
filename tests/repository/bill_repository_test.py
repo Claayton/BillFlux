@@ -1,7 +1,7 @@
 """Tests for the BillRepository Class"""
 
 from sqlmodel import select
-from billflux.infra.entities.bill import Bill
+from billflux.infra.entities.bills import Bill
 
 
 def test_insert_bill(fake_bill, bill_repository, get_test_session):

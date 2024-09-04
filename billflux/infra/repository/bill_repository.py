@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlmodel import select, create_engine
 from billflux.errors import DefaultError
 from billflux.infra.config.database import get_session
-from billflux.infra.entities.bill import Bill as BillModel
+from billflux.infra.entities.bills import Bill as BillModel
 from billflux.domain.models.bills import Bill
 
 

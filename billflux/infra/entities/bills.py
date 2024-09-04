@@ -1,8 +1,11 @@
-"""Module for model Bill"""
+"""Instance from Bill table and yours methods"""
 
 from datetime import datetime
-from typing import Optional
-from sqlmodel import SQLModel, Field
+from typing import Optional, TYPE_CHECKING
+from sqlmodel import SQLModel, Field, Relationship
+
+if TYPE_CHECKING:
+    from .users import User
 
 
 class Bill(SQLModel, table=True):
@@ -21,3 +24,10 @@ class Bill(SQLModel, table=True):
     bar_code: Optional[int] = Field(nullable=True)
     obs: Optional[str] = Field(nullable=True)
     date_from_add: datetime = Field(nullable=False)
+
+    user_id: int = Field(foreign_key="user.id", primary_key=True, nullable=False)
+
+    user: "User" = Relationship(back_populates="token")
+
+    def __repr__(self):
+        return f"<Bill {self.id}: {self.user.name}>"
