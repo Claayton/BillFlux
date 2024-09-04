@@ -1,27 +1,42 @@
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style-home.css') }}" rel="stylesheet">
-
 {% extends 'base.html' %}
 
 {% block title %}{{ super() }} - Home{% endblock %}
 
 {% block content %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Page</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style-home.css') }}">
+</head>
+<body>
+    <div class="container">
 
-<main id="main">
-    <div class="main-container">
-        <div id="title">
-            <h2>Welcome to BillFlux!</h2>
-        </div>
-        <div id="buttons">
-            <form action="/">
-                    <button class="button" type="submit" >Login</button>
-            </form>
-            <form action="/">
-                    <button class="button" type="submit">Sign Up</button>
-            </form>
-        </div>
-        
-        </form>
+        <main>
+            <div class="logo-home">
+                <img src="{{ url_for('static', filename='img/logo-home.png') }}" alt="Large Logo">
+            </div>
+            <div class="login-container">
+                <form action="{{ url_for('bp_home.signup') }}" method="post">
+                    <label for="signup-email">Email</label>
+                    <input type="email" id="signup-email" name="email" required>
+                    
+                    <label for="signup-password">Password</label>
+                    <input type="password" id="signup-password" name="password" required>
+                    
+                    <button type="submit">Log In</button>
+                    
+                </form>
+
+                <button type="button" class="btn-signup" id="signup">Create new ccount</button>
+
+            </div>
+        </main>
     </div>
-</main>
 
+    
+</body>
+</html>
 {% endblock %}

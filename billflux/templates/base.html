@@ -13,24 +13,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style-base.css') }}">
 </head>
 <body>
-  <header id="header-main">
-    <div id="header-container">
-      <h1 class="title-main">
-        <a href="/home">
-          <img src="{{ url_for('static', filename='img/logo.png') }}" alt="BillFlux" class="logo-img">
 
-
-        </a>
-      </h1>
-      <nav class="navbar-main" role="navigation" aria-label="Main Navigation">
-        <ul>
-          <li><a href="/home" aria-label="Home">Home</a></li>
-          <li><a href="/" aria-label="About">About</a></li>
-          <li><a href="/bills" aria-label="Profile">Bills</a></li>
-        </ul>
-      </nav>
-    </div>
-  </header>
 
   {% block content %}
   {% endblock %}
