@@ -1,5 +1,6 @@
 [development]
 DATABASE_URL="sqlite:///billflux.db"
+SECRET_KEY="duranteumbomtempoeuachavaqueessesimboeraojosc"
 
 [testing]
 DATABASE_URL="sqlite:///teste.db"
