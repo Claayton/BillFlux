@@ -27,7 +27,7 @@ class Bill(SQLModel, table=True):
 
     user_id: int = Field(foreign_key="user.id", primary_key=True, nullable=False)
 
-    user: "User" = Relationship(back_populates="token")
+    user: "User" = Relationship(back_populates="bill")
 
     def __repr__(self):
         return f"<Bill {self.id}: {self.user.name}>"

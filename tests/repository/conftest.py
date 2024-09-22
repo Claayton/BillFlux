@@ -59,6 +59,7 @@ def bill_repository_with_one_bill(
             bar_code=fake_bill.bar_code,
             obs=fake_bill.obs,
             date_from_add=fake_bill.date_from_add,
+            user_id=fake_bill.user_id,
         )
 
         session.add(bill)

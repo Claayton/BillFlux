@@ -22,6 +22,7 @@ BillMock = namedtuple(
         "bar_code",
         "obs",
         "date_from_add",
+        "user_id",
     ],
 )
 
@@ -42,4 +43,5 @@ def mock_bill():
         bar_code=fake.random_number(),
         obs=fake.text(),
         date_from_add=fake.date_time(),
+        user_id=fake.random_number(),
     )
