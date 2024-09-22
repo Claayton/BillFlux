@@ -2,7 +2,7 @@
 
 from flask.blueprints import Blueprint
 from flask import jsonify
-from billflux.infra.repository.bill_repository import BillRepository
+from billflux.infra.repository.bills_repository import BillRepository
 from billflux.config import settings
 
 

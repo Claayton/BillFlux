@@ -3,7 +3,7 @@
 from datetime import datetime
 from flask import request, redirect, url_for
 from flask.blueprints import Blueprint
-from billflux.infra.repository.bill_repository import BillRepository
+from billflux.infra.repository.bills_repository import BillRepository
 from billflux.config import settings
 
 

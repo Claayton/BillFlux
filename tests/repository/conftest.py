@@ -2,7 +2,7 @@
 
 from pytest import fixture
 from sqlmodel import delete, create_engine
-from billflux.infra.repository.bill_repository import BillRepository
+from billflux.infra.repository.bills_repository import BillRepository
 from billflux.infra.entities.bills import Bill as BillModel
 from billflux.infra.config.database import get_session
 from billflux.config import settings
