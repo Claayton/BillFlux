@@ -19,7 +19,18 @@
                 <img src="{{ url_for('static', filename='img/logo-home.png') }}" alt="Large Logo">
             </div>
             <div class="login-container">
-                <form action="{{ url_for('bp_home.signup') }}" method="post">
+                <!-- Exibe as mensagens de erro ou sucesso -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                  {% if messages %}
+                    <ul class="flashes">
+                      {% for category, message in messages %}
+                        <li class="{{ category }}">{{ message }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% endif %}
+                {% endwith %}
+
+                <form action="{{ url_for('bp_home.login') }}" method="post">
                     <label for="signup-email">Email</label>
                     <input type="email" id="signup-email" name="email" required>
                     
@@ -27,16 +38,34 @@
                     <input type="password" id="signup-password" name="password" required>
                     
                     <button type="submit">Log In</button>
-                    
                 </form>
 
-                <button type="button" class="btn-signup" id="signup">Create new ccount</button>
-
+                <button type="button" class="btn-signup" id="signup">Create new account</button>
             </div>
         </main>
     </div>
 
-    
+    <!-- Modal de cadastro -->
+    <div id="modal-signup" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <form method="POST" action="{{ url_for('bp_home.signup') }}">
+                <label for="new-email">Email</label>
+                <input type="email" id="new-email" name="email" required>
+                
+                <label for="new-password">Password</label>
+                <input type="password" id="new-password" name="password" required>
+                
+                <label for="confirm-password">Confirm Password</label>
+                <input type="password" id="confirm-password" name="confirm_password" required>
+
+                <button type="submit">Register</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/home.js') }}"></script>
+
 </body>
 </html>
 {% endblock %}
