@@ -24,12 +24,12 @@ class UserRepository:
 
     def insert_user(
         self,
-        name: str = None,
+        name: str = "User",
         email: str = None,
         password_hash: str = None,
         secundary_id: int = 0,  # Configurar futuramente
         is_staff: bool = False,  # Configurar futuramente
-        is_active_user: bool = False,  # Configurar futuramente
+        is_active: bool = False,  # Configurar futuramente
         date_joined: Type[datetime] = datetime.now(),  # Configurar futuramente
         last_login: Type[datetime] = datetime.now(),
     ) -> User:
@@ -40,7 +40,7 @@ class UserRepository:
         :param password_hash: Hash from the password of user.
         :param secundary_id: Secundary id from user.
         :param is_staff: If user is admin from the sistem.
-        :param is_active_user: If the user is active in the sistem.
+        :param is_active: If the user is active in the sistem.
         :param date_joined: Date of the sigin on the sistem.
         :param last_login: Date of the last login in the sistem.
         :return: the insert User and your data.
@@ -56,7 +56,7 @@ class UserRepository:
                     password_hash=password_hash,
                     secundary_id=secundary_id,
                     is_staff=is_staff,
-                    is_active_user=is_active_user,
+                    is_active=is_active,
                     date_joined=date_joined,
                     last_login=last_login,
                 )
@@ -68,7 +68,6 @@ class UserRepository:
                 return User(**dict(new_user))
 
             except Exception as error:
-
                 session.rollback()
                 raise DefaultError(
                     type_error=422, message="Parametros invalidos!, error"
@@ -80,7 +79,7 @@ class UserRepository:
         The data are searching by user_id, username or email.
         :param user_id: ID from user.
         :param emil: Email from user.
-        :return: One User and your data.
+        :return: One User and your data if user, or a empty list.
         """
 
         try:
@@ -143,7 +142,7 @@ class UserRepository:
         password_hash: str = None,
         secundary_id: int = None,
         is_staff: bool = None,
-        is_active_user: bool = None,
+        is_active: bool = None,
         date_joined: Type[datetime] = None,
         last_login: Type[datetime] = None,
     ) -> User:
@@ -155,7 +154,7 @@ class UserRepository:
         :param password_hash: Hash from the password of user.
         :param secundary_id: Secundary id from user.
         :param is_staff: If user is admin from the sistem.
-        :param is_active_user: If the user is active in the sistem.
+        :param is_active: If the user is active in the sistem.
         :param date_joined: Date of the sigin on the sistem.
         :param last_login: Date of the last login in the sistem.
         :return: The User with your updated data.
@@ -210,8 +209,8 @@ class UserRepository:
                     user.secundary_id = secundary_id
                 if is_staff is not None:
                     user.is_staff = is_staff
-                if is_active_user is not None:
-                    user.is_active_user = is_active_user
+                if is_active is not None:
+                    user.is_active = is_active
                 if date_joined is not None:
                     user.date_joined = date_joined
                 if last_login is not None:
@@ -264,7 +263,7 @@ class UserRepository:
                     password_hash=user.password_hash,
                     secundary_id=user.secundary_id,
                     is_staff=user.is_staff,
-                    is_active_user=user.is_active_user,
+                    is_active=user.is_active,
                     last_login=user.last_login,
                     date_joined=user.date_joined,
                 )

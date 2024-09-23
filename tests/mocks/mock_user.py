@@ -19,7 +19,7 @@ UserMock = namedtuple(
         "password_hash",
         "secundary_id",
         "is_staff",
-        "is_active_user",
+        "is_active",
         "last_login",
         "date_joined",
     ],
@@ -39,7 +39,7 @@ def mock_user():
         password_hash=password_hash.hash(password).decode(),
         secundary_id=fake.random_number(),
         is_staff=False,
-        is_active_user=False,
+        is_active=False,
         last_login=fake.date_time(),
         date_joined=fake.date_time(),
     )

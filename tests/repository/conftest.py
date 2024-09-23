@@ -59,7 +59,7 @@ def user_repository_with_one_user(
                 password_hash=fake_user.password_hash,
                 secundary_id=fake_user.secundary_id,
                 is_staff=fake_user.is_staff,
-                is_active_user=fake_user.is_active_user,
+                is_active=fake_user.is_active,
                 date_joined=fake_user.date_joined,
                 last_login=fake_user.last_login,
             )
