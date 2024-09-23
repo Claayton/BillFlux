@@ -24,10 +24,9 @@ class UserRepository:
 
     def insert_user(
         self,
-        name: str,
-        email: str,
-        username: str,
-        password_hash: str,
+        name: str = None,
+        email: str = None,
+        password_hash: str = None,
         secundary_id: int = 0,  # Configurar futuramente
         is_staff: bool = False,  # Configurar futuramente
         is_active_user: bool = False,  # Configurar futuramente
@@ -38,7 +37,6 @@ class UserRepository:
         Inserts a new user into the User table.
         :param name: User name.
         :param email: User email.
-        :param username: Username to be unique for each user.
         :param password_hash: Hash from the password of user.
         :param secundary_id: Secundary id from user.
         :param is_staff: If user is admin from the sistem.
@@ -55,7 +53,6 @@ class UserRepository:
                 new_user = UserModel(
                     name=name,
                     email=email,
-                    username=username,
                     password_hash=password_hash,
                     secundary_id=secundary_id,
                     is_staff=is_staff,
@@ -77,14 +74,11 @@ class UserRepository:
                     type_error=422, message="Parametros invalidos!, error"
                 ) from error
 
-    def get_user(
-        self, user_id: int = None, username: str = None, email: str = None
-    ) -> User:
+    def get_user(self, user_id: int = None, email: str = None) -> User:
         """
         Performs a search for one User registered in the system.
         The data are searching by user_id, username or email.
         :param user_id: ID from user.
-        :param username: user name, is a unique for each user.
         :param emil: Email from user.
         :return: One User and your data.
         """
@@ -101,14 +95,6 @@ class UserRepository:
                         select(UserModel).where(UserModel.id == user_id)
                     ).one()
 
-            elif username:
-
-                with self.__session() as session:
-
-                    query_user = session.exec(
-                        select(UserModel).where(UserModel.username == username)
-                    ).one()
-
             elif email:
 
                 with self.__session() as session:
@@ -121,7 +107,7 @@ class UserRepository:
 
                 raise DefaultError(
                     message="""
-                    E necessario o user_id, username ou email, para encontrar o usuario!, error""",
+                    E necessario o user_id ou email, para encontrar o usuario!, error""",
                     type_error=400,
                 )
 
@@ -154,7 +140,6 @@ class UserRepository:
         user_id: int,
         name: str = None,
         email: str = None,
-        username: str = None,
         password_hash: str = None,
         secundary_id: int = None,
         is_staff: bool = None,
@@ -167,7 +152,6 @@ class UserRepository:
         :param user_id: ID from user, needed to find user in the system.
         :param name: User name.
         :param email: User email.
-        :param username: Username to be unique for each user.
         :param password_hash: Hash from the password of user.
         :param secundary_id: Secundary id from user.
         :param is_staff: If user is admin from the sistem.
@@ -197,27 +181,6 @@ class UserRepository:
 
             try:
 
-                username_exist = session.exec(
-                    select(UserModel).where(UserModel.username == username)
-                ).one()
-
-                if username_exist and user.name != name:
-
-                    raise DefaultError(
-                        message="Nome de usuario indisponivel", type_error=400
-                    )
-
-            except NoResultFound:
-
-                ...
-
-            except Exception as error:
-
-                session.rollback()
-                raise DefaultError(message=str(error)) from error
-
-            try:
-
                 email_exist = session.exec(
                     select(UserModel).where(UserModel.email == email)
                 ).one()
@@ -241,8 +204,6 @@ class UserRepository:
                     user.name = name
                 if email is not None:
                     user.email = email
-                if username is not None:
-                    user.username = username
                 if password_hash is not None:
                     user.password_hash = password_hash
                 if secundary_id is not None:
@@ -300,7 +261,6 @@ class UserRepository:
                     id=user.id,
                     name=user.name,
                     email=user.email,
-                    username=user.username,
                     password_hash=user.password_hash,
                     secundary_id=user.secundary_id,
                     is_staff=user.is_staff,

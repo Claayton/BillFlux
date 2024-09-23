@@ -13,12 +13,11 @@ if TYPE_CHECKING:
 class User(SQLModel, table=True):
     """Table from users"""
 
-    __table_args__ = (UniqueConstraint("email", "username"),)
+    __table_args__ = (UniqueConstraint("email"),)
 
     id: Optional[int] = Field(primary_key=True, default=None, nullable=False)
     name: str
     email: str
-    username: str
     password_hash: str
 
     secundary_id: int = 0

@@ -56,7 +56,6 @@ def user_repository_with_one_user(
                 id=fake_user.id,
                 name=fake_user.name,
                 email=fake_user.email,
-                username=fake_user.username,
                 password_hash=fake_user.password_hash,
                 secundary_id=fake_user.secundary_id,
                 is_staff=fake_user.is_staff,

@@ -17,37 +17,31 @@ def test_insert_user(fake_user, user_repository, get_test_session):
     response = user_repository.insert_user(
         name=fake_user.name,
         email=fake_user.email,
-        username=fake_user.username,
         password_hash=fake_user.password_hash,
         secundary_id=fake_user.secundary_id,
     )
 
     with get_test_session as session:
         query_user = session.exec(
-            select(UserModel).where(UserModel.username == fake_user.username)
+            select(UserModel).where(UserModel.email == fake_user.email)
         ).one()
 
     # Testando se as informacoes enviadas pelo metodo estao no db.
     assert isinstance(response, User)
     assert response.name == query_user.name
     assert response.email == query_user.email
-    assert response.username == query_user.username
     assert response.password_hash == query_user.password_hash
     assert response.secundary_id == query_user.secundary_id
 
 
 @mark.parametrize(
-    "name,email,username,password_hash",
+    "email,password_hash",
     [
-        (None, user.email, user.username, user.password_hash),
-        (user.name, None, user.username, user.password_hash),
-        (user.name, user.email, None, user.password_hash),
-        (user.name, user.email, user.username, None),
+        (user.email, None),
+        (None, user.password_hash),
     ],
 )
-def test_insert_user_missing_one_of_the_params(
-    user_repository, name, email, username, password_hash
-):
+def test_insert_user_missing_one_of_the_params(user_repository, email, password_hash):
     """
     Testing error on insert_user method.
     If one the params is not used.
@@ -57,9 +51,7 @@ def test_insert_user_missing_one_of_the_params(
     with raises(DefaultError) as error:
 
         user_repository.insert_user(
-            name=name,
             email=email,
-            username=username,
             password_hash=password_hash,
         )
 
@@ -67,36 +59,32 @@ def test_insert_user_missing_one_of_the_params(
 
 
 @mark.parametrize(
-    "user_id,username,email",
-    [(user.id, None, None), (None, user.username, None), (None, None, user.email)],
+    "user_id,email",
+    [(user.id, None), (None, user.email)],
 )
 def test_get_user(
     user_repository_with_one_user,
     get_test_session,
     fake_user,
     user_id,
-    username,
     email,
 ):
     """
-    Testing the get_user methods, searching by id, username and email.
+    Testing the get_user methods, searching by id and email.
     It should return an object of type User with all the users information.
     """
 
-    response = user_repository_with_one_user.get_user(
-        user_id=user_id, username=username, email=email
-    )
+    response = user_repository_with_one_user.get_user(user_id=user_id, email=email)
 
     with get_test_session as session:
         query_user = session.exec(
-            select(UserModel).where(UserModel.username == fake_user.username)
+            select(UserModel).where(UserModel.email == fake_user.email)
         ).one()
 
     # Testing if the informations send from the method are in database.
     assert isinstance(response, User)
     assert response.name == query_user.name
     assert response.email == query_user.email
-    assert response.username == query_user.username
     assert response.password_hash == query_user.password_hash
     assert response.secundary_id == query_user.secundary_id
 
@@ -107,9 +95,7 @@ def test_get_user_with_no_results_found(user_repository, fake_user):
     It should return an empty list.
     """
 
-    response = user_repository.get_user(
-        user_id=fake_user.id, username=fake_user.username, email=fake_user.email
-    )
+    response = user_repository.get_user(user_id=fake_user.id, email=fake_user.email)
 
     # Testando se o retorno e uma lista vazia.
     assert response == []
@@ -123,7 +109,7 @@ def test_get_user_without_params(user_repository):
 
     with raises(Exception) as error:
 
-        user_repository.get_user(user_id=None, username=None, email=None)
+        user_repository.get_user(user_id=None, email=None)
 
     assert "error" in str(error.value)
 
@@ -139,7 +125,6 @@ def test_get_users(user_repository_with_one_user, fake_user, get_test_session):
             id=fake_user.id + 1,
             name=fake_user.name,
             email=f"{fake_user.email}2",
-            username=f"{fake_user.username}2",
             password_hash=fake_user.password_hash,
             secundary_id=fake_user.secundary_id,
             is_staff=fake_user.is_staff,
@@ -158,10 +143,8 @@ def test_get_users(user_repository_with_one_user, fake_user, get_test_session):
     # Testing if te sended informations from the method are on database.
     assert isinstance(response, list)
     assert response[0].id == query_users[0].id
-    assert response[0].username == query_users[0].username
     assert response[0].email == query_users[0].email
     assert response[1].id == query_users[1].id
-    assert response[1].username == query_users[1].username
     assert response[1].email == query_users[1].email
 
 
@@ -192,7 +175,6 @@ def test_update_user(user_repository_with_one_user, fake_user, get_test_session)
         user_id=fake_user.id,
         name=f"{fake_user.name}2",
         email=f"{fake_user.email}2",
-        username=f"{fake_user.username}2",
         is_staff=True,
         is_active_user=True,
     )
@@ -202,7 +184,6 @@ def test_update_user(user_repository_with_one_user, fake_user, get_test_session)
     assert response.id == query_user.id
     assert response.name != query_user.name
     assert response.email != query_user.email
-    assert response.username != query_user.username
 
 
 def test_update_user_with_no_results_found(user_repository, fake_user):
@@ -217,7 +198,6 @@ def test_update_user_with_no_results_found(user_repository, fake_user):
             user_id=fake_user.id,
             name=f"{fake_user.name}2",
             email=f"{fake_user.email}2",
-            username=f"{fake_user.username}2",
             is_staff=True,
             is_active_user=True,
         )
@@ -225,18 +205,17 @@ def test_update_user_with_no_results_found(user_repository, fake_user):
 
 
 @mark.parametrize(
-    "user_id,username,email",
+    "user_id,email",
     [
-        (user.id, f"{user.username}", user.email),
-        (user.id, user.username, f"{user.email}"),
+        (user.id, user.email),
+        (user.id, f"{user.email}"),
     ],
 )
-def test_update_user_with_username_or_email_unavailable(
+def test_update_user_with_email_unavailable(
     user_repository_with_one_user,
     get_test_session,
     fake_user,
     user_id,
-    username,
     email,
 ):
     """
@@ -249,7 +228,6 @@ def test_update_user_with_username_or_email_unavailable(
             id=fake_user.id + 1,
             name=fake_user.name,
             email=f"{fake_user.email}2",
-            username=f"{fake_user.username}2",
             password_hash=fake_user.password_hash,
             secundary_id=fake_user.secundary_id,
             is_staff=fake_user.is_staff,
@@ -265,8 +243,7 @@ def test_update_user_with_username_or_email_unavailable(
         user_repository_with_one_user.update_user(
             user_id=user_id,
             name=f"{fake_user.name}2",
-            email=email,
-            username=username,
+            email=f"{fake_user.email}2",
             is_staff=True,
             is_active_user=True,
         )
@@ -284,7 +261,7 @@ def test_delete_user(user_repository_with_one_user, fake_user, get_test_session)
 
     with get_test_session as session:
         query_user = session.exec(
-            select(UserModel).where(UserModel.username == fake_user.username)
+            select(UserModel).where(UserModel.email == fake_user.email)
         ).all()
 
     assert isinstance(response, User)

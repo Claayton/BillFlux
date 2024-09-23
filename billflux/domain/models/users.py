@@ -9,7 +9,6 @@ User = namedtuple(
         "id",
         "name",
         "email",
-        "username",
         "password_hash",
         "secundary_id",
         "is_staff",
