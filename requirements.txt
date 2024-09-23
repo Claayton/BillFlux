@@ -1,6 +1,7 @@
 annotated-types==0.7.0
 astroid==3.2.4
 asttokens==2.4.1
+bcrypt==4.2.0
 blinker==1.8.2
 cfgv==3.4.0
 click==8.1.7
