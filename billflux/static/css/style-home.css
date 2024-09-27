@@ -29,7 +29,6 @@ main {
     
 }
 
-
 .login-container {
     background-color: #ffffff;
     border-radius: 8px;
@@ -39,24 +38,9 @@ main {
     max-width: 400px;
 }
 
-
 .login-container h1 {
     margin: 0 0 20px;
     font-size: 24px;
-}
-
-.login-container label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: bold;
-}
-
-.login-container input {
-    width: 100%;
-    padding: 10px;
-    margin-bottom: 15px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
 }
 
 .login-container button {
@@ -72,6 +56,46 @@ main {
 
 .login-container button:hover {
     background-color: #165eab;
+}
+
+.input-container {
+    position: relative;
+    margin-top: 20px;
+}
+
+.placeholder-text {
+    position: absolute;
+    top: 40%;
+    left: 10px;
+    transform: translateY(-50%);
+    color: #0000008f;
+    font-size: 16px;
+    pointer-events: none;
+    transition: all 0.3s ease; /* Transição suave */
+}
+
+.input-field {
+    width: 100%;
+    padding: 10px;
+    font-size: 16px;
+    background-color: transparent;
+    border: 1px solid #ccc;
+    margin-bottom: 15px;
+    border-radius: 4px;
+}
+
+/* Efeito do placeholder ao focar */
+input:focus + .placeholder-text,
+input:not(:placeholder-shown) + .placeholder-text {
+    top: -10px; /* Move o placeholder para cima */
+    font-size: 12px; /* Diminui o tamanho do texto */
+    color: #000000; /* Muda a cor */
+}
+
+/* Ajustar borda do input ao focar */
+.input-field:focus {
+    border-color: #333;
+    outline: none;
 }
 
 #signup {

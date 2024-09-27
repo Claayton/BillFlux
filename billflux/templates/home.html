@@ -31,12 +31,14 @@
                 {% endwith %}
 
                 <form action="{{ url_for('bp_home.login') }}" method="post">
-                    <label for="signup-email">Email</label>
-                    <input type="email" id="signup-email" name="email" required>
-                    
-                    <label for="signup-password">Password</label>
-                    <input type="password" id="signup-password" name="password" required>
-                    
+                    <div class="input-container">
+                        <input type="email" class="input-field" name="email" placeholder="">
+                        <h5 class="placeholder-text">Email</h5>
+                    </div>
+                    <div class="input-container">
+                        <input type="password" class="input-field" name="password" placeholder="">
+                        <h5 class="placeholder-text">Password</h5>
+                    </div>
                     <button type="submit">Log In</button>
                 </form>
 
