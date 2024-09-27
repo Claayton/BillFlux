@@ -98,6 +98,20 @@ input:not(:placeholder-shown) + .placeholder-text {
     outline: none;
 }
 
+.login-flashes .error{
+    text-align: center;
+    list-style-type: none;
+    text-transform: uppercase;
+    margin: 0;
+    padding: 5px; /* Espaçamento interno */
+    border-radius: 10px; /* Bordas arredondadas */
+    font-size: 20px; /* Tamanho da fonte */
+    transition: opacity 0.3s ease; /* Transição suave para o efeito de opacidade */
+    background-color: #f8d7da; /* Fundo vermelho claro para mensagens de erro */
+    color: #721c24; /* Texto vermelho escuro */
+    border: 1px solid #f5c6cb; /* Borda vermelho claro */
+}
+
 #signup {
     background-color: #329b1d;
     margin-top: 10px;
