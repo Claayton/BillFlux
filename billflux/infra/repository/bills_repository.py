@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlmodel import select, create_engine
 from billflux.errors import DefaultError
 from billflux.infra.config.database import get_session
-from billflux.infra.entities.bill import Bill as BillModel
+from billflux.infra.entities.bills import Bill as BillModel
 from billflux.domain.models.bills import Bill
 
 
@@ -35,6 +35,7 @@ class BillRepository:
         bar_code: int = None,
         obs: str = None,
         date_from_add: datetime = datetime.now(),
+        user_id: int = None,
     ) -> Bill:
         """
         Inserts a new bill into the Bill table.
@@ -66,6 +67,7 @@ class BillRepository:
                 bar_code=bar_code,
                 obs=obs,
                 date_from_add=date_from_add,
+                user_id=user_id,
             )
 
             session.add(bill)

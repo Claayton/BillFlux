@@ -2,7 +2,8 @@
 
 from flask.blueprints import Blueprint
 from flask.templating import render_template
-from billflux.infra.repository.bill_repository import BillRepository
+from flask_login.utils import login_required
+from billflux.infra.repository.bills_repository import BillRepository
 from billflux.config import settings
 
 
@@ -13,6 +14,7 @@ database_url = settings["development"].DATABASE_URL
 
 @bp.route("/bills/", methods=["GET", "POST"])
 @bp.route("/bills", methods=["GET", "POST"])
+@login_required
 def bills():
     """Mount bills route, and list all bills in the table"""
 

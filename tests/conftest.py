@@ -3,7 +3,7 @@
 from pytest import fixture
 from dynaconf import settings
 from billflux import create_app
-from tests.mocks.mock_bills import mock_bill
+from tests.mocks import mock_user, mock_bill
 
 
 @fixture(scope="module")
@@ -15,11 +15,19 @@ def app():
     yield create_app()
 
 
-ticket = mock_bill()
+user = mock_user()
+bill = mock_bill()
+
+
+@fixture(scope="module")
+def fake_user():
+    """Mock of user"""
+
+    return user
 
 
 @fixture(scope="module")
 def fake_bill():
-    """Mock de usuario"""
+    """Mock of bill"""
 
-    return ticket
+    return bill
