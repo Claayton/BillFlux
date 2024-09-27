@@ -1,6 +1,5 @@
 """Module to create the app"""
 
-import os
 from flask import Flask
 from dynaconf import FlaskDynaconf
 from dotenv import load_dotenv

@@ -1,7 +1,10 @@
 """Controllers and Routes from Home"""
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_user
+from flask_login import login_user, current_user
+from sqlmodel import create_engine, select
+from billflux.infra.config.database import get_session
+from billflux.infra.entities import User as UserModel
 from billflux.infra.repository.users_repository import UserRepository
 from billflux.security.password_hash import PasswordHash
 from billflux.config import settings
@@ -16,33 +19,43 @@ database_url = settings["development"].DATABASE_URL
 @bp.route("/home")
 def index():
     """Index Route"""
+
+    if current_user.is_authenticated:
+        return redirect(url_for("bp_get_bills.bills"))
     return render_template("home.html")
 
 
-@bp.route("/login", methods=["POST"])
+@bp.route("/login", methods=["GET", "POST"])
 def login():
     """Login Route"""
-    email = request.form.get("email")
-    password = request.form.get("password")
 
-    user_repository = UserRepository(database_url=database_url)
-    password_hash = PasswordHash()
+    engine = create_engine(database_url)
 
-    user = user_repository.get_user(email=email)
+    if request.method == "POST":
+        email = request.form.get("email")
+        password = request.form.get("password")
 
-    if not user:
-        # Login falhou
-        flash("Invalid email or password", "error")
-        return redirect(url_for("bp_home.index"))
+        with get_session(engine) as session:
 
-    correct_password = password_hash.verify(
-        password=password, password_hashed=user.password_hash
-    )
+            user = session.exec(
+                select(UserModel).where(UserModel.email == email)
+            ).one_or_none()
 
-    if correct_password:
-        login_user(user)
-        flash(f"Logged in as {email}", "success")
-        return redirect(url_for("bp_get_bills.bills"))
+        password_hash = PasswordHash()
+
+        if not user:
+            # Login falhou
+            flash("Invalid email or password", "error")
+            return redirect(url_for("bp_home.index"))
+
+        correct_password = password_hash.verify(
+            password=password, password_hashed=user.password_hash
+        )
+
+        if correct_password:
+            login_user(user)
+            flash(f"Logged in as {email}", "success")
+            return redirect(url_for("bp_get_bills.bills"))
 
     flash("Invalid email or password", "error")
     return redirect(url_for("bp_home.index"))

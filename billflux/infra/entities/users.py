@@ -5,16 +5,10 @@ from datetime import datetime
 from flask_login import UserMixin
 from sqlalchemy import UniqueConstraint
 from sqlmodel import SQLModel, Field, Relationship
-from billflux.extensions.auth import lm
+
 
 if TYPE_CHECKING:
     from .bills import Bill
-
-
-@lm.user_loader
-def load_user(user_id):
-    """Load one user"""
-    return User.query.filter_by(id=user_id).first()
 
 
 class User(SQLModel, UserMixin, table=True):
@@ -29,7 +23,7 @@ class User(SQLModel, UserMixin, table=True):
 
     secundary_id: int = 0
     is_staff: bool
-    is_active: bool
+    is_active_user: bool
     last_login: datetime
     date_joined: datetime
 

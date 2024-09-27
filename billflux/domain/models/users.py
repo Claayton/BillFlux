@@ -12,7 +12,7 @@ User = namedtuple(
         "password_hash",
         "secundary_id",
         "is_staff",
-        "is_active",
+        "is_active_user",
         "last_login",
         "date_joined",
     ],

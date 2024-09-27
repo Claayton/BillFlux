@@ -29,7 +29,7 @@ class UserRepository:
         password_hash: str = None,
         secundary_id: int = 0,  # Configurar futuramente
         is_staff: bool = False,  # Configurar futuramente
-        is_active: bool = False,  # Configurar futuramente
+        is_active_user: bool = False,  # Configurar futuramente
         date_joined: Type[datetime] = datetime.now(),  # Configurar futuramente
         last_login: Type[datetime] = datetime.now(),
     ) -> User:
@@ -40,7 +40,7 @@ class UserRepository:
         :param password_hash: Hash from the password of user.
         :param secundary_id: Secundary id from user.
         :param is_staff: If user is admin from the sistem.
-        :param is_active: If the user is active in the sistem.
+        :param is_active_user: If the user is active in the sistem.
         :param date_joined: Date of the sigin on the sistem.
         :param last_login: Date of the last login in the sistem.
         :return: the insert User and your data.
@@ -56,7 +56,7 @@ class UserRepository:
                     password_hash=password_hash,
                     secundary_id=secundary_id,
                     is_staff=is_staff,
-                    is_active=is_active,
+                    is_active_user=is_active_user,
                     date_joined=date_joined,
                     last_login=last_login,
                 )
@@ -69,9 +69,10 @@ class UserRepository:
 
             except Exception as error:
                 session.rollback()
-                raise DefaultError(
+                raise error
+                """raise DefaultError(
                     type_error=422, message="Parametros invalidos!, error"
-                ) from error
+                ) from error"""
 
     def get_user(self, user_id: int = None, email: str = None) -> User:
         """
