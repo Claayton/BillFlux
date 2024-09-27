@@ -8,7 +8,6 @@ from sqlmodel import SQLModel, Field, Relationship
 from billflux.extensions.auth import lm
 
 if TYPE_CHECKING:
-    from .tokens import Token
     from .bills import Bill
 
 
@@ -34,7 +33,6 @@ class User(SQLModel, UserMixin, table=True):
     last_login: datetime
     date_joined: datetime
 
-    token: List["Token"] = Relationship(back_populates="user")
     bill: List["Bill"] = Relationship(back_populates="user")
 
     def __repr__(self):
