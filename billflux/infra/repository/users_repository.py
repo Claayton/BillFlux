@@ -69,10 +69,9 @@ class UserRepository:
 
             except Exception as error:
                 session.rollback()
-                raise error
-                """raise DefaultError(
+                raise DefaultError(
                     type_error=422, message="Parametros invalidos!, error"
-                ) from error"""
+                ) from error
 
     def get_user(self, user_id: int = None, email: str = None) -> User:
         """
@@ -143,7 +142,7 @@ class UserRepository:
         password_hash: str = None,
         secundary_id: int = None,
         is_staff: bool = None,
-        is_active: bool = None,
+        is_active_user: bool = None,
         date_joined: Type[datetime] = None,
         last_login: Type[datetime] = None,
     ) -> User:
@@ -155,7 +154,7 @@ class UserRepository:
         :param password_hash: Hash from the password of user.
         :param secundary_id: Secundary id from user.
         :param is_staff: If user is admin from the sistem.
-        :param is_active: If the user is active in the sistem.
+        :param is_active_user: If the user is active in the sistem.
         :param date_joined: Date of the sigin on the sistem.
         :param last_login: Date of the last login in the sistem.
         :return: The User with your updated data.
@@ -210,8 +209,8 @@ class UserRepository:
                     user.secundary_id = secundary_id
                 if is_staff is not None:
                     user.is_staff = is_staff
-                if is_active is not None:
-                    user.is_active = is_active
+                if is_active_user is not None:
+                    user.is_active_user = is_active_user
                 if date_joined is not None:
                     user.date_joined = date_joined
                 if last_login is not None:
@@ -264,7 +263,7 @@ class UserRepository:
                     password_hash=user.password_hash,
                     secundary_id=user.secundary_id,
                     is_staff=user.is_staff,
-                    is_active=user.is_active,
+                    is_active_user=user.is_active_user,
                     last_login=user.last_login,
                     date_joined=user.date_joined,
                 )

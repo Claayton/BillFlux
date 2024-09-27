@@ -128,7 +128,7 @@ def test_get_users(user_repository_with_one_user, fake_user, get_test_session):
             password_hash=fake_user.password_hash,
             secundary_id=fake_user.secundary_id,
             is_staff=fake_user.is_staff,
-            is_active=fake_user.is_active,
+            is_active_user=fake_user.is_active_user,
             date_joined=fake_user.date_joined,
             last_login=fake_user.last_login,
         )
@@ -176,7 +176,7 @@ def test_update_user(user_repository_with_one_user, fake_user, get_test_session)
         name=f"{fake_user.name}2",
         email=f"{fake_user.email}2",
         is_staff=True,
-        is_active=True,
+        is_active_user=True,
     )
 
     # Testing if the method sended informations are on database.
@@ -199,7 +199,7 @@ def test_update_user_with_no_results_found(user_repository, fake_user):
             name=f"{fake_user.name}2",
             email=f"{fake_user.email}2",
             is_staff=True,
-            is_active=True,
+            is_active_user=True,
         )
     assert "Usuario nao encontrado!" in str(error.value)
 
@@ -227,7 +227,7 @@ def test_update_user_with_email_unavailable(
             password_hash=fake_user.password_hash,
             secundary_id=fake_user.secundary_id,
             is_staff=fake_user.is_staff,
-            is_active=fake_user.is_active,
+            is_active_user=fake_user.is_active_user,
             date_joined=fake_user.date_joined,
             last_login=fake_user.last_login,
         )
@@ -241,7 +241,7 @@ def test_update_user_with_email_unavailable(
             name=f"{fake_user.name}2",
             email=f"{fake_user.email}2",
             is_staff=True,
-            is_active=True,
+            is_active_user=True,
         )
 
     assert "indisponivel" in str(error.value)
