@@ -18,5 +18,6 @@ Bill = namedtuple(
         "bar_code",
         "obs",
         "date_from_add",
+        "user_id",
     ],
 )

@@ -2,9 +2,10 @@
 
 from collections import namedtuple
 from faker import Faker
-
+from .mock_user import mock_user
 
 fake = Faker()
+user = mock_user()
 
 BillMock = namedtuple(
     "Bill",
@@ -43,5 +44,5 @@ def mock_bill():
         bar_code=fake.random_number(),
         obs=fake.text(),
         date_from_add=fake.date_time(),
-        user_id=fake.random_number(),
+        user_id=user.id,
     )

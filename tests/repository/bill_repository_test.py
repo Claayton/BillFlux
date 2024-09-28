@@ -4,10 +4,18 @@ from sqlmodel import select
 from billflux.infra.entities.bills import Bill
 
 
-def test_insert_bill(fake_bill, bill_repository, get_test_session):
+def test_insert_bill(
+    user_repository_with_one_user,
+    fake_user,
+    fake_bill,
+    bill_repository,
+    get_test_session,
+):
     """
     Testing the insert_bill method.
     """
+
+    user = user_repository_with_one_user.get_user(user_id=fake_user.id)
 
     response = bill_repository.insert_bill(
         status=fake_bill.status,
@@ -22,7 +30,7 @@ def test_insert_bill(fake_bill, bill_repository, get_test_session):
         bar_code=fake_bill.bar_code,
         obs=fake_bill.obs,
         date_from_add=fake_bill.date_from_add,
-        user_id=fake_bill.user_id,
+        user_id=user.id,
     )
 
     with get_test_session as session:

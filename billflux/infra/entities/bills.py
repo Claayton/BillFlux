@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 class Bill(SQLModel, table=True):
     """Bills table"""
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: Optional[int] = Field(primary_key=True, default=None, nullable=True)
     status: bool = Field(default=False)
     due_date: datetime = Field(nullable=True)
     value: Optional[int] = Field(nullable=True)
