@@ -30,4 +30,4 @@ class Bill(SQLModel, table=True):
     user: "User" = Relationship(back_populates="bill")
 
     def __repr__(self):
-        return f"<Bill {self.id}: {self.user.name}>"
+        return f"<Bill {self.id}: {self.user.email}>"
