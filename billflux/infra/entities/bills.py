@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 class Bill(SQLModel, table=True):
     """Bills table"""
 
-    id: Optional[int] = Field(primary_key=True, default=None, nullable=True)
+    id: Optional[int] = Field(primary_key=True, nullable=False)
     status: bool = Field(default=False)
     due_date: datetime = Field(nullable=True)
     value: Optional[int] = Field(nullable=True)
@@ -25,7 +25,7 @@ class Bill(SQLModel, table=True):
     obs: Optional[str] = Field(nullable=True)
     date_from_add: datetime = Field(nullable=False)
 
-    user_id: int = Field(foreign_key="user.id", primary_key=True, nullable=False)
+    user_id: int = Field(foreign_key="user.id", nullable=False)
 
     user: "User" = Relationship(back_populates="bill")
 

@@ -1,7 +1,8 @@
 """Tests for the BillRepository Class"""
 
 from sqlmodel import select
-from billflux.infra.entities.bills import Bill
+from billflux.infra.entities.bills import Bill as BillModel
+from billflux.domain.models.bills import Bill
 
 
 def test_insert_bill(
@@ -35,7 +36,7 @@ def test_insert_bill(
 
     with get_test_session as session:
         query_bill = session.exec(
-            select(Bill).where(Bill.bar_code == fake_bill.bar_code)
+            select(BillModel).where(BillModel.bar_code == fake_bill.bar_code)
         ).one()
 
     # Testing if the information sent by the method is in database.
@@ -47,12 +48,14 @@ def test_insert_bill(
 def test_delete_bill(fake_bill, bill_repository_with_one_bill, get_test_session):
     """Testing the delete_bill method"""
 
-    with get_test_session as session:
-        query_bill = session.exec(select(Bill).where(Bill.id == fake_bill.id)).one()
-
     response = bill_repository_with_one_bill.delete_bill(bill_id=fake_bill.id)
 
+    with get_test_session as session:
+        query_bill = session.exec(
+            select(BillModel).where(BillModel.id == fake_bill.id)
+        ).one_or_none()
+
     # Testing if the information sent by the method is in database.
-    assert response.bar_code == query_bill.bar_code
-    assert response.bill_type == query_bill.bill_type
-    assert response.suplyer == query_bill.suplyer
+    assert isinstance(response, Bill)
+    assert response.id == fake_bill.id
+    assert not query_bill
