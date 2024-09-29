@@ -1,3 +1,5 @@
+
+// Script para exibir modal de cadastro de usuarios
 document.addEventListener('DOMContentLoaded', function () {
     const signupBtn = document.getElementById('signup');
     const modalSignup = document.getElementById('modal-signup');

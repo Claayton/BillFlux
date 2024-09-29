@@ -42,8 +42,11 @@ def user_repository(clean_database):  # pylint: disable=W0621
 
 @fixture(scope="function")
 def user_repository_with_one_user(
-    user_repository, fake_user, get_test_session
-):  # pylint: disable=W0621
+    user_repository,
+    fake_user,
+    get_test_session,
+    clean_database,  # pylint: disable=W0621
+):
     """
     Fixture to mount UserRepository object with a registered user,
     And delete the user at the end.
@@ -88,33 +91,44 @@ def bill_repository(clean_database):  # pylint: disable=W0621
 
 @fixture(scope="function")
 def bill_repository_with_one_bill(
-    bill_repository, fake_bill, get_test_session, clean_database
-):  # pylint: disable=W0621
+    get_test_session,  # pylint: disable=W0621
+    user_repository_with_one_user,  # pylint: disable=W0621
+    fake_user,  # pylint: disable=W0621
+    bill_repository,  # pylint: disable=W0621
+    fake_bill,
+    clean_database,  # pylint: disable=W0621
+):
     """Fixture to show a object UserRepository whit one bill added."""
 
-    with get_test_session as session:
+    user = user_repository_with_one_user.get_user(user_id=fake_user.id)
 
-        bill = BillModel(
-            id=fake_bill.id,
-            status=fake_bill.status,
-            due_date=fake_bill.due_date,
-            value=fake_bill.value,
-            reference=fake_bill.reference,
-            suplyer=fake_bill.suplyer,
-            bill_type=fake_bill.bill_type,
-            days=fake_bill.days,
-            payday=fake_bill.payday,
-            value_from_payment=fake_bill.value_from_payment,
-            bar_code=fake_bill.bar_code,
-            obs=fake_bill.obs,
-            date_from_add=fake_bill.date_from_add,
-            user_id=fake_bill.user_id,
-        )
+    try:
 
-        session.add(bill)
-        session.commit()
+        with get_test_session as session:
 
-        try:
-            yield bill_repository
-        finally:
-            clean_database  # pylint: disable=W0104
+            bill = BillModel(
+                id=fake_bill.id,
+                status=fake_bill.status,
+                due_date=fake_bill.due_date,
+                value=fake_bill.value,
+                reference=fake_bill.reference,
+                suplyer=fake_bill.suplyer,
+                bill_type=fake_bill.bill_type,
+                days=fake_bill.days,
+                payday=fake_bill.payday,
+                value_from_payment=fake_bill.value_from_payment,
+                bar_code=fake_bill.bar_code,
+                obs=fake_bill.obs,
+                date_from_add=fake_bill.date_from_add,
+                user_id=user.id,
+            )
+            session.add(bill)
+            session.commit()
+
+    except IntegrityError as error:
+        raise error
+
+    try:
+        yield bill_repository
+    finally:
+        clean_database  # pylint: disable=W0104

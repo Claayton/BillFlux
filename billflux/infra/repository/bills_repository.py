@@ -76,17 +76,20 @@ class BillRepository:
 
             return Bill(**dict(bill))
 
-    def get_bills(self) -> List[Bill]:
+    def get_bills(self, user_id: int = None) -> List[Bill]:
         """
         Performs a search for all Bills registered in the system.
+        :param user_id: ID from user.
         :return: A list with all Bills and their data.
         """
 
         with self.__session() as session:
 
-            sql = select(BillModel)
+            sql = session.exec(
+                select(BillModel).where(BillModel.user_id == user_id)
+            ).all()
 
-            return [Bill(**dict(bill)) for bill in session.exec(sql)]
+        return [Bill(**dict(bill)) for bill in sql] if sql else []
 
     def delete_bill(self, bill_id: int) -> Bill:
         """

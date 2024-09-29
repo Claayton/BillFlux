@@ -3,6 +3,7 @@
 from datetime import datetime
 from flask import request, redirect, url_for
 from flask.blueprints import Blueprint
+from flask_login import current_user
 from billflux.infra.repository.bills_repository import BillRepository
 from billflux.config import settings
 
@@ -36,6 +37,7 @@ def insert_bill():
         suplyer=suplyer,
         bill_type=bill_type,
         obs=obs,
+        user_id=current_user.id,
     )
 
     return redirect(url_for("bp_get_bills.bills"))

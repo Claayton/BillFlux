@@ -45,7 +45,7 @@ def login():
 
         if not user:
             # Login falhou
-            flash("Invalid email or password", "error")
+            flash("INVALID EMAIL OR PASSWORD!", "error")
             return redirect(url_for("bp_home.index"))
 
         correct_password = password_hash.verify(
@@ -54,10 +54,9 @@ def login():
 
         if correct_password:
             login_user(user)
-            flash(f"Logged in as {email}", "success")
             return redirect(url_for("bp_get_bills.bills"))
 
-    flash("Invalid email or password", "error")
+    flash("INVALID EMAIL OR PASSWORD!", "error")
     return redirect(url_for("bp_home.index"))
 
 
@@ -77,16 +76,16 @@ def signup():
     if user_exists:
 
         # Usuário já existe
-        flash("User already exists", "error")
+        flash("User already exists!", "error")
         return redirect(url_for("bp_home.index"))
 
     if password != confirm_password:
 
         # Senhas não coincidem
-        flash("Passwords do not match", "error")
+        flash("Passwords do not match!", "error")
         return redirect(url_for("bp_home.index"))
 
     # Adiciona o novo usuário ao "banco de dados"
     user_repository.insert_user(email=email, password_hash=password_hash.hash(password))
-    flash(f"User {email} created successfully", "success")
+    flash(f"User {email} created successfully!", "success")
     return redirect(url_for("bp_home.index"))
