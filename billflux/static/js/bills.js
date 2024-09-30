@@ -141,3 +141,32 @@ document.addEventListener('DOMContentLoaded', (event) => {
         });
     }
 });
+
+// Função para converter o código de barras no padrão FEBRABAN
+function decodeFebraban(barcode) {
+    // Implementação da lógica que converte o código de barras para os dados necessários
+    const value = parseFloat(barcode.slice(9, 19)) / 100; // Exemplo de extração do valor
+    const dueDate = "2024-09-30"; // Exemplo de data (substitua com a lógica correta)
+    const supplier = "Fornecedor Exemplo"; // Exemplo de fornecedor
+
+    // Retornar os valores extraídos
+    return {
+        value: value.toFixed(2),
+        dueDate: dueDate,
+        supplier: supplier
+    };
+}
+
+// Escutar o evento de mudança no campo do código de barras
+document.getElementById('bar_code').addEventListener('input', function () {
+    const barcode = this.value;
+
+    if (barcode.length === 44) { // Verificar se o código de barras tem o tamanho esperado
+        const data = decodeFebraban(barcode);
+
+        // Preencher os campos com os valores extraídos
+        document.getElementById('value').value = data.value;
+        document.getElementById('vencimento-input').value = data.dueDate;
+        document.getElementById('suplyer').value = data.supplier;
+    }
+});
