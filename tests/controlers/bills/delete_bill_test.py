@@ -1,8 +1,6 @@
 """Test from delete_bill route"""
 
 from unittest.mock import patch
-from dynaconf import settings
-from sqlmodel import select
 from billflux.infra.entities.bills import Bill as BillModel
 from billflux.infra.entities.users import User as UserModel
 
@@ -47,7 +45,6 @@ def test_delete_bill(client, fake_user, fake_bill, get_test_session):
         session.add(new_bill)
         session.commit()
 
-        # Mock
         with patch(
             "billflux.controlers.bills.delete_bill.database_url", "sqlite:///teste.db"
         ):
