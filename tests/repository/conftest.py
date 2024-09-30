@@ -2,31 +2,10 @@
 
 from pytest import fixture
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import delete, create_engine
 from billflux.infra.repository import UserRepository, BillRepository
 from billflux.infra.entities.bills import Bill as BillModel
 from billflux.infra.entities.users import User as UserModel
-from billflux.infra.config.database import get_session
 from billflux.config import settings
-
-
-@fixture(scope="function")
-def get_test_session():
-    """Fixture to get a session test"""
-
-    engine = create_engine(settings["testing"].DATABASE_URL)
-
-    return get_session(engine)
-
-
-@fixture(scope="function")
-def clean_database(get_test_session):  # pylint: disable=w0621
-    """Fixture to clean database"""
-
-    with get_test_session as session:
-        session.exec(delete(BillModel))
-        session.exec(delete(UserModel))
-        session.commit()
 
 
 @fixture(scope="function")
@@ -42,9 +21,9 @@ def user_repository(clean_database):  # pylint: disable=W0621
 
 @fixture(scope="function")
 def user_repository_with_one_user(
-    user_repository,
+    user_repository,  # pylint: disable=W0621
     fake_user,
-    get_test_session,
+    get_test_session,  # pylint: disable=W0621
     clean_database,  # pylint: disable=W0621
 ):
     """
