@@ -40,4 +40,4 @@ def insert_bill():
         user_id=current_user.id,
     )
 
-    return redirect(url_for("bp_get_bills.bills"))
+    return redirect(url_for("bp_get_bills.bills"), code=201)

@@ -1,7 +1,7 @@
 """Controllers and Routes from Home"""
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_user, current_user
+from flask_login import login_user, current_user, login_required, logout_user
 from sqlmodel import create_engine, select
 from billflux.infra.config.database import get_session
 from billflux.infra.entities import User as UserModel
@@ -88,4 +88,14 @@ def signup():
     # Adiciona o novo usuário ao "banco de dados"
     user_repository.insert_user(email=email, password_hash=password_hash.hash(password))
     flash(f"User {email} created successfully!", "success")
+    return redirect(url_for("bp_home.index"))
+
+
+@bp.route("/logout", methods=["GET"])
+@login_required
+def logout():
+    """Logout from conected users"""
+
+    logout_user()
+
     return redirect(url_for("bp_home.index"))

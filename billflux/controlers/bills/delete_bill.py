@@ -19,6 +19,6 @@ def bills(bill_id):
     delete_bill = bills_repository.delete_bill(bill_id=bill_id)
 
     if delete_bill:
-        return jsonify({"message": "Item excluído com sucesso!"}), 200
+        return jsonify({"message": "Item excluído com sucesso!"}), 204
     else:
         return jsonify({"message": "Erro ao excluir o item."}), 500
