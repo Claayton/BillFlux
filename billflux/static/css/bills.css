@@ -100,10 +100,10 @@ main {
 
 /* O conteúdo do modal */
 .insert-modal-content {
-    bottom: 14%;
+    bottom: 32%;
     background-color: #fff; /* Cor de fundo do modal */
     border-radius: 5px; /* Bordas arredondadas */
-    max-width: 50%;
+    max-width: 65%;
     position: relative; /* Permite posicionar o botão de fechar */
     margin: 15% auto;
     padding: 20px;
@@ -137,7 +137,7 @@ main {
     background-color: #6c6f6c; /* Cor de fundo */
     color: white; /* Cor do texto */
     padding: 5px; /* Espaçamento interno */
-    margin: 25px 0px 0px 0px;
+    margin: 15px 0px 0px 0px;
     border: none; /* Remover a borda padrão */
     text-align: center; /* Centralizar o texto */
     text-decoration: none; /* Remover sublinhado */
@@ -150,6 +150,18 @@ main {
 
 .insert-boletoForm #insert-save-button:hover {
     background-color: #4d4d4d; /* Cor de fundo no hover */
+}
+
+.svg-container {
+    display: flex;
+    justify-content: center; /* Centraliza horizontalmente */
+    align-items: center;    /* Centraliza verticalmente */
+    margin: 15px 0px 0px 0px;
+}
+
+#codigoBarrasSVG {
+    width: 830px;
+    height: 120px;
 }
 
 /* Botão de fechar */

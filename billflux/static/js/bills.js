@@ -90,28 +90,60 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+// Transforma codigo 47 em 44
+function transformarCodigoBarras47Para44(codigo47) {
+    // Verifica se o código tem 47 dígitos
+    if (codigo47.length !== 47) {
+        throw new Error("O código de barras deve ter exatamente 47 dígitos.");
+    }
+
+    // Extrai as partes do código de 47 dígitos
+    const identificacaoBanco = codigo47.substring(0, 3); // Posições 1 a 3
+    const codigoMoeda = codigo47.charAt(3);              // Posição 4
+    const dvGeral = codigo47.charAt(32);                  // Posição 33 (DV geral)
+    const fatorVencimento = codigo47.substring(33, 37);   // Posições 34 a 37
+    const valorBoleto = codigo47.substring(37);           // Posições 38 a 47 (valor do boleto)
+
+    // Campo livre sem os dígitos verificadores dos blocos 1, 2 e 3
+    const campoLivre = (
+        codigo47.substring(4, 9) +  // Posições 5 a 9 do código de 47 (bloco 1 sem o DV)
+        codigo47.substring(10, 20) + // Posições 11 a 20 (bloco 2 sem o DV)
+        codigo47.substring(21, 31)    // Posições 22 a 31 (bloco 3 sem o DV)
+    );
+
+    // Concatena todas as partes para formar o código de barras de 44 dígitos
+    const codigo44 = identificacaoBanco + codigoMoeda + dvGeral + fatorVencimento + valorBoleto.substring(0, 10) + campoLivre;
+
+    return codigo44;
+}
+
 /// Script para pegar o codigo do boleto e extrair as informações necessarias
 document.addEventListener('DOMContentLoaded', (event) => {
     const barCodeInput = document.getElementById('bar_code');
     const valueInput = document.getElementById('value');
     const vencimentoInput = document.getElementById('vencimento-input');
     const referenceInput = document.getElementById('reference'); // Campo "Referente a"
+    const resultadoDiv = document.getElementById('codigoBarrasSVG');
 
     if (barCodeInput) {
         // Evento para quando o campo perde o foco
         barCodeInput.addEventListener('blur', function() {
-            const barCodeValue = barCodeInput.value.replace(/\D/g, '');
+            let barCodeValue = barCodeInput.value.replace(/\D/g, '');
             console.log('Código de barras:', barCodeValue);
             // Aqui você pode fazer o que quiser com o valor do código de barras
-
-            if (barCodeValue.length !== 47) {
-                throw new Error('Linha digitável inválida. Deve conter 47 dígitos.');
-            }
+            
+            if (barCodeValue.length !== 44 && barCodeValue.length !== 47) {
+                throw new Error('Linha digitável inválida. Deve conter 47 dígitos.')
+            };
+            
+            if (barCodeValue.length == 47) {
+            barCodeValue = transformarCodigoBarras47Para44(barCodeValue)
+            };
 
             // Data base: 7 de outubro de 1997
             const BASE_DATE = new Date(1997, 9, 7); 
-            const fatorVencimento = parseInt(barCodeValue.substring(33, 37), 10);
-            const valorBoleto = barCodeValue.substring(37, 47);
+            const fatorVencimento = parseInt(barCodeValue.substring(5, 9), 10) + 1;
+            const valorBoleto = barCodeValue.substring(9, 19);
 
             // Calcula a data de vencimento
             const vencimentoDate = new Date(BASE_DATE.getTime() + (fatorVencimento * 24 * 60 * 60 * 1000));
@@ -134,6 +166,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
             // Atualiza os campos de valor e vencimento
             valueInput.value = valor;
             vencimentoInput.value = formatDateForInput(vencimentoDate);
+            
+            JsBarcode(resultadoDiv, barCodeValue, {
+                format: "ITF", // Formato Interleaved 2 of 5
+                displayValue: false // Não exibe o valor abaixo do código de barras
+            });
         
             // Define o foco no campo "Referente a"
             referenceInput.focus();
