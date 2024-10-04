@@ -1,5 +1,6 @@
 """File to instantiate the blueprint for the insert bill"""
 
+import re
 from datetime import datetime
 from flask import request, redirect, url_for
 from flask.blueprints import Blueprint
@@ -18,7 +19,7 @@ def insert_bill():
     """Insert a new bill into the database route"""
 
     # Insert a new account and data in main table
-    bar_code = request.form.get("car_code")
+    bar_code = request.form.get("bar_code")
     value = request.form.get("value")
     vencimento = request.form.get("vencimento")
     reference = request.form.get("reference")
@@ -30,7 +31,7 @@ def insert_bill():
 
     bill_repository = BillRepository(database_url)
     bill_repository.insert_bill(
-        bar_code=bar_code,
+        bar_code=re.sub(r"\D", "", bar_code),
         value=value,
         due_date=formated_vencimento,
         reference=reference,
@@ -40,4 +41,4 @@ def insert_bill():
         user_id=current_user.id,
     )
 
-    return redirect(url_for("bp_get_bills.bills"), code=201)
+    return redirect(url_for("bp_get_bills.bills"))

@@ -297,6 +297,11 @@ main .search input:focus {
     min-height: 100%;
 }
 
+.table-container thead th {
+    color: white;
+    font-weight: bold;
+}
+
 .table-container th {
     margin: 0px 10px;
 }
