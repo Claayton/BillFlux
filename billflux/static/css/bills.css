@@ -42,6 +42,31 @@ main {
     left: 0;
 }
 
+.logout-container {
+    display: flex;
+    justify-content: right;
+}
+
+.logout-button {
+    background-color: #ff4b5c; /* Cor de fundo */
+    color: white; /* Cor do texto */
+    border: none; /* Remove borda padrão */
+    padding: 10px 20px; /* Espaçamento interno */
+    margin: 20px;
+    text-align: center; /* Centraliza o texto */
+    text-decoration: none; /* Remove sublinhado */
+    display: inline-block; /* Faz o botão se comportar como um bloco inline */
+    font-size: 16px; /* Tamanho do texto */
+    cursor: pointer; /* Cursor de ponteiro ao passar o mouse */
+    border-radius: 5px; /* Bordas arredondadas */
+    transition: background-color 0.3s ease; /* Animação suave */
+}
+
+.logout-button:hover {
+    background-color: #e60026; /* Cor de fundo ao passar o mouse */
+}
+
+
 .navbar-1 {
     width: 0%;
     height: 0%;
