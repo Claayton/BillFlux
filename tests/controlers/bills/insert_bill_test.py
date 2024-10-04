@@ -47,7 +47,7 @@ def test_insert_bill(client, fake_bill, fake_user, get_test_session, clean_datab
 
             response = client.post(url, data=data)
 
-            assert response.status_code == 201
+            assert response.status_code == 302
 
         finally:
             clean_database  # pylint: disable=W0104

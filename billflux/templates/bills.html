@@ -1,12 +1,17 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/bills.css') }}" rel="stylesheet">
 <script src="https://kit.fontawesome.com/c996c5ea01.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
 
 {% extends 'base.html' %}
 
 {% block title %}{{ super() }} - Bills{% endblock %}
 
 {% block content %}
-
+<div class="logout-container">
+    <a href="/logout">
+        <button class="logout-button">Logout</button>
+    </a>
+</div>
 <main id="main">
 
     <div class="navbar-1">
@@ -50,6 +55,9 @@
 
                         <label for="obs">Observações:</label>
                         <input type="text" id="obs" name="obs">
+                        <div class="svg-container">
+                            <svg id="codigoBarrasSVG"></svg>
+                        </div>
 
                         <!-- Adicione outros campos conforme necessário -->
 
@@ -171,6 +179,6 @@
 
 </main>
 
-<script type="text/javascript" src="{{ url_for('static', filename='js/bills.js') }}"></script>
+<script src="{{ url_for('static', filename='js/bills.js') }}"></script>
 
 {% endblock %}

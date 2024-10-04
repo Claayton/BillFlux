@@ -42,6 +42,31 @@ main {
     left: 0;
 }
 
+.logout-container {
+    display: flex;
+    justify-content: right;
+}
+
+.logout-button {
+    background-color: #ff4b5c; /* Cor de fundo */
+    color: white; /* Cor do texto */
+    border: none; /* Remove borda padrão */
+    padding: 10px 20px; /* Espaçamento interno */
+    margin: 20px;
+    text-align: center; /* Centraliza o texto */
+    text-decoration: none; /* Remove sublinhado */
+    display: inline-block; /* Faz o botão se comportar como um bloco inline */
+    font-size: 16px; /* Tamanho do texto */
+    cursor: pointer; /* Cursor de ponteiro ao passar o mouse */
+    border-radius: 5px; /* Bordas arredondadas */
+    transition: background-color 0.3s ease; /* Animação suave */
+}
+
+.logout-button:hover {
+    background-color: #e60026; /* Cor de fundo ao passar o mouse */
+}
+
+
 .navbar-1 {
     width: 0%;
     height: 0%;
@@ -100,10 +125,10 @@ main {
 
 /* O conteúdo do modal */
 .insert-modal-content {
-    bottom: 14%;
+    bottom: 32%;
     background-color: #fff; /* Cor de fundo do modal */
     border-radius: 5px; /* Bordas arredondadas */
-    max-width: 50%;
+    max-width: 65%;
     position: relative; /* Permite posicionar o botão de fechar */
     margin: 15% auto;
     padding: 20px;
@@ -137,7 +162,7 @@ main {
     background-color: #6c6f6c; /* Cor de fundo */
     color: white; /* Cor do texto */
     padding: 5px; /* Espaçamento interno */
-    margin: 25px 0px 0px 0px;
+    margin: 15px 0px 0px 0px;
     border: none; /* Remover a borda padrão */
     text-align: center; /* Centralizar o texto */
     text-decoration: none; /* Remover sublinhado */
@@ -150,6 +175,18 @@ main {
 
 .insert-boletoForm #insert-save-button:hover {
     background-color: #4d4d4d; /* Cor de fundo no hover */
+}
+
+.svg-container {
+    display: flex;
+    justify-content: center; /* Centraliza horizontalmente */
+    align-items: center;    /* Centraliza verticalmente */
+    margin: 15px 0px 0px 0px;
+}
+
+#codigoBarrasSVG {
+    width: 830px;
+    height: 120px;
 }
 
 /* Botão de fechar */
@@ -258,6 +295,11 @@ main .search input:focus {
     font-weight: bold;
     font-size: 14px;
     min-height: 100%;
+}
+
+.table-container thead th {
+    color: white;
+    font-weight: bold;
 }
 
 .table-container th {
