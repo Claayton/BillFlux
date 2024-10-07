@@ -25,6 +25,63 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+
+// Script para exibir o modal do botao de pagamento boleto:
+
+const payButtons = document.querySelectorAll('.openPayModalBtn');
+const modal = document.getElementById('pay-modal');
+const closeModal = document.querySelector('.pay-close');
+const resultadoDiv = document.getElementById('payCodigoBarrasSVG');
+
+// Função para abrir o modal e preencher os valores
+payButtons.forEach(button => {
+    button.addEventListener('click', function() {
+        // Captura os valores dos atributos data-*
+        let barCodeValue = this.dataset.barcode;
+        const value = this.dataset.value;
+        const dueDate = this.dataset.dueDate;
+        const reference = this.dataset.reference;
+        const suplyer = this.dataset.suplyer;
+        const billType = this.dataset.billType;
+        const obs = this.dataset.obs;
+
+        // Preenche os valores no modal
+        document.getElementById('modal-barcode').innerText = barCodeValue;
+        document.getElementById('modal-value').innerText = value;
+        document.getElementById('modal-due-date').innerText = dueDate;
+        document.getElementById('modal-reference').innerText = reference;
+        document.getElementById('modal-suplyer').innerText = suplyer;
+        document.getElementById('modal-bill-type').innerText = billType;
+        document.getElementById('modal-obs').innerText = obs;
+
+
+        if (barCodeValue.length == 47) {
+            barCodeValue = transformarCodigoBarras47Para44(barCodeValue)
+            };
+        console.log(payCodigoBarrasSVG)
+        JsBarcode(payCodigoBarrasSVG, barCodeValue, {
+            format: "ITF", // Formato Interleaved 2 of 5
+            displayValue: false // Não exibe o valor abaixo do código de barras
+        });
+
+        // Exibe o modal
+        modal.style.display = 'block';
+    });
+});
+
+// Função para fechar o modal
+closeModal.addEventListener('click', function() {
+    modal.style.display = 'none';
+});
+
+// Fecha o modal quando clica fora dele
+window.addEventListener('click', function(event) {
+    if (event.target === modal) {
+        modal.style.display = 'none';
+    }
+});
+
+
 // Script para exibir o modal dos campos referente a e observações:
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -90,7 +147,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// Transforma codigo 47 em 44
+// Script para transformar codigo 47 em 44
 function transformarCodigoBarras47Para44(codigo47) {
     // Verifica se o código tem 47 dígitos
     if (codigo47.length !== 47) {

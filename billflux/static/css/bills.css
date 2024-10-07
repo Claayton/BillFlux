@@ -354,6 +354,126 @@ tr:hover .options-bill-container label svg {
     color: white;
 }
 
+.pay-modal {
+    display: none; /* Começa escondido */
+    position: fixed; /* Fica fixo na tela */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5); /* Cor de fundo com opacidade */
+    justify-content: center; /* Centraliza o conteúdo horizontalmente */
+    align-items: center; /* Centraliza o conteúdo verticalmente */
+    z-index: 1000; /* Garante que o modal fique acima dos outros elementos */
+}
+
+/* O conteúdo do modal */
+.pay-modal-content {
+    bottom: 32%;
+    background-color: #fff; /* Cor de fundo do modal */
+    border-radius: 5px; /* Bordas arredondadas */
+    max-width: 65%;
+    position: relative; /* Permite posicionar o botão de fechar */
+    margin: 15% auto;
+    padding: 20px;
+    border: 1px solid #888;
+}
+
+.pay-modal-content .pay-boletoForm {
+    padding: 0px 20px;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 10px; /* Espaçamento entre os selects */
+    width: 100%; /* Ocupa toda a largura disponível */
+}
+
+.bar_code-modal-container {
+    display: flex;
+    flex-direction: row;
+}
+
+.bar_code-modal-container h4, .valor-modal-container h4, .vencimento-modal-container h4 {
+    padding: 15px 10px 10px 0px;
+}
+
+.bar_code-modal-container p {
+    margin: 5px 0; /* Margem acima e abaixo dos parágrafos */
+    font-size: 20px; /* Tamanho do texto */
+    color: #555; /* Cor do texto */
+    padding: 10px;
+    background-color: #1d8ede3a;
+    border-radius: 5px; /* Bordas arredondadas */
+}
+
+.pay-modal-content .pay-boletoForm input, h2 {
+    padding: 2px 20px;
+}
+
+.valor-modal-container, .vencimento-modal-container{
+    display: flex;
+    flex-direction: row;
+}
+
+.valor-modal-container p, .vencimento-modal-container p {
+    margin: 5px 0;
+    font-size: 20px;
+    padding: 10px;
+    color: #555; /* Cor do texto */
+}
+
+.valor-vencimento-container {
+    padding: 15px 0px 0px 0px;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.pay-boletoForm #pay-save-button {
+    background-color: #6c6f6c; /* Cor de fundo */
+    color: white; /* Cor do texto */
+    padding: 5px; /* Espaçamento interno */
+    margin: 15px 0px 0px 0px;
+    border: none; /* Remover a borda padrão */
+    text-align: center; /* Centralizar o texto */
+    text-decoration: none; /* Remover sublinhado */
+    display: inline-block; /* Manter o botão inline */
+    font-size: 30px; /* Tamanho da fonte */
+    cursor: pointer; /* Mostrar cursor de ponteiro */
+    box-shadow: 0 2px 4px var(--shadow-color); /* Sombra */
+    transition: background-color 0.3s ease; /* Transição suave da cor de fundo */
+}
+
+.pay-boletoForm #pay-save-button:hover {
+    background-color: #4d4d4d; /* Cor de fundo no hover */
+}
+
+.svg-container {
+    display: flex;
+    justify-content: center; /* Centraliza horizontalmente */
+    align-items: center;    /* Centraliza verticalmente */
+    margin: 15px 0px 0px 0px;
+}
+
+#codigoBarrasSVG {
+    width: 830px;
+    height: 120px;
+}
+
+/* Botão de fechar */
+.pay-close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.pay-close:hover,
+.pay-close:focus {
+    color: #000;
+    text-decoration: none;
+    cursor: pointer;
+}
+
 .table-estilosa tbody button {
     width: 100%;
     color: black;

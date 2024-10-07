@@ -22,7 +22,7 @@
         <div class="options">
             <button id="openInsertModalBtn">+</button>
 
-            <!-- Modal -->
+            <!-- Modal de cadastro -->
             <div id="insert-modal" class="insert-modal">
                 <div class="insert-modal-content">
                     <span class="close">&times;</span>
@@ -138,7 +138,29 @@
                                         </select>
                                     </div>
                                 </th>
-                                <th><button>Editar</button></th>
+                                {% if bill.status %}
+                                <th>
+                                    <button>Editar</button>
+
+
+                                    
+                                </th>
+                                {% else %}
+                                <th>
+                                    <button 
+                                        id="openPayModalBtn"
+                                        class="openPayModalBtn" 
+                                        data-barcode="{{ bill.bar_code }}" 
+                                        data-value="{{ bill.value }}" 
+                                        data-due-date="{{ bill.due_date }}" 
+                                        data-reference="{{ bill.reference }}" 
+                                        data-suplyer="{{ bill.suplyer }}" 
+                                        data-bill-type="{{ bill.bill_type }}" 
+                                        data-obs="{{ bill.obs }}">
+                                        Pagar
+                                    </button>
+                                </th>
+                                {% endif %}
                                 <th>{% if bill.status %}
                                     <p id="pago"><span class="checkmark">✔</span></p>
                                     {% else %}
@@ -166,6 +188,56 @@
                         {% endfor %}
 
                     </table>
+
+                    <!-- Modal de pagamento-->
+                    <div id="pay-modal" class="pay-modal">
+                        <div class="pay-modal-content">
+                            <span class="pay-close">&times;</span>
+                            <h2>Realizar Pagamento</h2>
+                            <form id="pay-boletoForm" class="pay-boletoForm" action="/pay_bill" method="POST">
+
+                                <div class="bar_code-modal-container">
+                                    <h4>Código de Barras:</h4>
+                                    <p><span id="modal-barcode"></span></p>
+                                </div>
+
+                                <div class="valor-vencimento-container">
+
+                                    <div class="valor-modal-container">
+                                        <h4>Valor:</h4>
+                                        <p>R$ <span id="modal-value"></span></p>
+                                    </div>
+                                    <div class="vencimento-modal-container">
+                                        <h4>Vencimento:</h4>
+                                        <p><span id="modal-due-date"></span></p>
+                                    </div>
+
+                                </div>
+
+                                <h4>Referente á:</h4>
+                                <p><span id="modal-reference"></span></p>
+
+                                <h4>Fornecedor:</h4>
+                                <p><span id="modal-suplyer"></span></p>
+
+                                <h4>Tipo:</h4>
+                                <p><span id="modal-bill-type"></span></p>
+
+                                <h4>Observações:</h4>
+                                <p><span id="modal-obs"></span></p>
+                                <div class="svg-container">
+                                    <svg id="payCodigoBarrasSVG"></svg>
+                                </div>
+
+                                <!-- Adicione outros campos conforme necessário -->
+
+                                <button id="pay-save-button" type="submit">Salvar</button>
+                                
+                            </form>
+
+                        </div>
+                    </div>
+
                     <div class="modal" id="modal">
                         <div class="modal-content">
                             <span class="close">&times;</span>
