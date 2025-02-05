@@ -8,6 +8,7 @@
 
 {% block content %}
 <div class="logout-container">
+    <p class="current_user_email">{{ current_user.email }}</p>
     <a href="/logout">
         <button class="logout-button">Logout</button>
     </a>

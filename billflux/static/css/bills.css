@@ -47,12 +47,12 @@ main {
     justify-content: right;
 }
 
-.logout-button {
+.logout-container .logout-button, .current_user_email {
     background-color: #ff4b5c; /* Cor de fundo */
     color: white; /* Cor do texto */
     border: none; /* Remove borda padrão */
     padding: 10px 20px; /* Espaçamento interno */
-    margin: 20px;
+    margin: 20px 20px 20px 5px;
     text-align: center; /* Centraliza o texto */
     text-decoration: none; /* Remove sublinhado */
     display: inline-block; /* Faz o botão se comportar como um bloco inline */
@@ -66,6 +66,20 @@ main {
     background-color: #e60026; /* Cor de fundo ao passar o mouse */
 }
 
+.current_user_email {
+    border: none; /* Remove borda padrão */
+    padding: 10px 20px; /* Espaçamento interno */
+    margin: 20px 0px;
+    text-align: center; /* Centraliza o texto */
+    text-decoration: none; /* Remove sublinhado */
+    display: inline-block; /* Faz o botão se comportar como um bloco inline */
+    border-radius: 5px; /* Bordas arredondadas */
+    transition: background-color 0.3s ease; /* Animação suave */
+    font-size: 16px;
+    color: #000;
+    background-color: rgba(180, 193, 251, 0.385);
+    cursor: default;
+}
 
 .navbar-1 {
     width: 0%;
@@ -381,7 +395,7 @@ tr:hover .options-bill-container label svg {
 
 .pay-modal-content .pay-boletoForm {
     padding: 0px 20px;
-    display: flex;
+     display: flex;
     flex-direction: column;
     margin-bottom: 10px; /* Espaçamento entre os selects */
     width: 100%; /* Ocupa toda a largura disponível */
