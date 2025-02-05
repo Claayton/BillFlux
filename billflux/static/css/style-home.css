@@ -61,6 +61,20 @@ main {
 .input-container {
     position: relative;
     margin-top: 20px;
+    display: flex;
+    align-items: center;
+}
+
+.input-container input {
+    padding-right: 10px; /* Espaço para o ícone */
+}
+
+.input-container span {
+    position: absolute;
+    right: 10px;
+    top: 20%;
+    cursor: pointer;
+    font-size: 18px;
 }
 
 .placeholder-text {
@@ -133,7 +147,8 @@ input:not(:placeholder-shown) + .placeholder-text {
 
 .logo-home img {
     width: 500px; 
-    height: 500px; 
+    height: 500px;
+    user-select: none;
 } 
 
 /* Modal escondido por padrão */

@@ -1,3 +1,16 @@
+// Script para exibir ou esconder a senha
+document.getElementById("togglePassword").addEventListener("click", function () {
+    let passwordInput = document.getElementById("password");
+    if (passwordInput.type === "password") {
+        passwordInput.type = "text";
+        this.textContent = "🙈"; // Ícone de "olho fechado"
+    } else {
+        passwordInput.type = "password";
+        this.textContent = "👁️"; // Ícone de "olho aberto"
+    }
+});
+
+
 
 // Script para exibir modal de cadastro de usuarios
 document.addEventListener('DOMContentLoaded', function () {
