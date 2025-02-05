@@ -88,8 +88,12 @@ window.addEventListener('click', function(event) {
 // Função para redirecionar ao clicar no botão de salvar
 paySaveButton.addEventListener('click', function() {
     if (currentBillId) {
-        // Redireciona para a rota /pay_bill/{bill_id}
-        window.location.href = `/pay_bill/${currentBillId}`;
+        let confirmacao = confirm("Realizar o pagamento?");
+
+        if (confirmacao) {
+            // Redireciona para a rota /pay_bill/{bill_id}
+            window.location.href = `/pay_bill/${currentBillId}`;
+        }
     }
 });
 
