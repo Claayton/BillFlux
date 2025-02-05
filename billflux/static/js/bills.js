@@ -32,18 +32,23 @@ const payButtons = document.querySelectorAll('.openPayModalBtn');
 const modal = document.getElementById('pay-modal');
 const closeModal = document.querySelector('.pay-close');
 const resultadoDiv = document.getElementById('payCodigoBarrasSVG');
+const paySaveButton = document.getElementById('pay-save-button');
+
+let currentBillId = null; // Variável para armazenar o bill_id atual
 
 // Função para abrir o modal e preencher os valores
 payButtons.forEach(button => {
     button.addEventListener('click', function() {
         // Captura os valores dos atributos data-*
         let barCodeValue = this.dataset.barcode;
+        currentBillId = this.dataset.id;
         const value = this.dataset.value;
         const dueDate = this.dataset.dueDate;
         const reference = this.dataset.reference;
         const suplyer = this.dataset.suplyer;
         const billType = this.dataset.billType;
         const obs = this.dataset.obs;
+        console.log(currentBillId)
 
         // Preenche os valores no modal
         document.getElementById('modal-barcode').innerText = barCodeValue;
@@ -58,7 +63,6 @@ payButtons.forEach(button => {
         if (barCodeValue.length == 47) {
             barCodeValue = transformarCodigoBarras47Para44(barCodeValue)
             };
-        console.log(payCodigoBarrasSVG)
         JsBarcode(payCodigoBarrasSVG, barCodeValue, {
             format: "ITF", // Formato Interleaved 2 of 5
             displayValue: false // Não exibe o valor abaixo do código de barras
@@ -78,6 +82,14 @@ closeModal.addEventListener('click', function() {
 window.addEventListener('click', function(event) {
     if (event.target === modal) {
         modal.style.display = 'none';
+    }
+});
+
+// Função para redirecionar ao clicar no botão de salvar
+paySaveButton.addEventListener('click', function() {
+    if (currentBillId) {
+        // Redireciona para a rota /pay_bill/{bill_id}
+        window.location.href = `/pay_bill/${currentBillId}`;
     }
 });
 

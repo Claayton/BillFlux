@@ -12,13 +12,13 @@ database_url = settings["development"].DATABASE_URL
 
 
 @bp.route("/delete_bill/<int:bill_id>", methods=["DELETE"])
-def bills(bill_id):
+def delete_bill(bill_id):
     """Mount bills route, and delete one bill in the table"""
 
     bills_repository = BillRepository(database_url)
-    delete_bill = bills_repository.delete_bill(bill_id=bill_id)
+    deleted_bill = bills_repository.delete_bill(bill_id=bill_id)
 
-    if delete_bill:
+    if deleted_bill:
         return jsonify({"message": "Item excluído com sucesso!"}), 204
     else:
         return jsonify({"message": "Erro ao excluir o item."}), 500

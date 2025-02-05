@@ -9,6 +9,7 @@ from billflux.controlers.bills import (
     get_bills,
     insert_bill,
     delete_bill,
+    pay_bill,
 )  # pylint: disable=E0401, E0611
 from billflux.infra.config.database import create_db
 
@@ -31,5 +32,6 @@ def create_app():
     app.register_blueprint(get_bills.bp)
     app.register_blueprint(insert_bill.bp)
     app.register_blueprint(delete_bill.bp)
+    app.register_blueprint(pay_bill.bp)
 
     return app

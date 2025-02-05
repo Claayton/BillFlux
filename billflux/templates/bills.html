@@ -149,7 +149,8 @@
                                 <th>
                                     <button 
                                         id="openPayModalBtn"
-                                        class="openPayModalBtn" 
+                                        class="openPayModalBtn"
+                                        data-id="{{ bill.id }}"
                                         data-barcode="{{ bill.bar_code }}" 
                                         data-value="{{ bill.value }}" 
                                         data-due-date="{{ bill.due_date }}" 
@@ -194,7 +195,7 @@
                         <div class="pay-modal-content">
                             <span class="pay-close">&times;</span>
                             <h2>Realizar Pagamento</h2>
-                            <form id="pay-boletoForm" class="pay-boletoForm" action="/pay_bill" method="POST">
+                            <div id="pay-boletoForm" class="pay-boletoForm">
 
                                 <div class="bar_code-modal-container">
                                     <h4>Código de Barras:</h4>
@@ -233,8 +234,7 @@
 
                                 <button id="pay-save-button" type="submit">Salvar</button>
                                 
-                            </form>
-
+                            </div>a
                         </div>
                     </div>
 

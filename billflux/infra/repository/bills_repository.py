@@ -91,6 +91,72 @@ class BillRepository:
 
         return [Bill(**dict(bill)) for bill in sql] if sql else []
 
+    def update_bill(
+        self,
+        bill_id: int,
+        status: bool = None,
+        due_date: datetime = None,
+        value: float = None,
+        reference: str = None,
+        suplyer: str = None,
+        bill_type: str = None,
+        payday: datetime = None,
+        value_from_payment: int = None,
+        bar_code: int = None,
+        obs: str = None,
+    ) -> Bill:
+        """
+        Update a bill from Bill table.
+        :param bill_id: ID from bill to be updated.
+        :param status: Status from bill: pay or not.
+        :param due_date: Due date from bill.
+        :param value: Value from bill.
+        :param reference: Reference from bill.
+        :param suplyer: Possible bill supplier.
+        :param bill_type: Type from bill.
+        :param payday: Bill payment day.
+        :param value_from_payment: Amount paid.
+        :param bar_code: Bar code from bill.
+        :param obs: Optional Observation.
+        :return: The Updated Bill.
+        """
+
+        with self.__session() as session:
+
+            bill = session.exec(
+                select(BillModel).where(BillModel.id == bill_id)
+            ).one_or_none()
+
+            if not bill:
+
+                raise DefaultError(message="Bill not found!", type_error=404)
+
+            if status is not None:
+                bill.status = status
+            if due_date is not None:
+                bill.due_date = due_date
+            if value is not None:
+                bill.value = value
+            if reference is not None:
+                bill.reference = reference
+            if suplyer is not None:
+                bill.suplyer = suplyer
+            if bill_type is not None:
+                bill.bill_type = bill_type
+            if payday is not None:
+                bill.payday = payday
+            if value_from_payment is not None:
+                bill.value_from_payment = value_from_payment
+            if bar_code is not None:
+                bill.bar_code = bar_code
+            if obs is not None:
+                bill.obs = obs
+
+            session.commit()
+            session.refresh(bill)
+
+            return Bill(**dict(bill))
+
     def delete_bill(self, bill_id: int) -> Bill:
         """
         Deletes a bill from the database.
