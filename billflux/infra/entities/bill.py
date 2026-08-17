@@ -1,7 +1,10 @@
 """Module for model Bill"""
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
+
+from sqlalchemy import Column, Numeric
 from sqlmodel import SQLModel, Field
 
 
@@ -11,13 +14,17 @@ class Bill(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     status: bool = Field(default=False)
     due_date: datetime = Field(nullable=True)
-    value: Optional[int] = Field(nullable=True)
+    value: Optional[Decimal] = Field(
+        default=None, sa_column=Column(Numeric(10, 2), nullable=True)
+    )
     reference: Optional[str] = Field(nullable=True)
     suplyer: Optional[str] = Field(nullable=True)
     bill_type: Optional[str] = Field(nullable=True)
     days: Optional[int] = Field(nullable=True)
     payday: Optional[datetime] = Field(nullable=True)
-    value_from_payment: Optional[int] = Field(nullable=True)
+    value_from_payment: Optional[Decimal] = Field(
+        default=None, sa_column=Column(Numeric(10, 2), nullable=True)
+    )
     bar_code: Optional[int] = Field(nullable=True)
     obs: Optional[str] = Field(nullable=True)
     date_from_add: datetime = Field(nullable=False)

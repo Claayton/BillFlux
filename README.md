@@ -5,8 +5,13 @@
 
 - Sistema para gerenciamento e administração de boletos e contas a pagar, com o objetivo de ser simples, direto e usual. As principais funcionalidades incluem:
   - Desenvolvido em Python/Flask
-  - Realizar CRUD de usuários
-  - Geração de código de barras para facilitar o pagamento, evitando a necessidade de digitar o código manualmente no smartphone ou de utilizar o boleto em papel
+  - Cadastro e listagem de contas a pagar (boletos)
+  - Filtros por status (pagas, vencidas, à vencer, hoje)
+
+### 🗺️ Roadmap
+
+- CRUD de usuários e autenticação
+- Geração de código de barras para facilitar o pagamento, evitando a necessidade de digitar o código manualmente no smartphone ou de utilizar o boleto em papel
 
 ## 🚀 Quick Start
 

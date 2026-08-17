@@ -3,7 +3,6 @@
 from collections import namedtuple
 from faker import Faker
 
-
 fake = Faker()
 
 BillMock = namedtuple(
@@ -32,13 +31,13 @@ def mock_bill():
         id=fake.random_number(),
         status=fake.boolean(),
         due_date=fake.date_time(),
-        value=fake.pricetag(),
+        value=fake.pydecimal(left_digits=4, right_digits=2, positive=True),
         reference=fake.text(),
         suplyer=fake.name(),
         bill_type=fake.name(),
         days=fake.random_number(),
         payday=fake.date_time(),
-        value_from_payment=fake.pricetag(),
+        value_from_payment=fake.pydecimal(left_digits=4, right_digits=2, positive=True),
         bar_code=fake.random_number(),
         obs=fake.text(),
         date_from_add=fake.date_time(),

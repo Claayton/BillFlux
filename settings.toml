@@ -1,4 +1,5 @@
 name = "ticketmanager"
+secret_key = "change-me"
 
 
 [database]

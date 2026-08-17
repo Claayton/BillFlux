@@ -1,35 +1,51 @@
-import typer
-from rich.table import Table
-from rich.console import Console
 from typing import Optional, List
-from billflux.infra.repository.bill_repository import (
-    add_ticket_to_database,
-    get_tickets_from_database,
-)
-from billflux.infra.entities.models import Ticket
 
-main = typer.Typer(help="Ticket Manager Aplication")
+import typer
+from rich.console import Console
+from rich.table import Table
+
+from billflux.domain.models.bills import Bill
+from billflux.infra.config.database import create_db
+from billflux.infra.repository.bill_repository import BillRepository
+
+main = typer.Typer(help="BillFlux - Gerenciador de Contas a Pagar")
 console = Console()
 
 
+@main.callback()
+def init_database():
+    """Garante que as tabelas existam no banco de dados."""
+    create_db()
+
+
 @main.command("add")
-def add(bar_code: int, suplyer: str, type: str = typer.Option(...)):
-    """Add a new ticket to database."""
-    if add_ticket_to_database(bar_code, suplyer, type):
-        print("New ticket add on database!")
+def add(bar_code: int, suplyer: str, bill_type: str = typer.Option(...)):
+    """Add a new bill to database."""
+    repository = BillRepository()
+    if repository.insert_bill(bar_code=bar_code, suplyer=suplyer, bill_type=bill_type):
+        print("New bill added to database!")
     else:
-        print("Failed! :()")
+        print("Failed!")
 
 
 @main.command("list")
-def list_tickets(type: Optional[str] = None) -> List[Ticket]:
-    """Lists tickets in database."""
-    tickets = get_tickets_from_database()
-    table = Table(title="Tickets")
-    headers = ["bar_code", "suplyer", "type", "due_date", "payday", "is_paid_out"]
+def list_bills(bill_type: Optional[str] = None) -> List[Bill]:
+    """Lists bills in database."""
+    repository = BillRepository()
+    bills = repository.get_bills()
+    table = Table(title="Bills")
+    headers = [
+        "bar_code",
+        "suplyer",
+        "bill_type",
+        "due_date",
+        "value",
+        "payday",
+        "status",
+    ]
     for header in headers:
         table.add_column(header, style="magenta")
-    for ticket in tickets:
-        values = [str(getattr(ticket, header)) for header in headers]
+    for bill in bills:
+        values = [str(getattr(bill, header)) for header in headers]
         table.add_row(*values)
     console.print(table)

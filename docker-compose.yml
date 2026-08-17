@@ -1,0 +1,12 @@
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      BILLFLUX_DATABASE__URL: sqlite:///data/billflux.db
+    volumes:
+      - billflux-data:/app/data
+
+volumes:
+  billflux-data:

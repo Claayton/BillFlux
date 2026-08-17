@@ -1,11 +1,11 @@
-<link rel="stylesheet" href="{{ url_for('static', filename='css/bills.css') }}" rel="stylesheet">
-<script src="https://kit.fontawesome.com/c996c5ea01.js" crossorigin="anonymous"></script>
-
 {% extends 'base.html' %}
 
 {% block title %}{{ super() }} - Bills{% endblock %}
 
 {% block content %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/bills.css') }}">
+<script src="https://kit.fontawesome.com/c996c5ea01.js" crossorigin="anonymous"></script>
 
 <main id="main">
 
@@ -23,6 +23,7 @@
                     <span class="close">&times;</span>
                     <h2>Cadastrar Nova Conta</h2>
                     <form id="insert-boletoForm" class="insert-boletoForm" action="/insert_bill" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                         <label for="bar_code">Código de Barras:</label>
                         <input type="text" id="bar_code" name="bar_code">
@@ -64,7 +65,7 @@
                 <input type="text" name="search" id="search">
             </div>
             <div class="option-1-container">
-                <label for="option-1""><i>▼</i></label>
+                <label for="option-1"><i>▼</i></label>
                 <select id="option-1" class="hidden-select">
                     <option value="Imprimir">Imprimir</option>
                     <option value="Exportar">Exportar</option>
@@ -73,7 +74,7 @@
             </div>
             
             <div class="option-2-container">
-                <label for="option-2""><i class="fas fa-filter"></i></label>
+                <label for="option-2"><i class="fas fa-filter"></i></label>
                 <select id="option-2" class="hidden-select">
                     <option value="Todas">Todas</option>
                     <option value="Não Pagas">Não Pagas</option>
@@ -112,9 +113,9 @@
                             </tr>
                         </thead>
 
+                        <tbody>
                         {% for bill in bills_list %}
 
-                        <tbody>
                             <tr>
                                 <th>
                                     <div class="options-bill-container">
@@ -153,9 +154,9 @@
                                 </th>
                                 <th>{{ bill.date_from_add }}</th>
                             </tr>
-                        </tbody>
 
                         {% endfor %}
+                        </tbody>
 
                     </table>
                     <div class="modal" id="modal">

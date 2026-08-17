@@ -4,7 +4,6 @@ from flask.blueprints import Blueprint
 from flask.templating import render_template
 from billflux.infra.repository.bill_repository import BillRepository
 
-
 bp = Blueprint("bp_bills", __name__)
 
 
