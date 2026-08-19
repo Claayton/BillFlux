@@ -9,6 +9,11 @@ from billflux.config import settings
 from billflux.infra.entities.bill import *  # pylint: disable=W0401, W0614
 from billflux.infra.entities.account import Account  # noqa: F401
 from billflux.infra.entities.sale import Sale  # noqa: F401
+from billflux.infra.entities.product import Product  # noqa: F401
+from billflux.infra.entities.product_movement import ProductMovement  # noqa: F401
+from billflux.infra.entities.payment_method import PaymentMethod  # noqa: F401
+from billflux.infra.entities.order import Order  # noqa: F401
+from billflux.infra.entities.order_item import OrderItem  # noqa: F401
 
 _database_url = settings.database.url
 _engine_kwargs = {"connect_args": {"check_same_thread": False}}

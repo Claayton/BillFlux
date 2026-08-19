@@ -6,7 +6,17 @@ from dynaconf import FlaskDynaconf
 from flask_wtf import CSRFProtect
 from billflux.config import settings
 from billflux.infra.config.database import create_db
-from billflux.controlers import home, bills, insert_bill, auth, accounts, sales
+from billflux.controlers import (
+    home,
+    bills,
+    insert_bill,
+    auth,
+    accounts,
+    sales,
+    products,
+    payments,
+    pdv,
+)
 
 csrf = CSRFProtect()
 
@@ -53,6 +63,20 @@ def _seed_default_accounts():
         repository.insert_account(name=name, type="despesa")
 
 
+def _seed_default_payment_methods():
+    """Cria as formas de pagamento padrão se a tabela estiver vazia."""
+    from billflux.infra.repository.payment_method_repository import (
+        PaymentMethodRepository,
+    )
+
+    repository = PaymentMethodRepository()
+    if repository.get_methods():
+        return
+
+    for name in ("Dinheiro", "PIX", "Crédito", "Débito", "VR/VA"):
+        repository.insert_method(name=name)
+
+
 def create_app():
     """Function that creates the app"""
 
@@ -63,6 +87,7 @@ def create_app():
     create_db()
     _seed_default_user()
     _seed_default_accounts()
+    _seed_default_payment_methods()
 
     @app.template_filter("brl")
     def brl(value):
@@ -114,4 +139,7 @@ def create_app():
     app.register_blueprint(auth.bp)
     app.register_blueprint(accounts.bp)
     app.register_blueprint(sales.bp)
+    app.register_blueprint(products.bp)
+    app.register_blueprint(payments.bp)
+    app.register_blueprint(pdv.bp)
     return app

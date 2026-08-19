@@ -8,16 +8,19 @@ from flask.blueprints import Blueprint
 from flask.templating import render_template
 
 from billflux.controlers.auth import login_required
+from billflux.infra.repository.order_repository import OrderRepository
+from billflux.infra.repository.payment_method_repository import PaymentMethodRepository
 from billflux.infra.repository.sale_repository import SaleRepository
 
 bp = Blueprint("bp_sales", __name__)
 
 
-def _build_summary(sales, today):
-    """Resumo das vendas exibido acima da tabela (apenas exibição)."""
+def _build_summary(sales, orders, today):
+    """Resumo das vendas exibido acima da tabela (apenas exibição).
+    Soma o lançamento manual (sales) com os pedidos fechados no PDV (orders)."""
     today_total = Decimal("0")
     month_total = Decimal("0")
-    days_with_sale = 0
+    days_with_sale = set()
 
     for sale in sales:
         total = sale.total or Decimal("0")
@@ -25,14 +28,23 @@ def _build_summary(sales, today):
             today_total += total
         if sale.date.year == today.year and sale.date.month == today.month:
             month_total += total
-            days_with_sale += 1
+            days_with_sale.add(sale.date)
 
-    avg = month_total / days_with_sale if days_with_sale else Decimal("0")
+    for order in orders:
+        order_date = order.created_at.date()
+        if order_date == today:
+            today_total += order.total
+        if order_date.year == today.year and order_date.month == today.month:
+            month_total += order.total
+            days_with_sale.add(order_date)
+
+    days = len(days_with_sale)
+    avg = month_total / days if days else Decimal("0")
 
     return {
         "today": today_total,
         "month": month_total,
-        "days": days_with_sale,
+        "days": days,
         "avg": avg,
     }
 
@@ -48,11 +60,19 @@ def sales():
         return _save_sale(repository)
 
     list_sales = repository.get_sales()
+    orders = OrderRepository().get_orders()
     today = date.today()
-    summary = _build_summary(list_sales, today)
+    summary = _build_summary(list_sales, orders, today)
+
+    payment_names = {
+        method.id: method.name for method in PaymentMethodRepository().get_methods()
+    }
+    today_orders = [order for order in orders if order.created_at.date() == today]
     return render_template(
         "sales.html",
         sales_list=list_sales,
+        today_orders=today_orders,
+        payment_names=payment_names,
         summary=summary,
         active="sales",
         today=today,

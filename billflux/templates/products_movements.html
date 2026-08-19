@@ -1,0 +1,21 @@
+<div class="movement-list">
+  {% if movements %}
+    {% for movement in movements %}
+    {% set is_entrada = movement.movement_type == 'entrada' or (movement.movement_type == 'ajuste' and movement.quantity >= 0) %}
+    <div class="movement-item">
+      <span class="movement-type {{ 'is-entrada' if is_entrada else 'is-saida' }}">
+        {{ 'Entrada' if movement.movement_type == 'entrada' else ('Saída' if movement.movement_type == 'saida' else 'Ajuste') }}
+      </span>
+      <span class="movement-qty {{ 'is-pos' if is_entrada else 'is-neg' }}">
+        {{ '+' if is_entrada else '-' }}{{ movement.quantity | abs }}
+      </span>
+      <span class="movement-meta">
+        {{ movement.created_at.strftime('%d/%m/%Y %H:%M') }}
+        {% if movement.obs %}· {{ movement.obs }}{% endif %}
+      </span>
+    </div>
+    {% endfor %}
+  {% else %}
+  <p class="movement-empty">Nenhuma movimentação registrada.</p>
+  {% endif %}
+</div>

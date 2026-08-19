@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ super() }} - Formas de pagamento{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/products.css') }}">
+
+<div class="dashboard">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Formas de pagamento</h1>
+      <p class="page-subtitle">Gerencie as formas aceitas no PDV.</p>
+    </div>
+    <button id="openNewMethodBtn" type="button" class="btn btn-primary">
+      <i class="fas fa-plus"></i> Nova forma
+    </button>
+  </div>
+
+  <div class="table-card">
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Forma de pagamento</th>
+            <th>Status</th>
+            <th class="th-actions"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for method in methods_list %}
+          <tr class="{% if not method.active %}is-inactive{% endif %}">
+            <td>
+              <span class="cell-title">{{ method.name }}</span>
+              {% if not method.active %}<span class="cell-sub">não aparece no PDV</span>{% endif %}
+            </td>
+            <td>
+              <span class="status-badge {{ 'is-active' if method.active else 'is-inactive' }}">
+                {{ 'Ativa' if method.active else 'Inativa' }}
+              </span>
+            </td>
+            <td class="cell-actions">
+              <div class="dropdown">
+                <button type="button" class="icon-btn row-menu-btn" data-dropdown-trigger="method-menu-{{ method.id }}"
+                        aria-haspopup="true" aria-expanded="false" aria-label="Ações da forma de pagamento">
+                  <i class="fas fa-ellipsis-h"></i>
+                </button>
+                <div class="dropdown-panel" id="method-menu-{{ method.id }}" hidden>
+                  <button type="button" class="dropdown-item" data-action="toggle" data-id="{{ method.id }}">
+                    <i class="fas fa-power-off"></i> {{ 'Desativar' if method.active else 'Ativar' }}
+                  </button>
+                  <button type="button" class="dropdown-item is-danger" data-action="delete" data-id="{{ method.id }}">
+                    <i class="fas fa-trash"></i> Excluir
+                  </button>
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr class="empty-row">
+            <td colspan="3" class="empty-state">
+              <i class="fas fa-credit-card"></i>
+              <h3>Nenhuma forma de pagamento</h3>
+              <p>Adicione as formas aceitas no seu comércio.</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="account-hint">
+    <i class="fas fa-info-circle"></i>
+    Formas já usadas em vendas não podem ser excluídas — apenas desativadas.
+  </p>
+</div>
+
+<!-- Modal: nova forma de pagamento -->
+<div id="method-modal" class="modal">
+  <div class="modal-content modal-content-sm">
+    <div class="modal-header">
+      <h2>Nova forma de pagamento</h2>
+      <button class="modal-close" aria-label="Fechar">&times;</button>
+    </div>
+    <form id="method-form" action="/payments/new" method="POST" class="modal-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="form-field">
+        <label for="method_name">Nome</label>
+        <input type="text" id="method_name" name="name" placeholder="Ex: Boleto, Vale-refeição..." required>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost modal-cancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar forma</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/payments.js') }}"></script>
+{% endblock %}

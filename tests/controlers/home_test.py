@@ -42,3 +42,26 @@ def test_home_dashboard_logged_in(logged_client):
     assert "Vendas hoje" in page
     assert "Contas em aberto" in page
     assert 'class="hero"' not in page
+
+
+def test_home_dashboard_shows_pdv_movement(logged_client):
+    """PDV orders should appear in the recent movement list."""
+
+    from decimal import Decimal
+
+    from billflux.infra.repository.order_repository import OrderRepository
+    from billflux.infra.repository.payment_method_repository import (
+        PaymentMethodRepository,
+    )
+    from billflux.infra.repository.product_repository import ProductRepository
+
+    product = ProductRepository().insert_product(
+        name="PDV Home Teste", price=Decimal("5.00"), stock_quantity=5
+    )
+    method = PaymentMethodRepository().get_active_methods()[0]
+    OrderRepository().create_order([(product.id, 1)], method.id)
+
+    response = logged_client.get("/home")
+
+    assert response.status_code == 200
+    assert "PDV" in response.get_data(as_text=True)

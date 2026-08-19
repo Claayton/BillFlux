@@ -4,6 +4,9 @@ import re
 from datetime import date
 from decimal import Decimal
 
+from billflux.infra.repository.order_repository import OrderRepository
+from billflux.infra.repository.payment_method_repository import PaymentMethodRepository
+from billflux.infra.repository.product_repository import ProductRepository
 from billflux.infra.repository.sale_repository import SaleRepository
 
 
@@ -112,3 +115,26 @@ def test_delete_sale(logged_client):
 
     assert response.status_code == 200
     assert SaleRepository().get_sale(sale.id) is None
+
+
+def test_sales_page_includes_pdv_orders(logged_client):
+    """PDV orders should feed the daily total shown on the sales page."""
+
+    product = ProductRepository().insert_product(
+        name="PDV Resumo Teste", price=Decimal("10.00"), stock_quantity=5
+    )
+    method = PaymentMethodRepository().get_active_methods()[0]
+    OrderRepository().create_order([(product.id, 2)], method.id)
+
+    today_total = sum(
+        order.total for order in OrderRepository().get_orders_by_date(date.today())
+    )
+
+    response = logged_client.get("/sales")
+    assert response.status_code == 200
+    page = response.get_data(as_text=True)
+    assert "Pedidos de hoje (PDV)" in page
+    formatted = (
+        f"R$ {today_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    )
+    assert formatted in page

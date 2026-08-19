@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ super() }} - PDV{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pdv.css') }}">
+
+<div class="dashboard pdv-dashboard">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Ponto de venda</h1>
+      <p class="page-subtitle">Monte o carrinho e finalize a venda. O estoque é baixado automaticamente.</p>
+    </div>
+    <a class="btn btn-ghost" href="/payments"><i class="fas fa-credit-card"></i> Formas de pagamento</a>
+  </div>
+
+  <div class="pdv-layout">
+    <div class="pdv-catalog">
+      <div class="pdv-search">
+        <input type="text" id="pdv-search" placeholder="Buscar produto ou ler código de barras..." autofocus>
+        <i class="fas fa-search"></i>
+      </div>
+
+      <div class="pdv-grid" id="pdv-grid">
+        {% for product in products_list %}
+        <button type="button" class="pdv-product"
+                data-id="{{ product.id }}"
+                data-name="{{ product.name }}"
+                data-barcode="{{ product.barcode or '' }}"
+                data-price="{{ product.price }}"
+                data-stock="{{ product.stock_quantity }}">
+          <span class="pdv-product-name">{{ product.name }}</span>
+          <span class="pdv-product-price">{{ product.price | brl }}</span>
+          <span class="pdv-product-stock {% if product.stock_quantity == 0 %}is-out{% endif %}">
+            {{ 'Esgotado' if product.stock_quantity == 0 else product.stock_quantity ~ ' em estoque' }}
+          </span>
+        </button>
+        {% else %}
+        <div class="pdv-empty">
+          <i class="fas fa-box-open"></i>
+          <p>Nenhum produto ativo. Cadastre produtos primeiro.</p>
+          <a class="btn btn-primary btn-sm" href="/products">Ir para Produtos</a>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="pdv-cart">
+      <div class="pdv-cart-head">
+        <i class="fas fa-shopping-cart"></i>
+        <span>Carrinho</span>
+        <span class="pdv-cart-count" id="cart-count">0</span>
+      </div>
+
+      <div class="pdv-cart-items" id="cart-items">
+        <p class="pdv-cart-empty">Nenhum item adicionado.</p>
+      </div>
+
+      <form id="pdv-form" action="/pdv/complete" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div id="pdv-hidden-items"></div>
+
+        <div class="pdv-cart-total">
+          <span>Total</span>
+          <span id="cart-total">R$ 0,00</span>
+        </div>
+
+        <div class="form-field">
+          <label for="payment_method_id">Forma de pagamento</label>
+          <select id="payment_method_id" name="payment_method_id" required>
+            <option value="">Selecione...</option>
+            {% for method in methods_list %}
+            <option value="{{ method.id }}">{{ method.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-field">
+          <label for="pdv_obs">Observações (opcional)</label>
+          <input type="text" id="pdv_obs" name="obs" placeholder="Ex: venda no balcão...">
+        </div>
+
+        <button type="submit" id="pdv-finish" class="btn btn-primary btn-block" disabled>
+          <i class="fas fa-check-circle"></i> Finalizar venda
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/pdv.js') }}"></script>
+{% endblock %}

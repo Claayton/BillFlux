@@ -57,7 +57,33 @@
     </form>
   </div>
 
+  <div class="pdv-orders-card">
+    <div class="pdv-orders-head">
+      <div>
+        <i class="fas fa-cart-shopping"></i>
+        <span>Pedidos de hoje (PDV)</span>
+      </div>
+      <a class="btn btn-ghost btn-sm" href="/pdv"><i class="fas fa-cash-register"></i> Abrir PDV</a>
+    </div>
+    {% if today_orders %}
+    <ul class="pdv-orders-list">
+      {% for order in today_orders %}
+      <li>
+        <span class="pdv-order-main">#{{ order.id }} · {{ payment_names.get(order.payment_method_id, '—') }}</span>
+        <span class="pdv-order-sub">{{ order.created_at.strftime('%H:%M') }}{% if order.obs %} · {{ order.obs }}{% endif %}</span>
+        <span class="pdv-order-value">{{ order.total | brl }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="pdv-orders-empty">Nenhuma venda fechada no PDV hoje.</p>
+    {% endif %}
+  </div>
+
   <div class="table-card">
+    <div class="table-card-head">
+      <h2>Lançamentos manuais</h2>
+    </div>
     <div class="table-container">
       <table class="data-table">
         <thead>

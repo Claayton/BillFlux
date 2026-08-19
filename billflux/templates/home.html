@@ -63,11 +63,11 @@
         <a href="/sales">Ver todas</a>
       </div>
       <ul class="home-list">
-        {% for sale in recent_sales %}
+        {% for item in recent_sales %}
         <li>
-          <span class="home-list-main">{{ sale.date | brdate_short }}</span>
-          <span class="home-list-sub">{{ 'hoje' if sale.date == today else '—' }}</span>
-          <span class="home-list-value">{{ sale.total | brl }}</span>
+          <span class="home-list-main">{{ item.date | brdate_short }}</span>
+          <span class="home-list-sub">{{ item.source }}</span>
+          <span class="home-list-value">{{ item.value | brl }}</span>
         </li>
         {% else %}
         <li class="home-list-empty">Nenhuma venda lançada.</li>
