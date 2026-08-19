@@ -2,5 +2,11 @@ name = "ticketmanager"
 secret_key = "change-me"
 
 
+[auth]
+username = "admin"
+# senha: "admin" (hash scrypt). Troque via env BILLFLUX_AUTH__PASSWORD_HASH.
+password_hash = "scrypt:32768:8:1$yyU8myh38wgg8Se7$b13af452833062a4ae4b7e6d0e94091408e983412eb38ee84192b7f3a97d3dae27c4d080ce353d8d25dfce5d7e1d94203baf17ca5ce8f73475702b8f1e53b4c8"
+
+
 [database]
 url = "sqlite:///billflux.db"

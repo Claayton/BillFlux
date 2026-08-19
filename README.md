@@ -44,6 +44,35 @@ pip3 install -r requirements.txt
 flask --app run run --debug
 ```
 
+## 🔐 Login (modo desenvolvimento)
+
+Para acessar a área de contas, use o usuário padrão:
+
+```
+Usuário: admin
+Senha:   admin
+```
+
+As credenciais ficam em `settings.toml` (seção `[auth]`, senha em hash). Para trocar em produção,
+utilize as variáveis de ambiente `BILLFLUX_AUTH__USERNAME` e `BILLFLUX_AUTH__PASSWORD_HASH`.
+
+Para gerar um novo hash de senha:
+
+```python
+python3 -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('sua-senha'))"
+```
+
+> Em produção, defina também `BILLFLUX_SECRET_KEY` (usado nas sessões e no CSRF). O valor padrão
+> `change-me` é apenas para desenvolvimento.
+
+## 🐳 Docker
+
+```
+docker compose up --build
+```
+
+A aplicação fica disponível em `http://localhost:5000`.
+
 ## ⚙️ Tests
 
 Utilizar para esse projeto o pytest para fazer os testes necessários, para executar os testes utilize:

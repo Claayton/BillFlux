@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ super() }} - Entrar{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style-home.css') }}">
+
+<section class="auth-page">
+  <div class="auth-card">
+    <div class="auth-header">
+      <span class="logo-mark">BF</span>
+      <h2>Bem-vindo de volta</h2>
+      <p>Acesse sua conta para gerenciar suas contas.</p>
+    </div>
+
+    <form method="POST" action="{{ url_for('bp_auth.login') }}" class="auth-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="form-field">
+        <label for="username">Usuário</label>
+        <input type="text" id="username" name="username" placeholder="admin" required autofocus>
+      </div>
+
+      <div class="form-field">
+        <label for="password">Senha</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block">Entrar</button>
+    </form>
+
+    <p class="auth-footer">
+      Não tem conta?
+      <a href="{{ url_for('bp_auth.signin') }}">Cadastre-se</a>
+    </p>
+  </div>
+</section>
+{% endblock %}
