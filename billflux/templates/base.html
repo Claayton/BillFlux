@@ -5,48 +5,148 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Gerenciador de Boletos.">
-  <meta name="keywords" content="palavras-chave, separadas, por, vírgula">
   <meta name="author" content="Clayton Garcia da Silva">
   <title>{% block title %}BillFlux{% endblock %}</title>
   <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}" sizes="any">
-  <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style-base.css') }}">
+  <script src="https://kit.fontawesome.com/c996c5ea01.js" crossorigin="anonymous"></script>
 </head>
 <body>
-  <header id="header-main">
-    <div id="header-container">
-      <h1 class="title-main">
-        <a href="/home">BillFlux</a>
-      </h1>
-      <nav class="navbar-main" role="navigation" aria-label="Main Navigation">
-        <ul>
-          <li><a href="/home" aria-label="Home">Home</a></li>
-          <li><a href="/" aria-label="About">About</a></li>
-          <li><a href="/bills" aria-label="Profile">Bills</a></li>
-        </ul>
-      </nav>
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="header-left">
+        <a class="logo" href="/home">
+          <span class="logo-mark">BF</span>
+          <span class="logo-text">BillFlux</span>
+        </a>
+        <nav class="main-nav" aria-label="Navegação principal">
+          <ul>
+            <li><a href="/home" class="{% if active == 'overview' %}is-active{% endif %}">Visão geral</a></li>
+            <li><a href="/bills" class="{% if active == 'bills' %}is-active{% endif %}">Contas</a></li>
+            <li><a href="/accounts" class="{% if active == 'accounts' %}is-active{% endif %}">Plano de contas</a></li>
+          </ul>
+        </nav>
+      </div>
+      <div class="header-actions">
+        {% if session.get('user') %}
+          <button type="button" class="icon-btn" title="Notificações" aria-label="Notificações">
+            <i class="fas fa-bell"></i>
+          </button>
+          <div class="user-menu" id="user-menu">
+            <button type="button" class="user-menu-trigger" data-dropdown-trigger="user-menu-panel"
+                    aria-haspopup="true" aria-expanded="false">
+              <span class="avatar">{{ session['user'][0] | upper }}</span>
+              <span class="user-name">{{ session['user'] }}</span>
+              <i class="fas fa-chevron-down"></i>
+            </button>
+            <div class="dropdown-panel" id="user-menu-panel" hidden>
+              <a class="dropdown-item" href="/logout">
+                <i class="fas fa-sign-out-alt"></i> Sair
+              </a>
+            </div>
+          </div>
+        {% else %}
+          <a class="btn btn-ghost btn-sm" href="/login">Entrar</a>
+          <a class="btn btn-primary btn-sm" href="/signin">Criar conta</a>
+        {% endif %}
+      </div>
     </div>
   </header>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
-      <div class="flashes">
+      <div class="flash-stack" role="alert">
         {% for category, message in messages %}
-          <div class="flash flash-{{ category }}">{{ message }}</div>
+          <div class="flash flash-{{ category }}">
+            <span>{{ message }}</span>
+            <button class="flash-close" aria-label="Fechar">&times;</button>
+          </div>
         {% endfor %}
       </div>
     {% endif %}
   {% endwith %}
 
-  {% block content %}
-  {% endblock %}
+  <main class="site-main">
+    {% block content %}{% endblock %}
+  </main>
 
-  <footer class="footer">
-    <p>&copy; <span id="year"></span> Clayton Garcia da Silva, Br.</p>
+  <footer class="site-footer">
+    <div class="container">
+      <p>&copy; <span id="year"></span> BillFlux — Clayton Garcia da Silva, Br.</p>
+    </div>
   </footer>
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+
   <script>
     document.getElementById('year').textContent = new Date().getFullYear();
+    document.querySelectorAll('.flash-close').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        btn.parentElement.remove();
+      });
+    });
+
+    // Dropdowns (menu do usuário, menu por linha, menu da toolbar).
+    // Abre pelo trigger, fecha ao clicar fora, fecha com Escape.
+    document.addEventListener('click', function (event) {
+      const trigger = event.target.closest('[data-dropdown-trigger]');
+      const panel = trigger
+        ? document.getElementById(trigger.getAttribute('data-dropdown-trigger'))
+        : null;
+
+      // Fecha qualquer dropdown aberto, exceto o acionado agora.
+      document.querySelectorAll('.dropdown-panel').forEach(function (p) {
+        if (panel && p === panel) return;
+        p.hidden = true;
+        const t = document.querySelector('[data-dropdown-trigger="' + p.id + '"]');
+        if (t) t.setAttribute('aria-expanded', 'false');
+      });
+
+      if (!trigger || !panel) return;
+      event.stopPropagation();
+      const wasOpen = !panel.hidden;
+      panel.hidden = wasOpen;
+      trigger.setAttribute('aria-expanded', wasOpen ? 'false' : 'true');
+
+      if (!wasOpen && trigger.classList.contains('row-menu-btn')) {
+        // O menu por linha vive dentro da tabela, que recorta overflow
+        // (esconde o menu nas últimas linhas). Posiciona em fixed
+        // (viewport) e abre para cima se não couber embaixo.
+        const rect = trigger.getBoundingClientRect();
+        const panelHeight = panel.offsetHeight;
+        panel.style.position = 'fixed';
+        panel.style.left = 'auto';
+        panel.style.right = Math.max(8, Math.round(window.innerWidth - rect.right)) + 'px';
+        if (rect.bottom + panelHeight + 8 > window.innerHeight) {
+          panel.style.top = 'auto';
+          panel.style.bottom = Math.round(window.innerHeight - rect.top + 6) + 'px';
+        } else {
+          panel.style.top = Math.round(rect.bottom + 6) + 'px';
+          panel.style.bottom = 'auto';
+        }
+      }
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape') return;
+      document.querySelectorAll('.dropdown-panel').forEach(function (p) {
+        p.hidden = true;
+        const t = document.querySelector('[data-dropdown-trigger="' + p.id + '"]');
+        if (t) t.setAttribute('aria-expanded', 'false');
+      });
+    });
+
+    // Fecha dropdowns ao rolar a página, para o menu fixo não desalinhar.
+    window.addEventListener('scroll', function () {
+      document.querySelectorAll('.dropdown-panel').forEach(function (p) {
+        if (p.hidden) return;
+        p.hidden = true;
+        const t = document.querySelector('[data-dropdown-trigger="' + p.id + '"]');
+        if (t) t.setAttribute('aria-expanded', 'false');
+      });
+    }, true);
   </script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

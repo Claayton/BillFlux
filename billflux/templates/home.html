@@ -3,24 +3,34 @@
 {% block title %}{{ super() }} - Home{% endblock %}
 
 {% block content %}
-
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style-home.css') }}">
 
-<main id="main">
-    <div class="main-container">
-        <div id="title">
-            <h2>Welcome to BillFlux!</h2>
-        </div>
-        <div id="buttons">
-            <form action="/">
-                    <button class="button" type="submit" >Login</button>
-            </form>
-            <form action="/">
-                    <button class="button" type="submit">Sign in</button>
-            </form>
-        </div>
-
+<section class="hero">
+  <div class="hero-card">
+    <div class="hero-badge">Gerenciador de contas a pagar</div>
+    <h1>Suas contas sob controle, sem dor de cabeça.</h1>
+    <p class="hero-subtitle">
+      Organize boletos, acompanhe vencimentos e saiba exatamente o que precisa pagar —
+      simples, direto e sem enrolação.
+    </p>
+    <div class="hero-actions">
+      <a class="btn btn-primary btn-lg" href="/login">Entrar</a>
+      <a class="btn btn-outline btn-lg" href="/signin">Criar conta</a>
     </div>
-</main>
-
+    <div class="hero-features">
+      <div class="feature">
+        <span class="feature-icon">&#128197;</span>
+        <span>Controle de vencimentos</span>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">&#9989;</span>
+        <span>Status em tempo real</span>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">&#128176;</span>
+        <span>Valores e pagamentos</span>
+      </div>
+    </div>
+  </div>
+</section>
 {% endblock %}

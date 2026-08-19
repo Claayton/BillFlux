@@ -1,177 +1,496 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ super() }} - Bills{% endblock %}
+{% block title %}{{ super() }} - Contas{% endblock %}
 
 {% block content %}
-
 <link rel="stylesheet" href="{{ url_for('static', filename='css/bills.css') }}">
-<script src="https://kit.fontawesome.com/c996c5ea01.js" crossorigin="anonymous"></script>
 
-<main id="main">
+<div class="dashboard">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Contas a pagar</h1>
+      <p class="page-subtitle">Gerencie suas despesas, vencimentos e pagamentos.</p>
+    </div>
+    <button id="openInsertModalBtn" type="button" class="btn btn-primary">
+      <i class="fas fa-plus"></i> Nova conta
+    </button>
+  </div>
 
-    <div class="navbar-1">
+  <div class="stats-row">
+    <div class="stat-card">
+      <span class="stat-label">Total em aberto</span>
+      <span class="stat-value">{{ stats.open | brl }}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Vencidas</span>
+      <span class="stat-value {% if stats.overdue > 0 %}stat-value-danger{% endif %}">{{ stats.overdue | brl }}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Pagas este mês</span>
+      <span class="stat-value stat-value-success">{{ stats.paid_month | brl }}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Total de contas</span>
+      <span class="stat-value">{{ stats.total }}</span>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search">
+      <i class="fas fa-search"></i>
+      <input type="text" id="search" placeholder="Buscar por fornecedor, descrição..." aria-label="Buscar contas">
     </div>
 
-    <div class="navbar-2">
-        <h1>Contas a Pagar</h1>
-        <div class="options">
-            <button id="openInsertModalBtn">+</button>
-
-            <!-- Modal -->
-            <div id="insert-modal" class="insert-modal">
-                <div class="insert-modal-content">
-                    <span class="close">&times;</span>
-                    <h2>Cadastrar Nova Conta</h2>
-                    <form id="insert-boletoForm" class="insert-boletoForm" action="/insert_bill" method="POST">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-                        <label for="bar_code">Código de Barras:</label>
-                        <input type="text" id="bar_code" name="bar_code">
-                        
-                        <div class="valor-vencimento-container">
-                            <div>
-                                <label for="value">Valor:</label>
-                                <input type="text" id="value" name="value" step="0.01" min="0" placeholder="R$: 0.00" required>
-                            </div>
-                            <div>
-                                <label for="vencimento" id="vencimento">Vencimento:</label>
-                                <input type="date" id="vencimento" name="vencimento" required>
-                            </div>
-
-                        </div>
-
-                        <label for="reference">Referente á:</label>
-                        <input type="text" id="reference" name="reference">
-
-                        <label for="suplyer">Fornecedor:</label>
-                        <input type="text" id="suplyer" name="suplyer">
-
-                        <label for="bill_type">Tipo:</label>
-                        <input type="text" id="bill_type" name="bill_type">
-
-                        <label for="obs">Observações:</label>
-                        <input type="text" id="obs" name="obs">
-
-                        <!-- Adicione outros campos conforme necessário -->
-
-                        <button id="insert-save-button" type="submit">Salvar</button>
-                        
-                    </form>
-                </div>
-            </div>
-
-            <div class="search">
-                <label for="search"><i class="fas fa-search"></i></label>
-                <input type="text" name="search" id="search">
-            </div>
-            <div class="option-1-container">
-                <label for="option-1"><i>▼</i></label>
-                <select id="option-1" class="hidden-select">
-                    <option value="Imprimir">Imprimir</option>
-                    <option value="Exportar">Exportar</option>
-                    <option value="Agrupar">Agrupar por coluna</option>
-                </select>
-            </div>
-            
-            <div class="option-2-container">
-                <label for="option-2"><i class="fas fa-filter"></i></label>
-                <select id="option-2" class="hidden-select">
-                    <option value="Todas">Todas</option>
-                    <option value="Não Pagas">Não Pagas</option>
-                    <option value="Vencidas">Vencidas</option>
-                    <option value="À vencer">À vencer</option>
-                    <option value="Hoje">Hoje</option>
-                    <option value="Pagas">Pagas</option>
-                </select>
-            </div>
-
-            <div id="vazio">
-            </div>
+    <div class="filter-group">
+      <div class="filter-wrap">
+        <i class="fas fa-filter"></i>
+        <select id="filter-status" class="filter-select" aria-label="Filtrar por status">
+          <option value="Todas">Todos os status</option>
+          <option value="NaoPagas">Não pagas</option>
+          <option value="Vencidas">Vencidas</option>
+          <option value="AVencer">À vencer</option>
+          <option value="Hoje">Vence hoje</option>
+          <option value="Pagas">Pagas</option>
+        </select>
+      </div>
+      <div class="filter-wrap">
+        <i class="fas fa-calendar"></i>
+        <select id="filter-period" class="filter-select" aria-label="Filtrar por período">
+          <option value="todos">Todos os períodos</option>
+          <option value="este-mes">Este mês</option>
+          <option value="mes-passado">Mês passado</option>
+          <option value="proximos-30">Próximos 30 dias</option>
+          <option value="vencidas">Somente vencidas</option>
+        </select>
+      </div>
+      <button type="button" class="btn btn-ghost" id="more-filters-btn" aria-expanded="false">
+        <i class="fas fa-sliders-h"></i> Mais filtros
+      </button>
+      <div class="dropdown">
+        <button type="button" class="icon-btn" data-dropdown-trigger="toolbar-menu"
+                aria-haspopup="true" aria-expanded="false" aria-label="Mais ações">
+          <i class="fas fa-ellipsis-v"></i>
+        </button>
+        <div class="dropdown-panel" id="toolbar-menu" hidden>
+          <button type="button" class="dropdown-item" data-action="imprimir"><i class="fas fa-print"></i> Imprimir</button>
+          <button type="button" class="dropdown-item" data-action="limpar"><i class="fas fa-times"></i> Limpar filtros</button>
         </div>
+      </div>
+    </div>
+  </div>
 
-        <section class="conteudo">
-            <div class="tabela">
-                <div class="table-container">
+  <div class="filter-advanced" id="filter-advanced" hidden>
+    <div class="filter-wrap">
+      <i class="fas fa-tag"></i>
+      <input type="text" id="filter-type" class="filter-input" placeholder="Filtrar por categoria (ex.: Aluguel)" aria-label="Filtrar por categoria">
+    </div>
+  </div>
 
-                    <table class="table-estilosa">
-                        <thead>
-                            <tr>
-                                <th></th>
-                                <th>Ação</th>
-                                <th>Status</th>
-                                <th>Vencimento</th>
-                                <th>Valor</th>
-                                <th>Referente a</th>
-                                <th>Fornecedor</th>
-                                <th>Tipo</th>
-                                <th>Dias</th>
-                                <th>Pago em</th>
-                                <th>Valor pago</th>
-                                <th>Número do documento</th>
-                                <th>Observações</th>
-                                <th>Lançado em</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                        {% for bill in bills_list %}
-
-                            <tr>
-                                <th>
-                                    <div class="options-bill-container">
-                                        <label for="options-bill">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
-                                                <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
-                                              </svg>
-                                        </label>
-                                        <select name="options-bill" class="hidden-select">
-                                            <option value="Pagar">Pagar</option>
-                                            <option value="Excluir">Excluir</option>
-                                            <option value="Editar">Editar</option>
-                                        </select>
-                                    </div>
-                                </th>
-                                <th><button>Editar</button></th>
-                                <th>{% if bill.status %}
-                                    <p id="pago"><span class="checkmark">✔</span></p>
-                                    {% else %}
-                                    <p id="pagar"><span class="xmark">✘</span></p>
-                                    {% endif %}
-                                </th>
-                                <th>{{ bill.due_date }}</th>
-                                <th>{{ bill.value }}</th>
-                                <th>
-                                    <button class="view-details-btn" data-details="{{ bill.reference }}">Ver detalhes</button>
-                                </th>
-                                <th>{{ bill.suplyer }}</th>
-                                <th>{{ bill.bill_type }}</th>
-                                <th>{{ bill.days }}</th>
-                                <th>{{ bill.payday }}</th>
-                                <th>{{ bill.value_from_payment }}</th>
-                                <th>{{ bill.bar_code }}</th>
-                                <th>
-                                    <button class="view-details-btn" data-details="{{ bill.obs }}">Ver detalhes</button>
-                                </th>
-                                <th>{{ bill.date_from_add }}</th>
-                            </tr>
-
-                        {% endfor %}
-                        </tbody>
-
-                    </table>
-                    <div class="modal" id="modal">
-                        <div class="modal-content">
-                            <span class="close">&times;</span>
-                            <p id="modal-text"></p>
-                        </div>
-                    </div>
+  <div class="table-card">
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Descrição</th>
+            <th>Fornecedor</th>
+            <th>Vencimento</th>
+            <th class="th-amount">Valor</th>
+            <th class="th-actions"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bill in bills_list %}
+          {% set due = bill.due_date.strftime('%Y-%m-%d') if bill.due_date else '' %}
+          {% set today_s = today.strftime('%Y-%m-%d') %}
+          {% set tomorrow_s = tomorrow.strftime('%Y-%m-%d') %}
+          {% set cat_name = account_names.get(bill.account_id) if bill.account_id else '' %}
+          {% if bill.status %}
+            {% set status_key = 'paga' %}
+          {% elif not bill.due_date %}
+            {% set status_key = 'semvenc' %}
+          {% elif due < today_s %}
+            {% set status_key = 'vencida' %}
+          {% elif due == today_s %}
+            {% set status_key = 'hoje' %}
+          {% elif due == tomorrow_s %}
+            {% set status_key = 'amanha' %}
+          {% else %}
+            {% set status_key = 'pendente' %}
+          {% endif %}
+          <tr class="account-row" data-id="{{ bill.id }}" data-status="{{ status_key }}"
+              data-due="{{ due }}" data-payday="{{ bill.payday.strftime('%Y-%m-%d') if bill.payday else '' }}"
+              data-type="{{ (cat_name or bill.bill_type or '').lower() }}"
+              data-search="{{ ((((bill.reference or '') ~ ' ' ~ (bill.suplyer or '') ~ ' ' ~ (cat_name or bill.bill_type or '') ~ ' ' ~ (bill.obs or '') ~ ' ' ~ (bill.bar_code or '')) | lower)) }}">
+            <td>
+              <span class="status status-{{ status_key }}">
+                <span class="status-dot"></span>
+                {% if status_key == 'paga' %}Paga
+                {% elif status_key == 'vencida' %}Vencida
+                {% elif status_key == 'hoje' %}Vence hoje
+                {% elif status_key == 'amanha' %}Vence amanhã
+                {% elif status_key == 'semvenc' %}Sem vencimento
+                {% else %}Pendente{% endif %}
+              </span>
+            </td>
+            <td>
+              <span class="cell-title">{{ bill.reference or 'Sem descrição' }}</span>
+              {% if cat_name or bill.bill_type %}<span class="cell-sub">{{ cat_name or bill.bill_type }}</span>{% endif %}
+            </td>
+            <td class="cell-supplier">{{ bill.suplyer or '—' }}</td>
+            <td>
+              {% if bill.due_date %}
+              <span class="cell-date {{ 'cell-date-overdue' if status_key == 'vencida' else '' }}">{{ bill.due_date | brdate_short }}</span>
+              {% else %}
+              <span class="cell-date muted-text">—</span>
+              {% endif %}
+              {% if status_key == 'vencida' %}
+                {% set od = bill.due_date | overdue_days(today) %}
+                {% if od %}<span class="cell-sub cell-overdue">há {{ -od }} dias</span>{% endif %}
+              {% elif status_key == 'paga' %}
+                <span class="cell-sub">Pago em {{ bill.payday | brdate_short }}</span>
+              {% endif %}
+            </td>
+            <td class="cell-amount">{{ bill.value | brl }}</td>
+            <td class="cell-actions">
+              <div class="row-data"
+                   data-id="{{ bill.id }}"
+                   data-value="{{ bill.value }}"
+                   data-due="{{ due }}"
+                   data-reference="{{ bill.reference or '' }}"
+                   data-suplyer="{{ bill.suplyer or '' }}"
+                   data-bill-type="{{ bill.bill_type or '' }}"
+                   data-account="{{ bill.account_id or '' }}"
+                   data-account-name="{{ cat_name }}"
+                   data-obs="{{ bill.obs or '' }}"
+                   data-bar-code="{{ bill.bar_code or '' }}"
+                   data-created="{{ bill.date_from_add.strftime('%Y-%m-%d') if bill.date_from_add else '' }}"
+                   data-pix-key="{{ bill.pix_key or '' }}"
+                   data-pix-payload="{{ bill.pix_payload or '' }}"
+                   data-pix-image="{{ bill.pix_image or '' }}"></div>
+              <div class="dropdown">
+                <button type="button" class="icon-btn row-menu-btn" data-dropdown-trigger="row-menu-{{ bill.id }}"
+                        aria-haspopup="true" aria-expanded="false" aria-label="Ações da conta">
+                  <i class="fas fa-ellipsis-h"></i>
+                </button>
+                <div class="dropdown-panel" id="row-menu-{{ bill.id }}" hidden>
+                  <button type="button" class="dropdown-item" data-action="details" data-id="{{ bill.id }}"><i class="fas fa-eye"></i> Ver detalhes</button>
+                  <button type="button" class="dropdown-item" data-action="edit" data-id="{{ bill.id }}"><i class="fas fa-pen"></i> Editar</button>
+                  {% if not bill.status %}
+                  <button type="button" class="dropdown-item" data-action="pay" data-id="{{ bill.id }}"><i class="fas fa-check-circle"></i> Marcar como paga</button>
+                  {% endif %}
+                  <button type="button" class="dropdown-item is-danger" data-action="delete" data-id="{{ bill.id }}"><i class="fas fa-trash"></i> Excluir</button>
                 </div>
-            </div>
-        </section>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr class="empty-row">
+            <td colspan="6" class="empty-state">
+              <i class="fas fa-receipt"></i>
+              <h3>Nenhuma conta encontrada</h3>
+              <p>Você ainda não possui contas cadastradas.</p>
+              <button id="openInsertModalBtnEmpty" type="button" class="btn btn-primary btn-sm">
+                <i class="fas fa-plus"></i> Nova conta
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+          <tr class="empty-row" id="no-results-row" hidden>
+            <td colspan="6" class="empty-state">
+              <i class="fas fa-search"></i>
+              <h3>Nenhuma conta encontrada</h3>
+              <p>Experimente alterar os filtros ou termos da busca.</p>
+              <button id="clear-filters-btn" type="button" class="btn btn-ghost btn-sm">
+                <i class="fas fa-times"></i> Limpar filtros
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: cadastrar nova conta -->
+<div id="insert-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Cadastrar Nova Conta</h2>
+      <button class="modal-close" aria-label="Fechar">&times;</button>
+    </div>
+    <form id="insert-boletoForm" action="/insert_bill" method="POST" class="modal-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="form-field">
+        <label for="bar_code">Código de barras</label>
+        <input type="text" id="bar_code" name="bar_code" placeholder="Número do documento">
+      </div>
+
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="value">Valor</label>
+          <input type="text" id="value" name="value" placeholder="R$ 0,00" step="0.01" min="0" required>
+        </div>
+        <div class="form-field">
+          <label for="vencimento">Vencimento</label>
+          <input type="date" id="vencimento" name="vencimento" required>
+        </div>
+      </div>
+
+      <div class="form-field">
+        <label for="reference">Referente a</label>
+        <input type="text" id="reference" name="reference" placeholder="Ex: Energia de agosto">
+      </div>
+
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="suplyer">Fornecedor</label>
+          <input type="text" id="suplyer" name="suplyer" placeholder="Ex: CEMIG">
+        </div>
+        <div class="form-field">
+          <label for="bill_category">Categoria</label>
+          <select id="bill_category" name="account_id">
+            <option value="">Selecione uma categoria</option>
+            {% for group in account_groups %}
+            <optgroup label="{{ group.label }}">
+              {% for account in group.accounts %}
+              <option value="{{ account.id }}">{{ account.name }}</option>
+              {% endfor %}
+            </optgroup>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="pix_key">Chave PIX (opcional)</label>
+          <input type="text" id="pix_key" name="pix_key" placeholder="CPF, CNPJ, e-mail, telefone ou aleatória">
+        </div>
+        <div class="form-field">
+          <label for="obs">Observações</label>
+          <input type="text" id="obs" name="obs" placeholder="Observações opcionais">
+        </div>
+      </div>
+
+      <div class="form-field">
+        <label for="pix_qr_image">Ou envie a imagem do QR Code PIX (print do boleto/PDF) — ou cole com Ctrl+V</label>
+        <input type="file" id="pix_qr_image" accept="image/*">
+        <input type="hidden" id="pix_payload" name="pix_payload">
+        <input type="hidden" id="pix_image" name="pix_image">
+        <img id="pix_qr_preview" class="pix-qr-preview" alt="Prévia do QR" hidden>
+        <p id="pix_upload_status" class="pix-upload-status" hidden></p>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost modal-cancel">Cancelar</button>
+        <button id="insert-save-button" type="submit" class="btn btn-primary">Salvar conta</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: editar conta -->
+<div id="edit-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Editar Conta</h2>
+      <button class="modal-close" aria-label="Fechar">&times;</button>
+    </div>
+    <form id="edit-boletoForm" action="/bills/edit" method="POST" class="modal-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="bill_id" id="edit_bill_id">
+      <input type="hidden" name="pix_payload" id="edit_pix_payload">
+      <input type="hidden" name="pix_image" id="edit_pix_image">
+
+      <div class="form-field">
+        <label for="edit_bar_code">Código de barras</label>
+        <input type="text" id="edit_bar_code" name="bar_code" placeholder="Número do documento">
+      </div>
+
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="edit_value">Valor</label>
+          <input type="text" id="edit_value" name="value" placeholder="R$ 0,00" step="0.01" min="0" required>
+        </div>
+        <div class="form-field">
+          <label for="edit_vencimento">Vencimento</label>
+          <input type="date" id="edit_vencimento" name="vencimento" required>
+        </div>
+      </div>
+
+      <div class="form-field">
+        <label for="edit_reference">Referente a</label>
+        <input type="text" id="edit_reference" name="reference" placeholder="Ex: Energia de agosto">
+      </div>
+
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="edit_suplyer">Fornecedor</label>
+          <input type="text" id="edit_suplyer" name="suplyer" placeholder="Ex: CEMIG">
+        </div>
+        <div class="form-field">
+          <label for="edit_bill_category">Categoria</label>
+          <select id="edit_bill_category" name="account_id">
+            <option value="">Selecione uma categoria</option>
+            {% for group in account_groups %}
+            <optgroup label="{{ group.label }}">
+              {% for account in group.accounts %}
+              <option value="{{ account.id }}">{{ account.name }}</option>
+              {% endfor %}
+            </optgroup>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="edit_pix_key">Chave PIX (opcional)</label>
+          <input type="text" id="edit_pix_key" name="pix_key" placeholder="CPF, CNPJ, e-mail, telefone ou aleatória">
+        </div>
+        <div class="form-field">
+          <label for="edit_obs">Observações</label>
+          <input type="text" id="edit_obs" name="obs" placeholder="Observações opcionais">
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost modal-cancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar alterações</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: pagamento -->
+<div id="pay-modal" class="modal">
+  <div class="modal-content pay-modal-content">
+    <div class="modal-header">
+      <h2>Realizar Pagamento</h2>
+      <button class="modal-close" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="pay-tabs">
+      <button type="button" class="pay-tab is-active" data-pay-tab="barcode">Código de barras</button>
+      <button type="button" class="pay-tab" data-pay-tab="pix">PIX</button>
     </div>
 
-</main>
+    <div class="pay-hero">
+      <span class="pay-hero-label">Valor</span>
+      <span class="pay-hero-value" id="pay-modal-value"></span>
+    </div>
 
-<script type="text/javascript" src="{{ url_for('static', filename='js/bills.js') }}"></script>
+    <div class="pay-pane" id="pay-pane-barcode">
+      <div class="pay-barcode">
+        <svg id="pay-codigo-barras"></svg>
+        <p id="pay-barcode-empty" class="pay-barcode-empty" hidden>
+          Este registro não possui um código de barras válido para escaneamento.
+        </p>
+      </div>
+      <div class="pay-linedigitavel">
+        <span class="label">Linha digitável:</span>
+        <p id="pay-modal-barcode"></p>
+        <div class="pay-actions">
+          <button id="pay-copy" type="button" class="btn btn-ghost btn-sm">Copiar código</button>
+        </div>
+      </div>
+    </div>
 
+    <div class="pay-pane" id="pay-pane-pix" hidden>
+      <div class="pix-box">
+        <p class="pix-hint" id="pix-hint" hidden>
+          QR Code PIX gerado a partir da chave salva nesta conta.
+        </p>
+        <div class="pix-qr"><svg id="pix-qr-svg"></svg></div>
+        <img id="pix-img" class="pix-qr-img" alt="QR Code PIX" hidden>
+        <p class="pix-copiacola-label">Pix Copia e Cola:</p>
+        <p id="pix-copiacola" class="pix-copiacola"></p>
+        <div class="pay-actions">
+          <button id="pix-copy" type="button" class="btn btn-ghost btn-sm">Copiar código PIX</button>
+        </div>
+      </div>
+    </div>
+    <div class="pay-info">
+      <div class="pay-info-item">
+        <span class="label">Vencimento:</span>
+        <span id="pay-modal-due"></span>
+      </div>
+      <div class="pay-info-item">
+        <span class="label">Referente a:</span>
+        <span id="pay-modal-reference"></span>
+      </div>
+      <div class="pay-info-item">
+        <span class="label">Fornecedor:</span>
+        <span id="pay-modal-suplyer"></span>
+      </div>
+      <div class="pay-info-item">
+        <span class="label">Categoria:</span>
+        <span id="pay-modal-type"></span>
+      </div>
+      <div class="pay-info-item">
+        <span class="label">Observações:</span>
+        <span id="pay-modal-obs"></span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost modal-cancel">Cancelar</button>
+      <button id="pay-save-button" type="button" class="btn btn-primary">Confirmar pagamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: detalhes -->
+<div id="modal" class="modal">
+  <div class="modal-content modal-content-sm">
+    <div class="modal-header">
+      <h2>Detalhes da conta</h2>
+      <button class="modal-close" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="modal-details" id="modal-details">
+      <div class="modal-details-item">
+        <span class="label">Status:</span>
+        <span data-d="status"></span>
+      </div>
+      <div class="modal-details-item">
+        <span class="label">Referente a:</span>
+        <span data-d="reference"></span>
+      </div>
+      <div class="modal-details-item">
+        <span class="label">Fornecedor:</span>
+        <span data-d="suplyer"></span>
+      </div>
+      <div class="modal-details-item">
+        <span class="label">Categoria:</span>
+        <span data-d="category"></span>
+      </div>
+      <div class="modal-details-item">
+        <span class="label">Vencimento:</span>
+        <span data-d="due"></span>
+      </div>
+      <div class="modal-details-item">
+        <span class="label">Valor:</span>
+        <span data-d="value"></span>
+      </div>
+      <div class="modal-details-item">
+        <span class="label">Nº documento:</span>
+        <span data-d="doc"></span>
+      </div>
+      <div class="modal-details-item">
+        <span class="label">Lançado em:</span>
+        <span data-d="created"></span>
+      </div>
+      <div class="modal-details-item">
+        <span class="label">Observações:</span>
+        <span data-d="obs"></span>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="{{ url_for('static', filename='js/bills.js') }}"></script>
 {% endblock %}

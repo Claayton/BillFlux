@@ -1,5 +1,6 @@
 """Module to create the app"""
 
+from datetime import datetime
 from flask import Flask
 from dynaconf import FlaskDynaconf
 from flask_wtf import CSRFProtect
@@ -8,6 +9,11 @@ from billflux.infra.config.database import create_db
 from billflux.controlers import home, bills, insert_bill, auth, accounts
 
 csrf = CSRFProtect()
+
+
+def _as_date(value):
+    """Normaliza datetime/date para date."""
+    return value.date() if isinstance(value, datetime) else value
 
 
 def _seed_default_user():
@@ -57,6 +63,51 @@ def create_app():
     create_db()
     _seed_default_user()
     _seed_default_accounts()
+
+    @app.template_filter("brl")
+    def brl(value):
+        """Formats a value as Brazilian currency."""
+        if value is None:
+            return "-"
+        return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    @app.template_filter("brdate")
+    def brdate(value):
+        """Formats a datetime as dd/mm/yyyy."""
+        if value is None:
+            return "-"
+        return value.strftime("%d/%m/%Y")
+
+    @app.template_filter("brdate_short")
+    def brdate_short(value):
+        """Formats a date as "21 ago 2026"."""
+        if value is None:
+            return "-"
+        months = [
+            "jan",
+            "fev",
+            "mar",
+            "abr",
+            "mai",
+            "jun",
+            "jul",
+            "ago",
+            "set",
+            "out",
+            "nov",
+            "dez",
+        ]
+        return f"{value.day:02d} {months[value.month - 1]} {value.year}"
+
+    @app.template_filter("overdue_days")
+    def overdue_days(value, today=None):
+        """Número de dias em atraso (negativo) ou None se não venceu."""
+        if value is None or today is None:
+            return None
+        due = _as_date(value)
+        days = (due - today).days
+        return days if days < 0 else None
+
     app.register_blueprint(home.bp)
     app.register_blueprint(bills.bp)
     app.register_blueprint(insert_bill.bp)

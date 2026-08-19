@@ -27,8 +27,8 @@ class BillRepository:
         pix_key: str = None,
         pix_payload: str = None,
         pix_image: str = None,
-        account_id: int = None,
         obs: str = None,
+        account_id: int = None,
         date_from_add: datetime = None,
     ) -> Bill:
         """
@@ -64,8 +64,8 @@ class BillRepository:
                     pix_key=pix_key,
                     pix_payload=pix_payload,
                     pix_image=pix_image,
-                    account_id=account_id,
                     obs=obs,
+                    account_id=account_id,
                     date_from_add=date_from_add or datetime.now(),
                 )
 
@@ -74,6 +74,21 @@ class BillRepository:
                 session.refresh(bill)
 
                 return Bill(**dict(bill))
+        finally:
+            session.close()
+
+    def get_bills(self) -> List[Bill]:
+        """
+        Performs a search for all Bills registered in the system.
+        :return: A list with all Bills and their data.
+        """
+
+        session = get_session()
+        try:
+            with session:
+                sql = select(BillModel)
+                bills = session.exec(sql).all()
+                return [Bill(**dict(bill)) for bill in bills]
         finally:
             session.close()
 
@@ -89,6 +104,70 @@ class BillRepository:
             with session:
                 bill = session.get(BillModel, bill_id)
                 return Bill(**dict(bill)) if bill else None
+        finally:
+            session.close()
+
+    def pay_bill(self, bill_id: int) -> Optional[Bill]:
+        """
+        Marks a Bill as paid, recording the payment date.
+        :param bill_id: Bill id.
+        :return: The updated Bill or None when not found.
+        """
+
+        session = get_session()
+        try:
+            with session:
+                bill = session.get(BillModel, bill_id)
+                if not bill:
+                    return None
+                bill.status = True
+                bill.payday = datetime.now()
+                session.add(bill)
+                session.commit()
+                session.refresh(bill)
+                return Bill(**dict(bill))
+        finally:
+            session.close()
+
+    def update_bill(self, bill_id: int, **fields: object) -> Optional[Bill]:
+        """
+        Updates the fields of an existing Bill.
+        :param bill_id: Bill id.
+        :param fields: Field name/value pairs to update.
+        :return: The updated Bill or None when not found.
+        """
+
+        session = get_session()
+        try:
+            with session:
+                bill = session.get(BillModel, bill_id)
+                if not bill:
+                    return None
+                for key, value in fields.items():
+                    setattr(bill, key, value)
+                session.add(bill)
+                session.commit()
+                session.refresh(bill)
+                return Bill(**dict(bill))
+        finally:
+            session.close()
+
+    def delete_bill(self, bill_id: int) -> bool:
+        """
+        Deletes a Bill by its id.
+        :param bill_id: Bill id.
+        :return: True when deleted, False when not found.
+        """
+
+        session = get_session()
+        try:
+            with session:
+                bill = session.get(BillModel, bill_id)
+                if not bill:
+                    return False
+                session.delete(bill)
+                session.commit()
+                return True
         finally:
             session.close()
 
@@ -119,20 +198,5 @@ class BillRepository:
                         count += 1
                 session.commit()
                 return count
-        finally:
-            session.close()
-
-    def get_bills(self) -> List[Bill]:
-        """
-        Performs a search for all Bills registered in the system.
-        :return: A list with all Bills and their data.
-        """
-
-        session = get_session()
-        try:
-            with session:
-                sql = select(BillModel)
-                bills = session.exec(sql).all()
-                return [Bill(**dict(bill)) for bill in bills]
         finally:
             session.close()
