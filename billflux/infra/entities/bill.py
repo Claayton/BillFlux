@@ -25,6 +25,6 @@ class Bill(SQLModel, table=True):
     value_from_payment: Optional[Decimal] = Field(
         default=None, sa_column=Column(Numeric(10, 2), nullable=True)
     )
-    bar_code: Optional[int] = Field(nullable=True)
+    bar_code: Optional[str] = Field(nullable=True)
     obs: Optional[str] = Field(nullable=True)
     date_from_add: datetime = Field(nullable=False)

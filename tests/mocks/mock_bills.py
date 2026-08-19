@@ -38,7 +38,7 @@ def mock_bill():
         days=fake.random_number(),
         payday=fake.date_time(),
         value_from_payment=fake.pydecimal(left_digits=4, right_digits=2, positive=True),
-        bar_code=fake.random_number(),
+        bar_code=fake.numerify("##########"),
         obs=fake.text(),
         date_from_add=fake.date_time(),
     )

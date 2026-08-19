@@ -36,7 +36,7 @@ def test_insert_bill_valid(client):
     assert response.status_code == 200
 
     bills = BillRepository().get_bills()
-    assert any(bill.bar_code == 1234567890 for bill in bills)
+    assert any(bill.bar_code == "1234567890" for bill in bills)
 
 
 def test_insert_bill_missing_required(client):

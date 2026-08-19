@@ -23,7 +23,7 @@ class BillRepository:
         days: int = None,
         payday: datetime = None,
         value_from_payment: Optional[Decimal] = None,
-        bar_code: int = None,
+        bar_code: str = None,
         obs: str = None,
         date_from_add: datetime = None,
     ) -> Bill:

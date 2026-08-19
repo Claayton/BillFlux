@@ -19,7 +19,7 @@ def init_database():
 
 
 @main.command("add")
-def add(bar_code: int, suplyer: str, bill_type: str = typer.Option(...)):
+def add(bar_code: str, suplyer: str, bill_type: str = typer.Option(...)):
     """Add a new bill to database."""
     repository = BillRepository()
     if repository.insert_bill(bar_code=bar_code, suplyer=suplyer, bill_type=bill_type):
