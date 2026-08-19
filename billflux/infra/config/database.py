@@ -7,6 +7,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import create_engine, Session
 from billflux.config import settings
 from billflux.infra.entities.bill import *  # pylint: disable=W0401, W0614
+from billflux.infra.entities.account import Account  # noqa: F401
 
 _database_url = settings.database.url
 _engine_kwargs = {"connect_args": {"check_same_thread": False}}
@@ -15,8 +16,6 @@ if ":memory:" in _database_url or _database_url == "sqlite://":
     _engine_kwargs["poolclass"] = StaticPool
 
 engine = create_engine(_database_url, **_engine_kwargs)
-
-
 
 
 def _add_column_if_missing(table: str, column: str, column_type: str = "VARCHAR"):
@@ -29,6 +28,7 @@ def _add_column_if_missing(table: str, column: str, column_type: str = "VARCHAR"
             )
             connection.commit()
 
+
 def create_db():
     """Criando bancos de dados"""
 
@@ -36,6 +36,7 @@ def create_db():
     _add_column_if_missing("bill", "pix_key")
     _add_column_if_missing("bill", "pix_payload")
     _add_column_if_missing("bill", "pix_image")
+    _add_column_if_missing("bill", "account_id", "INTEGER")
 
     return base
 

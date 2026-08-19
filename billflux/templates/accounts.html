@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ super() }} - Plano de contas{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/accounts.css') }}">
+
+<div class="dashboard">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Plano de contas</h1>
+      <p class="page-subtitle">Organize receitas e despesas em categorias para enxergar seu resultado.</p>
+    </div>
+    <button id="openNewAccountBtn" type="button" class="btn btn-primary">
+      <i class="fas fa-plus"></i> Nova categoria
+    </button>
+  </div>
+
+  {% for section in sections %}
+  <section class="account-section">
+    <div class="account-section-head">
+      <span class="account-type-dot {{ 'is-receita' if section.type == 'receita' else 'is-despesa' }}"></span>
+      <h2>{{ section.label }}</h2>
+    </div>
+
+    {% if section.groups %}
+    <div class="account-card">
+      {% for group in section.groups %}
+      <div class="account-item" data-account-id="{{ group.account.id }}">
+        <div class="account-item-main">
+          <span class="account-dot" {% if group.account.color %}style="background: {{ group.account.color }}"{% endif %}></span>
+          <span class="account-name">{{ group.account.name }}</span>
+        </div>
+        <div class="dropdown">
+          <button type="button" class="icon-btn" data-dropdown-trigger="account-menu-{{ group.account.id }}"
+                  aria-haspopup="true" aria-expanded="false" aria-label="Ações da categoria">
+            <i class="fas fa-ellipsis-h"></i>
+          </button>
+          <div class="dropdown-panel" id="account-menu-{{ group.account.id }}" hidden>
+            <button type="button" class="dropdown-item" data-action="edit" data-id="{{ group.account.id }}"
+                    data-name="{{ group.account.name }}" data-type="{{ group.account.type }}"
+                    data-parent="{{ group.account.parent_id or '' }}" data-color="{{ group.account.color or '' }}">
+              <i class="fas fa-pen"></i> Editar
+            </button>
+            <button type="button" class="dropdown-item is-danger" data-action="delete" data-id="{{ group.account.id }}">
+              <i class="fas fa-trash"></i> Excluir
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {% for child in group.children %}
+      <div class="account-item is-child" data-account-id="{{ child.id }}">
+        <div class="account-item-main">
+          <span class="account-dot" {% if child.color %}style="background: {{ child.color }}"{% endif %}></span>
+          <span class="account-name">{{ child.name }}</span>
+          <span class="account-tag">{{ child.type == 'receita' and 'Receita' or 'Despesa' }}</span>
+        </div>
+        <div class="dropdown">
+          <button type="button" class="icon-btn" data-dropdown-trigger="account-menu-{{ child.id }}"
+                  aria-haspopup="true" aria-expanded="false" aria-label="Ações da categoria">
+            <i class="fas fa-ellipsis-h"></i>
+          </button>
+          <div class="dropdown-panel" id="account-menu-{{ child.id }}" hidden>
+            <button type="button" class="dropdown-item" data-action="edit" data-id="{{ child.id }}"
+                    data-name="{{ child.name }}" data-type="{{ child.type }}"
+                    data-parent="{{ child.parent_id or '' }}" data-color="{{ child.color or '' }}">
+              <i class="fas fa-pen"></i> Editar
+            </button>
+            <button type="button" class="dropdown-item is-danger" data-action="delete" data-id="{{ child.id }}">
+              <i class="fas fa-trash"></i> Excluir
+            </button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="account-card account-empty">
+      <i class="fas fa-folder-open"></i>
+      <span>Nenhuma categoria de {{ section.label | lower }} criada ainda.</span>
+    </div>
+    {% endif %}
+  </section>
+  {% endfor %}
+
+  <p class="account-hint">
+    <i class="fas fa-info-circle"></i>
+    Categorias em uso (com contas vinculadas) não podem ser excluídas.
+  </p>
+</div>
+
+<!-- Modal: nova categoria -->
+<div id="account-modal" class="modal">
+  <div class="modal-content modal-content-sm">
+    <div class="modal-header">
+      <h2 id="account-modal-title">Nova categoria</h2>
+      <button class="modal-close" aria-label="Fechar">&times;</button>
+    </div>
+    <form id="account-form" action="/accounts/new" method="POST" class="modal-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="account_id" id="account_id">
+
+      <div class="form-field">
+        <label for="account_name">Nome da categoria</label>
+        <input type="text" id="account_name" name="name" placeholder="Ex: Energia de agosto" required>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="account_type">Tipo</label>
+          <select id="account_type" name="type" required>
+            <option value="receita">Receita</option>
+            <option value="despesa">Despesa</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label for="account_color">Cor (opcional)</label>
+          <select id="account_color" name="color">
+            <option value="">Sem cor</option>
+            <option value="#6366F1">Índigo</option>
+            <option value="#10B981">Verde</option>
+            <option value="#F59E0B">Âmbar</option>
+            <option value="#EF4444">Vermelho</option>
+            <option value="#3B82F6">Azul</option>
+            <option value="#8B5CF6">Roxo</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-field">
+        <label for="account_parent">Subcategoria de (opcional)</label>
+        <select id="account_parent" name="parent_id">
+          <option value="">— Categoria principal —</option>
+          {% for section in sections %}
+          <optgroup label="{{ section.label }}">
+            {% for group in section.groups %}
+            <option value="{{ group.account.id }}">{{ group.account.name }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost modal-cancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar categoria</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/accounts.js') }}"></script>
+{% endblock %}

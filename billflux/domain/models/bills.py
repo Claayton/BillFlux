@@ -20,6 +20,7 @@ Bill = namedtuple(
         "pix_payload",
         "pix_image",
         "obs",
+        "account_id",
         "date_from_add",
     ],
 )

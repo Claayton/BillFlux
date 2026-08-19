@@ -30,4 +30,7 @@ class Bill(SQLModel, table=True):
     pix_payload: Optional[str] = Field(nullable=True)
     pix_image: Optional[str] = Field(nullable=True)
     obs: Optional[str] = Field(nullable=True)
+    account_id: Optional[int] = Field(
+        default=None, foreign_key="account.id", nullable=True
+    )
     date_from_add: datetime = Field(nullable=False)

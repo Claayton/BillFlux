@@ -27,6 +27,7 @@ class BillRepository:
         pix_key: str = None,
         pix_payload: str = None,
         pix_image: str = None,
+        account_id: int = None,
         obs: str = None,
         date_from_add: datetime = None,
     ) -> Bill:
@@ -41,6 +42,7 @@ class BillRepository:
         :param value_from_payment: Amount paid.
         :param bar_code: Bar code from bill.
         :param obs: Optional Observation.
+        :param account_id: Category id from the chart of accounts.
         :param date_from_add: Date the bill was added.
         :return: The Registerer Bill.
         """
@@ -62,6 +64,7 @@ class BillRepository:
                     pix_key=pix_key,
                     pix_payload=pix_payload,
                     pix_image=pix_image,
+                    account_id=account_id,
                     obs=obs,
                     date_from_add=date_from_add or datetime.now(),
                 )
