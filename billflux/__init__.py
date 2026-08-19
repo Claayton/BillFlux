@@ -6,7 +6,7 @@ from dynaconf import FlaskDynaconf
 from flask_wtf import CSRFProtect
 from billflux.config import settings
 from billflux.infra.config.database import create_db
-from billflux.controlers import home, bills, insert_bill, auth, accounts
+from billflux.controlers import home, bills, insert_bill, auth, accounts, sales
 
 csrf = CSRFProtect()
 
@@ -113,4 +113,5 @@ def create_app():
     app.register_blueprint(insert_bill.bp)
     app.register_blueprint(auth.bp)
     app.register_blueprint(accounts.bp)
+    app.register_blueprint(sales.bp)
     return app

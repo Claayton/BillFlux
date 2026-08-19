@@ -14,9 +14,30 @@
       simples, direto e sem enrolação.
     </p>
     <div class="hero-actions">
-      <a class="btn btn-primary btn-lg" href="/login">Entrar</a>
-      <a class="btn btn-outline btn-lg" href="/signin">Criar conta</a>
+      {% if session.get('user') %}
+        <a class="btn btn-primary btn-lg" href="/sales"><i class="fas fa-cash-register"></i> Lançar vendas</a>
+        <a class="btn btn-outline btn-lg" href="/bills">Ver contas</a>
+      {% else %}
+        <a class="btn btn-primary btn-lg" href="/login">Entrar</a>
+        <a class="btn btn-outline btn-lg" href="/signin">Criar conta</a>
+      {% endif %}
     </div>
+    {% if session.get('user') and sales_summary %}
+    <div class="hero-sales">
+      <div class="hero-sales-item">
+        <span class="hero-sales-label">Vendas hoje</span>
+        <span class="hero-sales-value">{{ sales_summary.today | brl }}</span>
+      </div>
+      <div class="hero-sales-item">
+        <span class="hero-sales-label">Vendas no mês</span>
+        <span class="hero-sales-value">{{ sales_summary.month | brl }}</span>
+      </div>
+      <div class="hero-sales-item">
+        <span class="hero-sales-label">Média por dia</span>
+        <span class="hero-sales-value">{{ sales_summary.avg | brl }}</span>
+      </div>
+    </div>
+    {% endif %}
     <div class="hero-features">
       <div class="feature">
         <span class="feature-icon">&#128197;</span>

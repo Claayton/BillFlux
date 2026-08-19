@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ super() }} - Vendas{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sales.css') }}">
+
+<div class="dashboard">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Vendas diárias</h1>
+      <p class="page-subtitle">Lance o total bruto vendido por dia e acompanhe o movimento.</p>
+    </div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <span class="stat-label">Vendas hoje</span>
+      <span class="stat-value stat-value-success">{{ summary.today | brl }}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Total do mês</span>
+      <span class="stat-value">{{ summary.month | brl }}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Dias com venda</span>
+      <span class="stat-value">{{ summary.days }}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Média por dia (mês)</span>
+      <span class="stat-value">{{ summary.avg | brl }}</span>
+    </div>
+  </div>
+
+  <div class="sales-form-card">
+    <div class="sales-form-head">
+      <i class="fas fa-cash-register"></i>
+      <span>Lançar vendas do dia</span>
+    </div>
+    <form id="sale-form" action="/sales" method="POST" class="sales-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-field">
+        <label for="sale_date">Data</label>
+        <input type="date" id="sale_date" name="date" value="{{ today.strftime('%Y-%m-%d') }}" required>
+      </div>
+      <div class="form-field">
+        <label for="sale_total">Total bruto</label>
+        <input type="text" id="sale_total" name="total" placeholder="R$ 0,00" inputmode="decimal" required>
+      </div>
+      <div class="form-field">
+        <label for="sale_obs">Observações (opcional)</label>
+        <input type="text" id="sale_obs" name="obs" placeholder="Ex: feira, balcão...">
+      </div>
+      <div class="sales-form-actions">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Lançar</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="table-card">
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th class="th-amount">Total bruto</th>
+            <th>Observações</th>
+            <th class="th-actions"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sale in sales_list %}
+          <tr class="sale-row" data-id="{{ sale.id }}">
+            <td>
+              <span class="cell-title">{{ sale.date | brdate_short }}</span>
+              {% if sale.date == today %}<span class="cell-sub cell-today">hoje</span>{% endif %}
+            </td>
+            <td class="cell-amount">{{ sale.total | brl }}</td>
+            <td class="cell-obs">{{ sale.obs or '—' }}</td>
+            <td class="cell-actions">
+              <div class="row-data"
+                   data-id="{{ sale.id }}"
+                   data-date="{{ sale.date.strftime('%Y-%m-%d') }}"
+                   data-total="{{ sale.total }}"
+                   data-obs="{{ sale.obs or '' }}"></div>
+              <div class="dropdown">
+                <button type="button" class="icon-btn row-menu-btn" data-dropdown-trigger="sale-menu-{{ sale.id }}"
+                        aria-haspopup="true" aria-expanded="false" aria-label="Ações da venda">
+                  <i class="fas fa-ellipsis-h"></i>
+                </button>
+                <div class="dropdown-panel" id="sale-menu-{{ sale.id }}" hidden>
+                  <button type="button" class="dropdown-item" data-action="edit" data-id="{{ sale.id }}"><i class="fas fa-pen"></i> Editar</button>
+                  <button type="button" class="dropdown-item is-danger" data-action="delete" data-id="{{ sale.id }}"><i class="fas fa-trash"></i> Excluir</button>
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr class="empty-row">
+            <td colspan="4" class="empty-state">
+              <i class="fas fa-cash-register"></i>
+              <h3>Nenhuma venda lançada</h3>
+              <p>Lance o total vendido no dia para começar a acompanhar.</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: editar venda do dia -->
+<div id="sale-modal" class="modal">
+  <div class="modal-content modal-content-sm">
+    <div class="modal-header">
+      <h2>Editar venda do dia</h2>
+      <button class="modal-close" aria-label="Fechar">&times;</button>
+    </div>
+    <form id="sale-edit-form" action="/sales" method="POST" class="modal-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="form-field">
+        <label for="edit_sale_date">Data</label>
+        <input type="date" id="edit_sale_date" name="date" required>
+      </div>
+
+      <div class="form-field">
+        <label for="edit_sale_total">Total bruto</label>
+        <input type="text" id="edit_sale_total" name="total" placeholder="R$ 0,00" inputmode="decimal" required>
+      </div>
+
+      <div class="form-field">
+        <label for="edit_sale_obs">Observações (opcional)</label>
+        <input type="text" id="edit_sale_obs" name="obs" placeholder="Ex: feira, balcão...">
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost modal-cancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar venda</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/sales.js') }}"></script>
+{% endblock %}
