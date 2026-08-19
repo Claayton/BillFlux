@@ -14,7 +14,39 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style-base.css') }}">
   <script src="https://kit.fontawesome.com/c996c5ea01.js" crossorigin="anonymous"></script>
 </head>
-<body>
+<body{% if session.get('user') %} class="app-mode"{% endif %}>
+  {% if session.get('user') %}
+  <aside class="sidebar">
+    <a class="logo" href="/home">
+      <span class="logo-mark">BF</span>
+      <span class="logo-text">BillFlux</span>
+    </a>
+    <nav class="sidebar-nav" aria-label="Navegação principal">
+      <ul>
+        <li><a href="/home" class="{% if active == 'overview' %}is-active{% endif %}"><i class="fas fa-th-large"></i> Visão geral</a></li>
+        <li><a href="/bills" class="{% if active == 'bills' %}is-active{% endif %}"><i class="fas fa-file-invoice"></i> Contas</a></li>
+        <li><a href="/sales" class="{% if active == 'sales' %}is-active{% endif %}"><i class="fas fa-cash-register"></i> Vendas</a></li>
+        <li><a href="/accounts" class="{% if active == 'accounts' %}is-active{% endif %}"><i class="fas fa-list-ul"></i> Plano de contas</a></li>
+      </ul>
+    </nav>
+    <div class="sidebar-user">
+      <span class="avatar">{{ session['user'][0] | upper }}</span>
+      <span class="user-name">{{ session['user'] }}</span>
+      <a href="/logout" title="Sair" aria-label="Sair"><i class="fas fa-sign-out-alt"></i></a>
+    </div>
+  </aside>
+  <div class="app-shell">
+    <header class="topbar">
+      <button type="button" class="icon-btn app-hamburger" id="sidebar-toggle"
+              aria-label="Abrir menu" aria-expanded="false">
+        <i class="fas fa-bars"></i>
+      </button>
+      <div class="topbar-spacer"></div>
+      <button type="button" class="icon-btn" title="Notificações" aria-label="Notificações">
+        <i class="fas fa-bell"></i>
+      </button>
+    </header>
+  {% else %}
   <header class="site-header">
     <div class="container header-inner">
       <div class="header-left">
@@ -32,30 +64,12 @@
         </nav>
       </div>
       <div class="header-actions">
-        {% if session.get('user') %}
-          <button type="button" class="icon-btn" title="Notificações" aria-label="Notificações">
-            <i class="fas fa-bell"></i>
-          </button>
-          <div class="user-menu" id="user-menu">
-            <button type="button" class="user-menu-trigger" data-dropdown-trigger="user-menu-panel"
-                    aria-haspopup="true" aria-expanded="false">
-              <span class="avatar">{{ session['user'][0] | upper }}</span>
-              <span class="user-name">{{ session['user'] }}</span>
-              <i class="fas fa-chevron-down"></i>
-            </button>
-            <div class="dropdown-panel" id="user-menu-panel" hidden>
-              <a class="dropdown-item" href="/logout">
-                <i class="fas fa-sign-out-alt"></i> Sair
-              </a>
-            </div>
-          </div>
-        {% else %}
-          <a class="btn btn-ghost btn-sm" href="/login">Entrar</a>
-          <a class="btn btn-primary btn-sm" href="/signin">Criar conta</a>
-        {% endif %}
+        <a class="btn btn-ghost btn-sm" href="/login">Entrar</a>
+        <a class="btn btn-primary btn-sm" href="/signin">Criar conta</a>
       </div>
     </div>
   </header>
+  {% endif %}
 
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
@@ -79,6 +93,10 @@
       <p>&copy; <span id="year"></span> BillFlux — Clayton Garcia da Silva, Br.</p>
     </div>
   </footer>
+  {% if session.get('user') %}
+  </div>
+  <div id="sidebar-overlay" class="sidebar-overlay" hidden></div>
+  {% endif %}
 
   <script>
     document.getElementById('year').textContent = new Date().getFullYear();
@@ -136,6 +154,7 @@
         const t = document.querySelector('[data-dropdown-trigger="' + p.id + '"]');
         if (t) t.setAttribute('aria-expanded', 'false');
       });
+      closeSidebar();
     });
 
     // Fecha dropdowns ao rolar a página, para o menu fixo não desalinhar.
@@ -147,6 +166,30 @@
         if (t) t.setAttribute('aria-expanded', 'false');
       });
     }, true);
+
+    // Gaveta da sidebar (mobile): abre pelo hamburger, fecha fora ou com Escape.
+    const sidebar = document.querySelector('.sidebar');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+    function closeSidebar() {
+      if (!sidebar) return;
+      sidebar.classList.remove('is-open');
+      if (sidebarOverlay) sidebarOverlay.hidden = true;
+      if (sidebarToggle) sidebarToggle.setAttribute('aria-expanded', 'false');
+    }
+
+    if (sidebarToggle) {
+      sidebarToggle.addEventListener('click', function () {
+        const open = !sidebar.classList.contains('is-open');
+        sidebar.classList.toggle('is-open', open);
+        if (sidebarOverlay) sidebarOverlay.hidden = !open;
+        sidebarToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+    }
+    if (sidebarOverlay) {
+      sidebarOverlay.addEventListener('click', closeSidebar);
+    }
   </script>
   {% block scripts %}{% endblock %}
 </body>
