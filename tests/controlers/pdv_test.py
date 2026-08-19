@@ -25,7 +25,7 @@ def test_pdv_requires_login(client):
 
 
 def test_pdv_page(logged_client):
-    """GET /pdv should render the point of sale."""
+    """GET /pdv should render the full-screen point of sale."""
 
     ProductRepository().insert_product(
         name="Item PDV Página", price=Decimal("3.00"), stock_quantity=4
@@ -35,10 +35,13 @@ def test_pdv_page(logged_client):
 
     assert response.status_code == 200
     page = response.get_data(as_text=True)
-    assert "Ponto de venda" in page
-    assert "Carrinho" in page
-    assert "Item PDV Página" in page
+    assert 'id="pdv-search"' in page
+    assert "Carrinho vazio" in page
+    assert "Concluir venda" in page
+    assert "F2" in page
+    assert "Forma de pagamento" in page
     assert "Dinheiro" in page  # forma de pagamento padrão
+    assert "Item PDV Página" in page  # produto embutido no JSON da busca
 
 
 def test_complete_empty_cart(logged_client):

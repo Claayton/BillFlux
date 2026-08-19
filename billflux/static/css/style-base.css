@@ -627,6 +627,32 @@ a:hover {
   font-weight: 600;
 }
 
+/* Item em destaque (PDV): sempre preenchido na cor primária. */
+.sidebar-nav a.is-primary {
+  color: #fff;
+  background: var(--primary);
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+}
+
+.sidebar-nav a.is-primary i {
+  color: #fff;
+}
+
+.sidebar-nav a.is-primary:hover {
+  color: #fff;
+  background: var(--primary-hover);
+}
+
+.sidebar-nav a.is-primary.is-active {
+  color: #fff;
+  background: var(--primary-hover);
+}
+
+.sidebar-nav .sidebar-primary-spacer {
+  height: 2px;
+}
+
 .sidebar-user {
   display: flex;
   align-items: center;

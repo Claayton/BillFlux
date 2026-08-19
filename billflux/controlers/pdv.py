@@ -1,5 +1,7 @@
 """File to instantiate the blueprint for the PDV (point of sale) page"""
 
+import json
+
 from flask import flash, redirect, request, url_for
 from flask.blueprints import Blueprint
 from flask.templating import render_template
@@ -16,13 +18,23 @@ bp = Blueprint("bp_pdv", __name__)
 @bp.route("/pdv", methods=["GET"])
 @login_required
 def pdv():
-    """Renderiza o ponto de venda: catálogo + carrinho + formas de pagamento."""
+    """Renderiza o ponto de venda full-screen: busca + carrinho + painel."""
 
     products_list = ProductRepository().get_active_products()
     methods_list = PaymentMethodRepository().get_active_methods()
+    products_data = [
+        {
+            "id": product.id,
+            "name": product.name,
+            "barcode": product.barcode or "",
+            "price": str(product.price),
+            "stock": product.stock_quantity,
+        }
+        for product in products_list
+    ]
     return render_template(
         "pdv.html",
-        products_list=products_list,
+        products_json=json.dumps(products_data, ensure_ascii=False),
         methods_list=methods_list,
         active="pdv",
     )
