@@ -10,3 +10,8 @@ password_hash = "scrypt:32768:8:1$yyU8myh38wgg8Se7$b13af452833062a4ae4b7e6d0e940
 
 [database]
 url = "sqlite:///billflux.db"
+
+
+[pix]
+# Dias após o pagamento em que a imagem/payload do QR PIX é removida.
+retention_days = 30

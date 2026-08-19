@@ -26,5 +26,8 @@ class Bill(SQLModel, table=True):
         default=None, sa_column=Column(Numeric(10, 2), nullable=True)
     )
     bar_code: Optional[str] = Field(nullable=True)
+    pix_key: Optional[str] = Field(nullable=True)
+    pix_payload: Optional[str] = Field(nullable=True)
+    pix_image: Optional[str] = Field(nullable=True)
     obs: Optional[str] = Field(nullable=True)
     date_from_add: datetime = Field(nullable=False)

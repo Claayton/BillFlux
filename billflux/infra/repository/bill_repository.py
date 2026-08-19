@@ -24,6 +24,9 @@ class BillRepository:
         payday: datetime = None,
         value_from_payment: Optional[Decimal] = None,
         bar_code: str = None,
+        pix_key: str = None,
+        pix_payload: str = None,
+        pix_image: str = None,
         obs: str = None,
         date_from_add: datetime = None,
     ) -> Bill:
@@ -56,6 +59,9 @@ class BillRepository:
                     payday=payday,
                     value_from_payment=value_from_payment,
                     bar_code=bar_code,
+                    pix_key=pix_key,
+                    pix_payload=pix_payload,
+                    pix_image=pix_image,
                     obs=obs,
                     date_from_add=date_from_add or datetime.now(),
                 )
@@ -65,6 +71,51 @@ class BillRepository:
                 session.refresh(bill)
 
                 return Bill(**dict(bill))
+        finally:
+            session.close()
+
+    def get_bill(self, bill_id: int) -> Optional[Bill]:
+        """
+        Searches a Bill by its id.
+        :param bill_id: Bill id.
+        :return: The Bill or None when not found.
+        """
+
+        session = get_session()
+        try:
+            with session:
+                bill = session.get(BillModel, bill_id)
+                return Bill(**dict(bill)) if bill else None
+        finally:
+            session.close()
+
+    def cleanup_pix_data(self, days: int) -> int:
+        """
+        Removes the PIX QR image/payload of bills paid more than ``days`` ago.
+        :param days: Retention period after the payment date.
+        :return: Number of bills updated.
+        """
+
+        from datetime import timedelta
+
+        cutoff = datetime.now() - timedelta(days=days)
+        session = get_session()
+        try:
+            with session:
+                bills = session.exec(
+                    select(BillModel).where(
+                        BillModel.status.is_(True), BillModel.payday.is_not(None)
+                    )
+                ).all()
+                count = 0
+                for bill in bills:
+                    if bill.payday and bill.payday <= cutoff:
+                        bill.pix_image = None
+                        bill.pix_payload = None
+                        session.add(bill)
+                        count += 1
+                session.commit()
+                return count
         finally:
             session.close()
 
