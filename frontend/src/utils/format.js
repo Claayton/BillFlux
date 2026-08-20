@@ -16,7 +16,15 @@ const MONTHS = [
 function toNumber(value) {
   if (value === null || value === undefined || value === '') return NaN
   if (typeof value === 'number') return value
-  return Number(String(value).replace(/\./g, '').replace(',', '.'))
+  const text = String(value).trim()
+  if (text.includes(',')) {
+    return Number(text.replace(/\./g, '').replace(',', '.'))
+  }
+  const dots = (text.match(/\./g) || []).length
+  if (dots > 1) {
+    return Number(text.replace(/\./g, ''))
+  }
+  return Number(text)
 }
 
 export function brl(value) {

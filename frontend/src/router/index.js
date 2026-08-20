@@ -44,6 +44,10 @@ const routes = [
     component: () => import('@/views/ReceiptView.vue'),
     meta: { auth: true },
   },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/sales',
+  },
 ]
 
 const router = createRouter({

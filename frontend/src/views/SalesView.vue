@@ -13,7 +13,7 @@ const periods = [
 ]
 
 const active = ref('hoje')
-const showValues = ref(false)
+const showValues = ref(true)
 const data = ref(null)
 const loading = ref(false)
 const saving = ref(false)
