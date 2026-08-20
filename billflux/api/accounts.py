@@ -3,8 +3,30 @@
 from flask import request
 
 from billflux.api import bp, api_error, api_login_required, api_response
-from billflux.controlers.accounts import ACCOUNT_TYPES, _build_tree
 from billflux.infra.repository.account_repository import AccountRepository
+
+ACCOUNT_TYPES = ("receita", "despesa")
+
+
+def _build_tree(accounts):
+    """Organiza as contas em árvore (2 níveis) para a listagem."""
+    children = {}
+    for account in accounts:
+        if account.parent_id:
+            children.setdefault(account.parent_id, []).append(account)
+
+    tree = []
+    for account in accounts:
+        if not account.parent_id:
+            tree.append(
+                {
+                    "account": account,
+                    "children": sorted(
+                        children.get(account.id, []), key=lambda a: a.name.lower()
+                    ),
+                }
+            )
+    return sorted(tree, key=lambda g: g["account"].name.lower())
 
 
 def _serialize_account(account):

@@ -13,7 +13,6 @@ from billflux.api import (
     br_to_decimal,
 )
 from billflux.config import settings
-from billflux.controlers.bills import _account_context, _build_stats
 from billflux.infra.repository.account_repository import AccountRepository
 from billflux.infra.repository.bill_repository import BillRepository
 from billflux.services.barcode import to_barcode
@@ -22,6 +21,49 @@ from billflux.services.barcode import to_barcode
 def _as_date(value):
     """Normaliza datetime/date para date."""
     return value.date() if isinstance(value, datetime) else value
+
+
+def _account_context():
+    """Mapeia id -> nome das categorias e agrupa para os formulários."""
+    accounts = AccountRepository().get_accounts()
+    names = {account.id: account.name for account in accounts}
+    groups = [
+        {
+            "label": "Receitas",
+            "accounts": [a for a in accounts if a.type == "receita"],
+        },
+        {
+            "label": "Despesas",
+            "accounts": [a for a in accounts if a.type == "despesa"],
+        },
+    ]
+    return names, groups
+
+
+def _build_stats(bills, today):
+    """Resumo financeiro exibido acima da tabela (apenas exibição)."""
+    open_total = Decimal("0")
+    overdue_total = Decimal("0")
+    paid_month_total = Decimal("0")
+
+    for bill in bills:
+        value = bill.value or Decimal("0")
+        paid_value = bill.value_from_payment or value
+        if not bill.status:
+            open_total += value
+            if bill.due_date and _as_date(bill.due_date) < today:
+                overdue_total += value
+        elif bill.payday:
+            payday = _as_date(bill.payday)
+            if payday.year == today.year and payday.month == today.month:
+                paid_month_total += paid_value
+
+    return {
+        "open": open_total,
+        "overdue": overdue_total,
+        "paid_month": paid_month_total,
+        "total": len(bills),
+    }
 
 
 def _serialize_account(account):

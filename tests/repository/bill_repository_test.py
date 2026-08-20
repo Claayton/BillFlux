@@ -1,39 +1,39 @@
 """Tests for the BillRepository Class"""
 
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 from sqlmodel import select
 from billflux.infra.config.database import get_session
 from billflux.infra.entities.bill import Bill
 
 
-def test_insert_bill(fake_bill, bill_repository):
+def test_insert_bill(bill_repository):
     """
     Testando o metodo insert_bill
     """
 
+    now = datetime.now()
     response = bill_repository.insert_bill(
-        status=fake_bill.status,
-        due_date=fake_bill.due_date,
-        value=fake_bill.value,
-        reference=fake_bill.reference,
-        suplyer=fake_bill.suplyer,
-        bill_type=fake_bill.bill_type,
-        days=fake_bill.days,
-        payday=fake_bill.payday,
-        value_from_payment=fake_bill.value_from_payment,
-        bar_code=fake_bill.bar_code,
-        pix_key=fake_bill.pix_key,
-        pix_payload=fake_bill.pix_payload,
-        pix_image=fake_bill.pix_image,
-        obs=fake_bill.obs,
-        date_from_add=fake_bill.date_from_add,
+        status=False,
+        due_date=now,
+        value=Decimal("123.45"),
+        reference="Energia",
+        suplyer="CEMIG",
+        bill_type="Boleto",
+        days=5,
+        payday=None,
+        value_from_payment=None,
+        bar_code="12345",
+        pix_key="key",
+        pix_payload="payload",
+        pix_image="img",
+        obs="obs",
+        date_from_add=now,
     )
 
     with get_session() as session:
-        query_user = session.exec(
-            select(Bill).where(Bill.bar_code == fake_bill.bar_code)
-        ).one()
+        query_user = session.exec(select(Bill).where(Bill.bar_code == "12345")).one()
 
     # Testing if the information sent by the metod is in database.
     assert response.bar_code == query_user.bar_code

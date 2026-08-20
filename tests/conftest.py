@@ -4,23 +4,19 @@ import os
 
 os.environ["BILLFLUX_DATABASE__URL"] = "sqlite://"
 
-import re  # noqa: E402
-
 from pytest import fixture  # noqa: E402
 from billflux import create_app  # noqa: E402
-from tests.mocks.mock_bills import mock_bill  # noqa: E402
 
 
 def login(client):
-    """Autentica o client de teste com o usuário fixo do settings."""
-    page = client.get("/login")
-    match = re.search(r'name="csrf_token" value="([^"]+)"', page.get_data(as_text=True))
-    assert match, "CSRF token not found in /login page"
+    """Autentica o client de teste via API com o usuário fixo do settings."""
+    token = client.get("/api/auth/csrf").get_json()["csrf_token"]
     response = client.post(
-        "/login",
-        data={"csrf_token": match.group(1), "username": "admin", "password": "admin"},
+        "/api/auth/login",
+        json={"username": "admin", "password": "admin"},
+        headers={"X-CSRFToken": token},
     )
-    assert response.status_code == 302
+    assert response.status_code == 200
 
 
 @fixture(scope="module", autouse=True)
@@ -42,13 +38,3 @@ def logged_client(client):
     """Client de teste já autenticado."""
     login(client)
     return client
-
-
-ticket = mock_bill()
-
-
-@fixture(scope="module")
-def fake_bill():
-    """Mock de usuario"""
-
-    return ticket

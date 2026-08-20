@@ -1,17 +1,96 @@
 """Endpoints de vendas da API JSON (lista, lançamento avulso e exclusão)."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from flask import request
 
 from billflux.api import bp, api_error, api_login_required, api_response
-from billflux.controlers.sales import _build_periods, _combine_sales
 from billflux.infra.repository.order_repository import OrderRepository
 from billflux.infra.repository.payment_method_repository import (
     PaymentMethodRepository,
 )
 from billflux.infra.repository.sale_repository import SaleRepository
+
+
+def _build_range_summary(sales, orders, start, end):
+    """Resumo das vendas (total, nº de vendas, dias e média) num período.
+
+    Considera lançamentos manuais (sales) e pedidos fechados no PDV (orders)."""
+    total = Decimal("0")
+    count = 0
+    days = set()
+
+    for sale in sales:
+        if start <= sale.date <= end:
+            total += sale.total
+            count += 1
+            days.add(sale.date)
+
+    for order in orders:
+        order_date = order.created_at.date()
+        if start <= order_date <= end:
+            total += order.total
+            count += 1
+            days.add(order_date)
+
+    avg = total / len(days) if days else Decimal("0")
+
+    return {"total": total, "count": count, "days": len(days), "avg": avg}
+
+
+def _build_periods(sales, orders, today):
+    """Resumos por período."""
+    month_start = today.replace(day=1)
+    prev_month_end = month_start - timedelta(days=1)
+    prev_month_start = prev_month_end.replace(day=1)
+
+    raw = {
+        "hoje": _build_range_summary(sales, orders, today, today),
+        "7d": _build_range_summary(sales, orders, today - timedelta(days=6), today),
+        "mes": _build_range_summary(sales, orders, month_start, today),
+        "mes_anterior": _build_range_summary(
+            sales, orders, prev_month_start, prev_month_end
+        ),
+    }
+
+    return {
+        key: {
+            "total": str(value["total"]),
+            "count": value["count"],
+            "days": value["days"],
+            "avg": str(value["avg"]),
+        }
+        for key, value in raw.items()
+    }
+
+
+def _combine_sales(sales, orders, payment_names):
+    """Junta vendas avulsas (manuais) e pedidos do PDV numa única lista."""
+
+    combined = []
+    for sale in sales:
+        combined.append(
+            {
+                "kind": "manual",
+                "id": sale.id,
+                "date": sale.date,
+                "total": sale.total,
+                "obs": sale.obs,
+            }
+        )
+    for order in orders:
+        combined.append(
+            {
+                "kind": "pdv",
+                "id": order.id,
+                "date": order.created_at.date(),
+                "total": order.total,
+                "obs": order.obs,
+                "payment": payment_names.get(order.payment_method_id, "—"),
+            }
+        )
+    return sorted(combined, key=lambda item: item["date"], reverse=True)
 
 
 def _sales_payload():
