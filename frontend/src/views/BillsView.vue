@@ -4,7 +4,7 @@ import { ElMessage } from 'element-plus'
 import JsBarcode from 'jsbarcode'
 import qrcode from 'qrcode-generator'
 import { api } from '@/api/client'
-import { brl, brdateShort, maskMoney, moneyToDecimal } from '@/utils/format'
+import { brl, brdate, brdateShort, maskMoney, moneyToDecimal } from '@/utils/format'
 import AppShell from '@/components/AppShell.vue'
 
 const data = ref(null)
@@ -23,6 +23,82 @@ function toggleMenu(id) {
 
 function closeMenus() {
   openMenu.value = null
+}
+
+const detailsModal = ref(false)
+const detailsBill = ref(null)
+
+function openDetails(bill) {
+  detailsBill.value = bill
+  detailsModal.value = true
+}
+
+function rowClick(bill, event) {
+  if (event.target.closest('a, button, select, input, .dropdown-panel')) return
+  openDetails(bill)
+}
+
+// ---------- Autofill a partir do código de barras ----------
+function checkDvGeral(code) {
+  if (code.length !== 44) return false
+  const dvPos = code[0] === '8' ? 3 : 4
+  const base = code.slice(0, dvPos) + code.slice(dvPos + 1)
+  let sum = 0
+  for (let i = 0; i < base.length; i++) {
+    sum += parseInt(base[base.length - 1 - i], 10) * (i % 8 + 2)
+  }
+  const resto = sum % 11
+  const dv = resto === 0 || resto === 1 ? 0 : 11 - resto
+  return dv === parseInt(code[dvPos], 10)
+}
+
+function decodeBarcode(raw) {
+  const code = toBarcode(raw)
+  if (!code || !checkDvGeral(code)) return null
+  const result = { value: null, vencimento: null }
+
+  if (code[0] === '8') {
+    if (code[2] === '6' || code[2] === '8') {
+      result.value = parseInt(code.slice(4, 15), 10) / 100
+    }
+    const y = parseInt(code.slice(19, 23), 10)
+    const m = parseInt(code.slice(23, 25), 10)
+    const d = parseInt(code.slice(25, 27), 10)
+    if (y >= 1 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      result.vencimento =
+        String(y).padStart(4, '0') + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0')
+    }
+  } else {
+    result.value = parseInt(code.slice(9, 19), 10) / 100
+    const factor = parseInt(code.slice(5, 9), 10)
+    if (factor >= 1000 && factor <= 9999) {
+      const ms = Date.UTC(1997, 9, 7) + (factor - 1000) * 86400000
+      result.vencimento = new Date(ms).toISOString().slice(0, 10)
+    }
+  }
+  return result
+}
+
+function shouldAutofillDate(isoDate) {
+  if (!isoDate) return false
+  const d = new Date(isoDate + 'T00:00:00')
+  if (Number.isNaN(d.getTime())) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const limit = new Date(today)
+  limit.setDate(limit.getDate() - 7)
+  return d >= limit
+}
+
+function onBarcodeInput() {
+  const decoded = decodeBarcode(form.value.bar_code)
+  if (!decoded) return
+  if (decoded.value !== null && !form.value.value) {
+    form.value.value = maskMoney(String(Math.round(decoded.value * 100)))
+  }
+  if (shouldAutofillDate(decoded.vencimento) && !form.value.due_date) {
+    form.value.due_date = decoded.vencimento
+  }
 }
 
 const form = ref({
@@ -453,7 +529,7 @@ onMounted(() => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="bill in filteredBills" :key="bill.id" class="account-row">
+                <tr v-for="bill in filteredBills" :key="bill.id" class="account-row" @click="rowClick(bill, $event)">
                   <td>
                     <span class="status" :class="'status-' + bill.status">
                       <span class="status-dot"></span>
@@ -493,6 +569,9 @@ onMounted(() => {
                         <i class="fas fa-ellipsis-h"></i>
                       </button>
                       <div class="dropdown-panel" v-show="openMenu === bill.id">
+                        <button type="button" class="dropdown-item" @click="openDetails(bill)">
+                          <i class="fas fa-eye"></i> Ver detalhes
+                        </button>
                         <button type="button" class="dropdown-item" @click="openEdit(bill)">
                           <i class="fas fa-pen"></i> Editar
                         </button>
@@ -530,7 +609,13 @@ onMounted(() => {
         <form class="modal-form" @submit.prevent="submit">
           <div class="form-field">
             <label for="bill_barcode">Código de barras</label>
-            <input id="bill_barcode" v-model="form.bar_code" type="text" placeholder="Número do documento" />
+            <input
+              id="bill_barcode"
+              v-model="form.bar_code"
+              type="text"
+              placeholder="Número do documento"
+              @input="onBarcodeInput"
+            />
           </div>
 
           <div class="form-grid">
@@ -598,6 +683,53 @@ onMounted(() => {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <div class="modal" :class="{ 'is-open': detailsModal }">
+      <div class="modal-content modal-content-sm">
+        <div class="modal-header">
+          <h2>Detalhes da conta</h2>
+          <button type="button" class="modal-close" aria-label="Fechar" @click="detailsModal = false">&times;</button>
+        </div>
+        <div class="modal-details">
+          <div class="modal-details-item">
+            <span class="label">Status:</span>
+            <span>{{ detailsBill ? STATUS_LABELS[detailsBill.status] || 'Pendente' : '—' }}</span>
+          </div>
+          <div class="modal-details-item">
+            <span class="label">Referente a:</span>
+            <span>{{ detailsBill?.reference || '—' }}</span>
+          </div>
+          <div class="modal-details-item">
+            <span class="label">Fornecedor:</span>
+            <span>{{ detailsBill?.suplyer || '—' }}</span>
+          </div>
+          <div class="modal-details-item">
+            <span class="label">Categoria:</span>
+            <span>{{ detailsBill?.category || '—' }}</span>
+          </div>
+          <div class="modal-details-item">
+            <span class="label">Vencimento:</span>
+            <span>{{ detailsBill?.due_date ? brdate(detailsBill.due_date) : '—' }}</span>
+          </div>
+          <div class="modal-details-item">
+            <span class="label">Valor:</span>
+            <span>{{ brl(detailsBill?.value) }}</span>
+          </div>
+          <div class="modal-details-item">
+            <span class="label">Nº documento:</span>
+            <span>{{ detailsBill?.bar_code || '—' }}</span>
+          </div>
+          <div class="modal-details-item">
+            <span class="label">Lançado em:</span>
+            <span>{{ detailsBill?.date_from_add ? brdate(detailsBill.date_from_add) : '—' }}</span>
+          </div>
+          <div class="modal-details-item">
+            <span class="label">Observações:</span>
+            <span>{{ detailsBill?.obs || '—' }}</span>
+          </div>
+        </div>
       </div>
     </div>
 
