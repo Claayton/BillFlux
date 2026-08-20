@@ -25,6 +25,7 @@ from billflux.api import bills as api_bills
 from billflux.api import products as api_products
 from billflux.api import accounts as api_accounts
 from billflux.api import payments as api_payments
+from billflux.api import pdv as api_pdv
 
 csrf = CSRFProtect()
 
