@@ -2,13 +2,28 @@
 
 import json
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from functools import wraps
 
 from flask import Response, session
 from flask.blueprints import Blueprint
 
 bp = Blueprint("bp_api", __name__, url_prefix="/api")
+
+
+def br_to_decimal(value):
+    """Converte número ou string BR ('1.234,56') para Decimal ou None."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        return Decimal(str(value))
+    raw = str(value).strip()
+    try:
+        if "," in raw:
+            return Decimal(raw.replace(".", "").replace(",", "."))
+        return Decimal(raw)
+    except InvalidOperation:
+        return None
 
 
 def _json_default(obj):

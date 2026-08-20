@@ -19,7 +19,10 @@ def _sales_payload():
     list_sales = SaleRepository().get_sales()
     orders = OrderRepository().get_orders()
     today = date.today()
-    periods = _build_periods(list_sales, orders, today)
+    periods = {
+        key: {**p, "total": float(p["total"]), "avg": float(p["avg"])}
+        for key, p in _build_periods(list_sales, orders, today).items()
+    }
 
     payment_names = {
         method.id: method.name for method in PaymentMethodRepository().get_methods()
@@ -34,7 +37,7 @@ def _sales_payload():
                 "kind": item["kind"],
                 "id": item["id"],
                 "date": item["date"].isoformat(),
-                "total": str(item["total"]),
+                "total": float(item["total"]),
                 "obs": item["obs"],
                 "payment": item.get("payment"),
             }

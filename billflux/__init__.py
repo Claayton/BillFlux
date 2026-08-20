@@ -17,9 +17,14 @@ from billflux.controlers import (
     payments,
     pdv,
 )
+from billflux.api import bp as api_bp
 from billflux.api import auth as api_auth
 from billflux.api import dashboard as api_dashboard
 from billflux.api import sales as api_sales
+from billflux.api import bills as api_bills
+from billflux.api import products as api_products
+from billflux.api import accounts as api_accounts
+from billflux.api import payments as api_payments
 
 csrf = CSRFProtect()
 
@@ -145,7 +150,7 @@ def create_app():
     app.register_blueprint(products.bp)
     app.register_blueprint(payments.bp)
     app.register_blueprint(pdv.bp)
-    app.register_blueprint(api_auth.bp)
+    app.register_blueprint(api_bp)
 
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")

@@ -26,25 +26,25 @@ def dashboard():
         {
             "period": _serialize_period(context["period"]),
             "metrics": {
-                "faturamento": str(context["metrics"]["faturamento"]),
+                "faturamento": float(context["metrics"]["faturamento"]),
                 "vendas": context["metrics"]["vendas"],
-                "ticket": str(context["metrics"]["ticket"]),
-                "lucro": str(context["metrics"]["lucro"]),
+                "ticket": float(context["metrics"]["ticket"]),
+                "lucro": float(context["metrics"]["lucro"]),
             },
             "series": [
                 {
                     "label": item["label"],
-                    "value": str(item["value"]),
+                    "value": float(item["value"]),
                     "date": item["date"].isoformat(),
                 }
                 for item in context["series"]
             ],
-            "chart_max": str(context["chart_max"]),
+            "chart_max": float(context["chart_max"]),
             "open_bills": [
                 {
                     "reference": bill.reference,
                     "due_date": bill.due_date.isoformat(),
-                    "value": str(bill.value),
+                    "value": float(bill.value),
                 }
                 for bill in context["open_bills"]
             ],
@@ -52,7 +52,7 @@ def dashboard():
                 {
                     "date": item["date"].isoformat(),
                     "source": item["source"],
-                    "value": str(item["value"]),
+                    "value": float(item["value"]),
                 }
                 for item in context["recent_sales"]
             ],

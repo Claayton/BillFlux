@@ -33,6 +33,30 @@ const routes = [
     meta: { auth: true },
   },
   {
+    path: '/bills',
+    name: 'bills',
+    component: () => import('@/views/BillsView.vue'),
+    meta: { auth: true },
+  },
+  {
+    path: '/products',
+    name: 'products',
+    component: () => import('@/views/ProductsView.vue'),
+    meta: { auth: true },
+  },
+  {
+    path: '/accounts',
+    name: 'accounts',
+    component: () => import('@/views/AccountsView.vue'),
+    meta: { auth: true },
+  },
+  {
+    path: '/payments',
+    name: 'payments',
+    component: () => import('@/views/PaymentsView.vue'),
+    meta: { auth: true },
+  },
+  {
     path: '/pdv',
     name: 'pdv',
     component: () => import('@/views/PdvView.vue'),

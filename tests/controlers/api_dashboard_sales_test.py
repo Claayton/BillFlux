@@ -55,8 +55,8 @@ def test_dashboard_accounts_pdv_profit(logged_client):
 
     assert response.status_code == 200
     data = response.get_json()
-    assert data["metrics"]["faturamento"] == "20.00"
-    assert data["metrics"]["lucro"] == "12.00"  # (10 - 4) * 2
+    assert data["metrics"]["faturamento"] == 20.0
+    assert data["metrics"]["lucro"] == 12.0  # (10 - 4) * 2
 
 
 def test_dashboard_specific_date(logged_client):
@@ -111,7 +111,7 @@ def test_sales_create_and_upsert(logged_client):
     assert response.status_code == 201
     data = response.get_json()
     sale = next(s for s in data["sales"] if s["date"] == "2026-07-01")
-    assert sale["total"] == "150.50"
+    assert sale["total"] == 150.5
     assert sale["obs"] == "Feira"
 
     response = logged_client.post(
@@ -123,7 +123,7 @@ def test_sales_create_and_upsert(logged_client):
     data = response.get_json()
     updated = [s for s in data["sales"] if s["date"] == "2026-07-01"]
     assert len(updated) == 1  # upsert: continua uma venda por data
-    assert updated[0]["total"] == "160.00"
+    assert updated[0]["total"] == 160.0
 
 
 def test_sales_create_validation(logged_client):

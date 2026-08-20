@@ -10,6 +10,10 @@ const sidebarOpen = ref(false)
 
 const navItems = [
   { name: 'sales', label: 'Vendas', icon: 'fas fa-cash-register', to: '/sales', primary: true },
+  { name: 'bills', label: 'Contas', icon: 'fas fa-file-invoice', to: '/bills' },
+  { name: 'products', label: 'Produtos', icon: 'fas fa-box-open', to: '/products' },
+  { name: 'accounts', label: 'Plano de contas', icon: 'fas fa-list-ul', to: '/accounts' },
+  { name: 'payments', label: 'Formas de pagamento', icon: 'fas fa-credit-card', to: '/payments' },
   { name: 'home', label: 'Visão geral', icon: 'fas fa-th-large', to: '/home' },
 ]
 
