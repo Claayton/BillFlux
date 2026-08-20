@@ -8,6 +8,7 @@ Product = namedtuple(
         "id",
         "name",
         "price",
+        "cost",
         "barcode",
         "stock_quantity",
         "min_stock",

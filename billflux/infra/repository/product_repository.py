@@ -25,6 +25,7 @@ class ProductRepository:
         min_stock: int = 0,
         active: bool = True,
         obs: Optional[str] = None,
+        cost: Decimal = Decimal("0"),
     ) -> Product:
         """Inserts a new product into the Product table."""
 
@@ -34,6 +35,7 @@ class ProductRepository:
                 product = ProductModel(
                     name=name,
                     price=price,
+                    cost=cost,
                     barcode=barcode,
                     stock_quantity=stock_quantity,
                     min_stock=min_stock,

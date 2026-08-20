@@ -71,11 +71,12 @@ def test_insert_bill_without_csrf_token(logged_client):
 
 
 def test_insert_bill_get_method(logged_client):
-    """GET on insert_bill route should not be allowed"""
+    """GET on insert_bill route now serves the SPA shell (client-side route)."""
 
     response = logged_client.get("/insert_bill/")
 
-    assert response.status_code == 405
+    assert response.status_code == 200
+    assert '<div id="app">' in response.get_data(as_text=True)
 
 
 def test_insert_bill_requires_login(client):

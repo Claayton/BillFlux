@@ -13,22 +13,22 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style-base.css') }}">
   <script src="https://kit.fontawesome.com/c996c5ea01.js" crossorigin="anonymous"></script>
+  <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 <body{% if session.get('user') %} class="app-mode"{% endif %}>
   {% if session.get('user') %}
   <aside class="sidebar">
-    <a class="logo" href="/home">
+    <a class="logo" href="/">
       <span class="logo-mark">BF</span>
       <span class="logo-text">BillFlux</span>
     </a>
     <nav class="sidebar-nav" aria-label="Navegação principal">
       <ul>
-        <li><a href="/pdv" class="is-primary {% if active == 'pdv' %}is-active{% endif %}"><i class="fas fa-cart-shopping"></i> PDV</a></li>
-        <li><a href="/home" class="{% if active == 'overview' %}is-active{% endif %}"><i class="fas fa-th-large"></i> Visão geral</a></li>
+        <li><a href="/sales" class="is-primary {% if active == 'sales' %}is-active{% endif %}"><i class="fas fa-cash-register"></i> Vendas</a></li>
         <li><a href="/bills" class="{% if active == 'bills' %}is-active{% endif %}"><i class="fas fa-file-invoice"></i> Contas</a></li>
-        <li><a href="/sales" class="{% if active == 'sales' %}is-active{% endif %}"><i class="fas fa-cash-register"></i> Vendas</a></li>
         <li><a href="/products" class="{% if active == 'products' %}is-active{% endif %}"><i class="fas fa-box-open"></i> Produtos</a></li>
         <li><a href="/accounts" class="{% if active == 'accounts' %}is-active{% endif %}"><i class="fas fa-list-ul"></i> Plano de contas</a></li>
+        <li><a href="/home" class="{% if active == 'overview' %}is-active{% endif %}"><i class="fas fa-th-large"></i> Visão geral</a></li>
       </ul>
     </nav>
     <div class="sidebar-user">
@@ -43,6 +43,7 @@
               aria-label="Abrir menu" aria-expanded="false">
         <i class="fas fa-bars"></i>
       </button>
+      <a class="btn btn-primary btn-sm" href="/pdv"><i class="fas fa-cash-register"></i> Abrir PDV</a>
       <div class="topbar-spacer"></div>
       <button type="button" class="icon-btn" title="Notificações" aria-label="Notificações">
         <i class="fas fa-bell"></i>
@@ -58,18 +59,17 @@
         </a>
         <nav class="main-nav" aria-label="Navegação principal">
           <ul>
-            <li><a href="/pdv" class="{% if active == 'pdv' %}is-active{% endif %}">PDV</a></li>
-            <li><a href="/home" class="{% if active == 'overview' %}is-active{% endif %}">Visão geral</a></li>
-            <li><a href="/bills" class="{% if active == 'bills' %}is-active{% endif %}">Contas</a></li>
             <li><a href="/sales" class="{% if active == 'sales' %}is-active{% endif %}">Vendas</a></li>
+            <li><a href="/bills" class="{% if active == 'bills' %}is-active{% endif %}">Contas</a></li>
             <li><a href="/products" class="{% if active == 'products' %}is-active{% endif %}">Produtos</a></li>
             <li><a href="/accounts" class="{% if active == 'accounts' %}is-active{% endif %}">Plano de contas</a></li>
+            <li><a href="/home" class="{% if active == 'overview' %}is-active{% endif %}">Visão geral</a></li>
           </ul>
         </nav>
       </div>
       <div class="header-actions">
         <a class="btn btn-ghost btn-sm" href="/login">Entrar</a>
-        <a class="btn btn-primary btn-sm" href="/signin">Criar conta</a>
+        {% if allow_signup %}<a class="btn btn-primary btn-sm" href="/signin">Criar conta</a>{% endif %}
       </div>
     </div>
   </header>
@@ -195,6 +195,7 @@
       sidebarOverlay.addEventListener('click', closeSidebar);
     }
   </script>
+  <script src="{{ url_for('static', filename='vendor/htmx.min.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

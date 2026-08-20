@@ -16,7 +16,7 @@ def test_sidebar_present_when_logged_in(logged_client):
 
 
 def test_public_layout_without_sidebar(client):
-    """Public pages should keep the top header and no sidebar."""
+    """The root now serves the SPA shell (no server-side layout)."""
 
     response = client.get("/")
 
@@ -25,4 +25,4 @@ def test_public_layout_without_sidebar(client):
     assert 'class="app-mode"' not in page
     assert 'class="sidebar"' not in page
     assert 'class="topbar"' not in page
-    assert 'class="site-header"' in page
+    assert '<div id="app">' in page

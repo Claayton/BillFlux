@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const productIdInput = document.getElementById('product_id');
   const nameInput = document.getElementById('product_name');
   const priceInput = document.getElementById('product_price');
+  const costInput = document.getElementById('product_cost');
   const barcodeInput = document.getElementById('product_barcode');
   const stockInput = document.getElementById('product_stock_quantity');
   const minStockInput = document.getElementById('product_min_stock');
@@ -41,6 +42,27 @@ document.addEventListener('DOMContentLoaded', function () {
     const input = document.querySelector('input[name="csrf_token"]');
     return input ? input.value : '';
   }
+
+  function digitsOnly(value) {
+    return String(value).replace(/\D/g, '');
+  }
+
+  // Máscara de moeda (centavos no final): "15050" -> "150,50".
+  function maskMoneyInput(input) {
+    var digits = digitsOnly(input.value);
+    if (!digits) {
+      input.value = '';
+      return;
+    }
+    var padded = digits.padStart(3, '0');
+    var cents = padded.slice(-2);
+    var integer = padded.slice(0, -2).replace(/^0+/, '') || '0';
+    input.value = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + cents;
+  }
+
+  [priceInput, costInput].forEach(function (input) {
+    if (input) input.addEventListener('input', function () { maskMoneyInput(input); });
+  });
 
   function bindModal(modal) {
     if (!modal) return;
@@ -65,6 +87,7 @@ document.addEventListener('DOMContentLoaded', function () {
       productIdInput.value = '';
       nameInput.value = '';
       priceInput.value = '';
+      costInput.value = '0,00';
       barcodeInput.value = '';
       stockInput.value = '0';
       minStockInput.value = '0';
@@ -81,6 +104,7 @@ document.addEventListener('DOMContentLoaded', function () {
     productIdInput.value = btn.getAttribute('data-id');
     nameInput.value = btn.getAttribute('data-name');
     priceInput.value = btn.getAttribute('data-price');
+    costInput.value = btn.getAttribute('data-cost');
     barcodeInput.value = btn.getAttribute('data-barcode');
     minStockInput.value = btn.getAttribute('data-min-stock');
     obsInput.value = btn.getAttribute('data-obs');

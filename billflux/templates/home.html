@@ -3,82 +3,21 @@
 {% block title %}{{ super() }} - Home{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style-home.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style-home.css') }}?v=2">
 
 {% if session.get('user') %}
 <div class="home-dashboard">
   <div class="page-header">
     <div>
       <h1 class="page-title">Visão geral</h1>
-      <p class="page-subtitle">Resumo rápido do seu comércio.</p>
+      <p class="page-subtitle">Relatórios do seu comércio.</p>
     </div>
   </div>
 
-  <div class="stats-row">
-    <div class="stat-card">
-      <span class="stat-label">Vendas hoje</span>
-      <span class="stat-value stat-value-success">{{ sales_summary.today | brl }}</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">Vendas no mês</span>
-      <span class="stat-value">{{ sales_summary.month | brl }}</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">Em aberto</span>
-      <span class="stat-value">{{ stats.open | brl }}</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">Vencidas</span>
-      <span class="stat-value {% if stats.overdue > 0 %}stat-value-danger{% endif %}">{{ stats.overdue | brl }}</span>
-    </div>
-  </div>
-
-  <div class="home-actions">
-    <a class="btn btn-primary" href="/sales"><i class="fas fa-cash-register"></i> Lançar vendas</a>
-    <a class="btn btn-ghost" href="/bills"><i class="fas fa-file-invoice"></i> Ver contas</a>
-  </div>
-
-  <div class="home-grid">
-    <div class="table-card">
-      <div class="home-card-head">
-        <h2>Contas em aberto</h2>
-        <a href="/bills">Ver todas</a>
-      </div>
-      <ul class="home-list">
-        {% for bill in open_bills %}
-        <li>
-          <span class="home-list-main">{{ bill.reference or 'Sem descrição' }}</span>
-          <span class="home-list-sub">{{ bill.due_date | brdate_short }}</span>
-          <span class="home-list-value">{{ bill.value | brl }}</span>
-        </li>
-        {% else %}
-        <li class="home-list-empty">Nenhuma conta em aberto.</li>
-        {% endfor %}
-      </ul>
-    </div>
-
-    <div class="table-card">
-      <div class="home-card-head">
-        <h2>Últimas vendas</h2>
-        <a href="/sales">Ver todas</a>
-      </div>
-      <ul class="home-list">
-        {% for item in recent_sales %}
-        <li>
-          <span class="home-list-main">{{ item.date | brdate_short }}</span>
-          <span class="home-list-sub">{{ item.source }}</span>
-          <span class="home-list-value">{{ item.value | brl }}</span>
-        </li>
-        {% else %}
-        <li class="home-list-empty">Nenhuma venda lançada.</li>
-        {% endfor %}
-      </ul>
-    </div>
-  </div>
+  {% include '_dashboard_region.html' %}
 </div>
 {% else %}
-<section class="hero">
-  <div class="hero-card">
+<section class="hero">  <div class="hero-card">
     <div class="hero-badge">Gerenciador de contas a pagar</div>
     <h1>Suas contas sob controle, sem dor de cabeça.</h1>
     <p class="hero-subtitle">
@@ -87,7 +26,7 @@
     </p>
     <div class="hero-actions">
       <a class="btn btn-primary btn-lg" href="/login">Entrar</a>
-      <a class="btn btn-outline btn-lg" href="/signin">Criar conta</a>
+      {% if allow_signup %}<a class="btn btn-outline btn-lg" href="/signin">Criar conta</a>{% endif %}
     </div>
     <div class="hero-features">
       <div class="feature">
@@ -106,4 +45,19 @@
   </div>
 </section>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Rebinde o fechamento dos avisos inseridos pelo HTMX na região do dashboard.
+  document.addEventListener('htmx:afterSettle', function () {
+    document.querySelectorAll('.flash-close').forEach(function (btn) {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', function () {
+        btn.parentElement.remove();
+      });
+    });
+  });
+</script>
 {% endblock %}

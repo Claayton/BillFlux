@@ -22,6 +22,11 @@ storage.db
 tests.db
 mitmirror.db
 billflux.db
+billflux_dev.db
+
+# Frontend (Vite)
+frontend/node_modules/
+billflux/static/app/
 
 # Ignore dynaconf secret files
 .secrets.*

@@ -17,6 +17,7 @@ from billflux.controlers import (
     payments,
     pdv,
 )
+from billflux.api import auth as api_auth
 
 csrf = CSRFProtect()
 
@@ -142,4 +143,20 @@ def create_app():
     app.register_blueprint(products.bp)
     app.register_blueprint(payments.bp)
     app.register_blueprint(pdv.bp)
+    app.register_blueprint(api_auth.bp)
+
+    @app.route("/", defaults={"path": ""})
+    @app.route("/<path:path>")
+    def spa_app(path):
+        """Entrega o SPA (build do Vite) para qualquer rota não-reservada."""
+        from flask import abort, send_from_directory
+
+        if path.startswith(("api/", "static/")):
+            return abort(404)
+        return send_from_directory(app.static_folder, "app/index.html")
+
+    def inject_settings():
+        """Expõe flags de configuração para os templates."""
+        return {"allow_signup": settings.auth.get("allow_signup", True)}
+
     return app

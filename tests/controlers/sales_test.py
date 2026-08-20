@@ -1,5 +1,6 @@
 """Tests from the daily sales routes"""
 
+import json
 import re
 from datetime import date
 from decimal import Decimal
@@ -27,10 +28,26 @@ def test_sales_page(logged_client):
 
     assert response.status_code == 200
     page = response.get_data(as_text=True)
-    assert "Vendas diárias" in page
-    assert "Lançar vendas do dia" in page
-    assert "Vendas hoje" in page
+    assert "Lançar venda avulsa" in page
+    assert "Apenas valor, sem produtos." in page
     assert 'id="sale_total"' in page
+
+
+def test_sales_metrics_have_filters_and_are_masked(logged_client):
+    """Métricas: filtros de período presentes e valores ocultos por padrão."""
+
+    response = logged_client.get("/sales")
+    assert response.status_code == 200
+    page = response.get_data(as_text=True)
+
+    for label in ["Hoje", "7 dias", "Este mês", "Mês passado"]:
+        assert label in page
+
+    assert 'id="period-filter"' in page
+    assert 'id="toggle-values"' in page
+    assert "Total vendido" in page
+    assert "data-periods=" in page
+    assert "R$ ••••" in page
 
 
 def test_sales_requires_login(client):
@@ -117,6 +134,56 @@ def test_delete_sale(logged_client):
     assert SaleRepository().get_sale(sale.id) is None
 
 
+def test_sales_get_hx_returns_region(logged_client):
+    """Com HX-Request, /sales deve devolver apenas o fragmento da região."""
+
+    response = logged_client.get("/sales", headers={"HX-Request": "true"})
+
+    assert response.status_code == 200
+    page = response.get_data(as_text=True)
+    assert 'id="sales-region"' in page
+    assert 'class="sidebar"' not in page
+    assert 'class="site-header"' not in page
+    assert "Lançar venda avulsa" in page
+
+
+def test_sales_post_hx_persists_and_returns_region(logged_client):
+    """Lançar venda via HTMX persiste e devolve o fragmento atualizado."""
+
+    token = _get_csrf_token(logged_client)
+
+    response = logged_client.post(
+        "/sales",
+        data={"csrf_token": token, "date": "2026-03-10", "total": "50,00", "obs": "HX"},
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    page = response.get_data(as_text=True)
+    assert 'id="sales-region"' in page
+    assert "R$ 50,00" in page
+    sale = SaleRepository().get_sale_by_date(date(2026, 3, 10))
+    assert sale is not None
+    assert sale.total == Decimal("50.00")
+
+
+def test_sales_delete_hx_returns_region(logged_client):
+    """Excluir via HTMX remove a venda e devolve o fragmento."""
+
+    sale = SaleRepository().insert_sale(date(2026, 3, 15), Decimal("100.00"))
+    token = _get_csrf_token(logged_client)
+
+    response = logged_client.post(
+        f"/sales/delete/{sale.id}",
+        data={},
+        headers={"X-CSRFToken": token, "HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert 'id="sales-region"' in response.get_data(as_text=True)
+    assert SaleRepository().get_sale(sale.id) is None
+
+
 def test_sales_page_includes_pdv_orders(logged_client):
     """PDV orders should feed the daily total shown on the sales page."""
 
@@ -127,14 +194,34 @@ def test_sales_page_includes_pdv_orders(logged_client):
     OrderRepository().create_order([(product.id, 2)], method.id)
 
     today_total = sum(
-        order.total for order in OrderRepository().get_orders_by_date(date.today())
-    )
+        sale.total for sale in SaleRepository().get_sales() if sale.date == date.today()
+    ) + sum(order.total for order in OrderRepository().get_orders_by_date(date.today()))
 
     response = logged_client.get("/sales")
     assert response.status_code == 200
     page = response.get_data(as_text=True)
-    assert "Pedidos de hoje (PDV)" in page
-    formatted = (
-        f"R$ {today_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    assert "Pedidos de hoje (PDV)" not in page
+    assert "source-badge-pdv" in page
+    match = re.search(r"data-periods='([^']+)'", page)
+    assert match, "data-periods not found"
+    periods = json.loads(match.group(1))
+    assert periods["hoje"]["total"] == str(today_total)
+
+
+def test_sales_table_lists_manual_and_pdv_sales(logged_client):
+    """A tabela de Vendas deve mostrar vendas avulsas e pedidos do PDV."""
+
+    SaleRepository().insert_sale(date(2026, 2, 10), Decimal("250.00"), obs="Balcão")
+    product = ProductRepository().insert_product(
+        name="PDV Tabela Teste", price=Decimal("10.00"), stock_quantity=5
     )
-    assert formatted in page
+    method = PaymentMethodRepository().get_active_methods()[0]
+    OrderRepository().create_order([(product.id, 1)], method.id)
+
+    response = logged_client.get("/sales")
+    assert response.status_code == 200
+    page = response.get_data(as_text=True)
+    assert ">Vendas</h2>" in page
+    assert "source-badge-manual" in page
+    assert "source-badge-pdv" in page
+    assert "Balcão" in page

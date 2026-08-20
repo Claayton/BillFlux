@@ -6,6 +6,7 @@ from flask import flash, redirect, render_template, request, session, url_for
 from flask.blueprints import Blueprint
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from billflux.config import settings
 from billflux.infra.repository.user_repository import UserRepository
 
 bp = Blueprint("bp_auth", __name__)
@@ -29,7 +30,7 @@ def login():
     """Login page route"""
 
     if session.get("user"):
-        return redirect(url_for("bp_bills.bills"))
+        return redirect(url_for("bp_sales.sales"))
 
     if request.method == "POST":
         username = request.form.get("username", "").strip()
@@ -40,7 +41,7 @@ def login():
         if user and check_password_hash(user.password_hash, password):
             session["user"] = user.username
             flash(f"Bem-vindo, {user.username}!", "success")
-            return redirect(url_for("bp_bills.bills"))
+            return redirect(url_for("bp_sales.sales"))
 
         flash("Usuário ou senha inválidos.", "error")
 
@@ -51,6 +52,10 @@ def login():
 @bp.route("/signin", methods=["GET", "POST"])
 def signin():
     """Sign in page route"""
+
+    if not settings.auth.get("allow_signup", True):
+        flash("O cadastro está desativado. Contate o administrador.", "info")
+        return redirect(url_for("bp_auth.login"))
 
     if request.method == "POST":
         username = request.form.get("username", "").strip()
@@ -88,4 +93,4 @@ def logout():
 
     session.pop("user", None)
     flash("Você saiu da sua conta.", "info")
-    return redirect(url_for("bp_home.index"))
+    return redirect("/")

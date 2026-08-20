@@ -7,6 +7,9 @@ __pycache__/
 .coverage
 htmlcov/
 billflux.db
+billflux_dev.db
 .idea/
 .vscode/
 .env
+frontend/node_modules/
+billflux/static/app/

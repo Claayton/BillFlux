@@ -47,6 +47,7 @@ def new_product():
 
     name = (request.form.get("name") or "").strip()
     price = _parse_br_decimal(request.form.get("price"))
+    cost = _parse_br_decimal(request.form.get("cost"))
     barcode = (request.form.get("barcode") or "").strip() or None
     stock = request.form.get("stock_quantity")
     min_stock = request.form.get("min_stock")
@@ -57,6 +58,9 @@ def new_product():
         return redirect(url_for("bp_products.products"))
     if price is None or price < 0:
         flash("Informe um preço válido.", "error")
+        return redirect(url_for("bp_products.products"))
+    if cost is None or cost < 0:
+        flash("Informe um custo válido.", "error")
         return redirect(url_for("bp_products.products"))
 
     stock = int(stock) if str(stock).strip().isdigit() else 0
@@ -72,6 +76,7 @@ def new_product():
     ProductRepository().insert_product(
         name=name,
         price=price,
+        cost=cost,
         barcode=barcode,
         stock_quantity=stock,
         min_stock=min_stock,
@@ -89,6 +94,7 @@ def edit_product():
     product_id = request.form.get("product_id")
     name = (request.form.get("name") or "").strip()
     price = _parse_br_decimal(request.form.get("price"))
+    cost = _parse_br_decimal(request.form.get("cost"))
     barcode = (request.form.get("barcode") or "").strip() or None
     min_stock = request.form.get("min_stock")
     obs = (request.form.get("obs") or "").strip() or None
@@ -102,6 +108,9 @@ def edit_product():
         return redirect(url_for("bp_products.products"))
     if price is None or price < 0:
         flash("Informe um preço válido.", "error")
+        return redirect(url_for("bp_products.products"))
+    if cost is None or cost < 0:
+        flash("Informe um custo válido.", "error")
         return redirect(url_for("bp_products.products"))
 
     min_stock = int(min_stock) if str(min_stock).strip().isdigit() else 0
@@ -119,6 +128,7 @@ def edit_product():
         int(product_id),
         name=name,
         price=price,
+        cost=cost,
         barcode=barcode,
         min_stock=min_stock,
         obs=obs,

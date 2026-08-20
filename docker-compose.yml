@@ -5,6 +5,10 @@ services:
       - "5000:5000"
     environment:
       BILLFLUX_DATABASE__URL: sqlite:///data/billflux.db
+      BILLFLUX_SECRET_KEY: ${BILLFLUX_SECRET_KEY}
+      BILLFLUX_AUTH__ALLOW_SIGNUP: ${BILLFLUX_AUTH__ALLOW_SIGNUP:-false}
+      BILLFLUX_AUTH__USERNAME: ${BILLFLUX_AUTH__USERNAME:-coqueiral}
+      BILLFLUX_AUTH__PASSWORD_HASH: ${BILLFLUX_AUTH__PASSWORD_HASH:-}
     volumes:
       - billflux-data:/app/data
 

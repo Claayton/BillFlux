@@ -23,6 +23,7 @@
           <tr>
             <th>Produto</th>
             <th class="th-amount">Preço</th>
+            <th class="th-amount">Custo</th>
             <th class="th-number">Estoque</th>
             <th>Código de barras</th>
             <th>Status</th>
@@ -38,6 +39,7 @@
               {% if product.obs %}<span class="cell-sub">{{ product.obs }}</span>{% endif %}
             </td>
             <td class="cell-amount">{{ product.price | brl }}</td>
+            <td class="cell-amount">{{ product.cost | brl }}</td>
             <td class="cell-stock {% if product.min_stock and product.stock_quantity <= product.min_stock %}cell-stock-low{% endif %}">
               {{ product.stock_quantity }}
               {% if product.min_stock %}<span class="cell-sub">mín. {{ product.min_stock }}</span>{% endif %}
@@ -56,7 +58,7 @@
                 </button>
                 <div class="dropdown-panel" id="product-menu-{{ product.id }}" hidden>
                   <button type="button" class="dropdown-item" data-action="edit" data-id="{{ product.id }}"
-                          data-name="{{ product.name }}" data-price="{{ product.price }}"
+                          data-name="{{ product.name }}" data-price="{{ product.price }}" data-cost="{{ product.cost }}"
                           data-barcode="{{ product.barcode or '' }}" data-min-stock="{{ product.min_stock }}"
                           data-obs="{{ product.obs or '' }}" data-active="{{ '1' if product.active else '0' }}">
                     <i class="fas fa-pen"></i> Editar
@@ -78,7 +80,7 @@
           </tr>
           {% else %}
           <tr class="empty-row">
-            <td colspan="6" class="empty-state">
+            <td colspan="7" class="empty-state">
               <i class="fas fa-box-open"></i>
               <h3>Nenhum produto cadastrado</h3>
               <p>Cadastre os itens vendidos no PDV para começar.</p>
@@ -118,9 +120,14 @@
           <input type="text" id="product_price" name="price" placeholder="0,00" inputmode="decimal" required>
         </div>
         <div class="form-field">
-          <label for="product_barcode">Código de barras (opcional)</label>
-          <input type="text" id="product_barcode" name="barcode" placeholder="Ex: 7891000112345">
+          <label for="product_cost">Custo (R$)</label>
+          <input type="text" id="product_cost" name="cost" placeholder="0,00" inputmode="decimal" value="0,00">
         </div>
+      </div>
+
+      <div class="form-field">
+        <label for="product_barcode">Código de barras (opcional)</label>
+        <input type="text" id="product_barcode" name="barcode" placeholder="Ex: 7891000112345">
       </div>
 
       <div class="form-grid">

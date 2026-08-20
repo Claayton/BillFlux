@@ -46,6 +46,7 @@ def test_create_product(logged_client):
             "csrf_token": token,
             "name": "Produto do Teste",
             "price": "12,50",
+            "cost": "8,00",
             "barcode": "999000111",
             "stock_quantity": "10",
             "min_stock": "2",
@@ -59,7 +60,23 @@ def test_create_product(logged_client):
     assert product is not None
     assert product.name == "Produto do Teste"
     assert product.price == Decimal("12.50")
+    assert product.cost == Decimal("8.00")
     assert product.stock_quantity == 10
+
+
+def test_create_product_shows_cost(logged_client):
+    """The catalog page should display the cost column and value."""
+
+    ProductRepository().insert_product(
+        name="Com Custo", price=Decimal("20.00"), cost=Decimal("15.50")
+    )
+
+    response = logged_client.get("/products")
+
+    assert response.status_code == 200
+    page = response.get_data(as_text=True)
+    assert "Custo" in page
+    assert "R$ 15,50" in page
 
 
 def test_create_product_invalid(logged_client):

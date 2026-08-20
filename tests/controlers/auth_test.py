@@ -35,6 +35,29 @@ def test_signin_page(client):
     assert response.status_code == 200
 
 
+def test_signup_disabled_redirects_to_login(client, monkeypatch):
+    """When allow_signup is false, /signin must not be served."""
+
+    from billflux.config import settings
+
+    monkeypatch.setattr(settings.auth, "allow_signup", False)
+
+    get_response = client.get("/signin")
+    assert get_response.status_code == 302
+    assert "/login" in get_response.headers["Location"]
+
+    post_response = client.post(
+        "/signin",
+        data={
+            "csrf_token": _csrf(client),
+            "username": "bloqueado",
+            "password": "segredo",
+        },
+    )
+    assert post_response.status_code == 302
+    assert "/login" in post_response.headers["Location"]
+
+
 def test_signup_creates_user_and_allows_login(client):
     """After signing up, the new credentials must work on login."""
 
@@ -73,6 +96,17 @@ def test_signup_short_password(client):
 def test_login_valid(logged_client):
     response = logged_client.get("/bills")
     assert response.status_code == 200
+
+
+def test_login_redirects_to_sales(client):
+    """After a successful login the system should open on Vendas."""
+
+    response = client.post(
+        "/login",
+        data={"csrf_token": _csrf(client), "username": "admin", "password": "admin"},
+    )
+    assert response.status_code == 302
+    assert "/sales" in response.headers["Location"]
 
 
 def test_login_invalid(client):

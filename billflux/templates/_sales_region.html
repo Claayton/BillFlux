@@ -1,0 +1,144 @@
+<div id="sales-region">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-stack" role="alert">
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">
+            <span>{{ message }}</span>
+            <button class="flash-close" aria-label="Fechar">&times;</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <div class="stats-toolbar">
+    <div class="filter-segmented" id="period-filter" role="group" aria-label="Período das métricas">
+      <button type="button" class="is-active" data-period="hoje"><i class="fas fa-calendar-day"></i> Hoje</button>
+      <button type="button" data-period="7d"><i class="fas fa-calendar-week"></i> 7 dias</button>
+      <button type="button" data-period="mes"><i class="fas fa-calendar"></i> Este mês</button>
+      <button type="button" data-period="mes_anterior"><i class="fas fa-calendar-minus"></i> Mês passado</button>
+    </div>
+    <button type="button" class="icon-btn eye-btn" id="toggle-values"
+            title="Mostrar valores" aria-pressed="false" aria-label="Mostrar valores">
+      <i class="fas fa-eye-slash"></i>
+    </button>
+  </div>
+
+  <div class="stats-row" id="stats-row" data-active="{{ active_period }}" data-periods='{{ periods | tojson }}'>
+    <div class="stat-card">
+      <span class="stat-label">Total vendido</span>
+      <span class="stat-value stat-value-success" data-stat="total" data-mask="R$ ••••">R$ ••••</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Nº de vendas</span>
+      <span class="stat-value" data-stat="count" data-mask="•••">•••</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Dias com venda</span>
+      <span class="stat-value" data-stat="days" data-mask="•••">•••</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Média por dia</span>
+      <span class="stat-value" data-stat="avg" data-mask="R$ ••••">R$ ••••</span>
+    </div>
+  </div>
+
+  <div class="sales-form-card">
+    <div class="sales-form-head">
+      <i class="fas fa-hand-holding-usd"></i>
+      <div>
+        <span>Lançar venda avulsa</span>
+        <small>Apenas valor, sem produtos.</small>
+      </div>
+    </div>
+    <form id="sale-form" action="/sales" method="POST" class="sales-form"
+          hx-post="/sales" hx-target="#sales-region" hx-swap="outerHTML">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-field">
+        <label for="sale_date">Data</label>
+        <input type="date" id="sale_date" name="date" value="{{ today.strftime('%Y-%m-%d') }}" required>
+      </div>
+      <div class="form-field">
+        <label for="sale_total">Total bruto</label>
+        <input type="text" id="sale_total" name="total" placeholder="R$ 0,00" inputmode="decimal" required>
+      </div>
+      <div class="form-field">
+        <label for="sale_obs">Observações (opcional)</label>
+        <input type="text" id="sale_obs" name="obs" placeholder="Ex: feira, balcão...">
+      </div>
+      <div class="sales-form-actions">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Lançar</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="table-card">
+    <div class="table-card-head">
+      <h2>Vendas</h2>
+    </div>
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Origem</th>
+            <th>Observações</th>
+            <th class="th-amount">Total</th>
+            <th class="th-actions"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sale in sales_list %}
+          <tr class="sale-row" data-id="{{ sale.id }}" data-kind="{{ sale.kind }}">
+            <td>
+              <span class="cell-title">{{ sale.date | brdate_short }}</span>
+              {% if sale.date == today %}<span class="cell-sub cell-today">hoje</span>{% endif %}
+            </td>
+            <td>
+              {% if sale.kind == 'pdv' %}
+              <span class="source-badge source-badge-pdv"><i class="fas fa-cash-register"></i> PDV</span>
+              {% else %}
+              <span class="source-badge source-badge-manual"><i class="fas fa-hand-holding-usd"></i> Manual</span>
+              {% endif %}
+            </td>
+            <td class="cell-obs">{{ sale.obs or '—' }}</td>
+            <td class="cell-amount">{{ sale.total | brl }}</td>
+            <td class="cell-actions">
+              {% if sale.kind == 'pdv' %}
+              <a class="icon-btn" href="/pdv/recibo/{{ sale.id }}" title="Ver recibo" aria-label="Ver recibo"><i class="fas fa-receipt"></i></a>
+              {% else %}
+              <div class="row-data"
+                   data-id="{{ sale.id }}"
+                   data-date="{{ sale.date.strftime('%Y-%m-%d') }}"
+                   data-total="{{ sale.total }}"
+                   data-obs="{{ sale.obs or '' }}"></div>
+              <div class="dropdown">
+                <button type="button" class="icon-btn row-menu-btn" data-dropdown-trigger="sale-menu-{{ sale.id }}"
+                        aria-haspopup="true" aria-expanded="false" aria-label="Ações da venda">
+                  <i class="fas fa-ellipsis-h"></i>
+                </button>
+                <div class="dropdown-panel" id="sale-menu-{{ sale.id }}" hidden>
+                  <button type="button" class="dropdown-item" data-action="edit" data-id="{{ sale.id }}"><i class="fas fa-pen"></i> Editar</button>
+                  <button type="button" class="dropdown-item is-danger" data-action="delete" data-id="{{ sale.id }}"
+                          hx-post="/sales/delete/{{ sale.id }}" hx-target="#sales-region" hx-swap="outerHTML"
+                          hx-confirm="Excluir esta venda?"><i class="fas fa-trash"></i> Excluir</button>
+                </div>
+              </div>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr class="empty-row">
+            <td colspan="5" class="empty-state">
+              <i class="fas fa-cash-register"></i>
+              <h3>Nenhuma venda ainda</h3>
+              <p>Lance uma venda avulsa ou feche uma venda no PDV.</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
