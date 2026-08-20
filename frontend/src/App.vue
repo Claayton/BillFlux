@@ -1,9 +1,11 @@
 <script setup>
 import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
 </script>
 
 <template>
-  <router-view v-if="!useAuthStore().loading" />
+  <router-view v-if="!auth.loading" />
   <div v-else class="app-boot">
     <div class="app-boot-mark">BF</div>
     <p>Carregando BillFlux…</p>
