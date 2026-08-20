@@ -13,6 +13,7 @@ export default defineConfig({
   server: {
     port: 5174,
     strictPort: true,
+    allowedHosts: ['pdv.beeplay.site', '.beeplay.site'],
     proxy: {
       '/api': process.env.BILLFLUX_API_TARGET || 'http://localhost:5000',
     },

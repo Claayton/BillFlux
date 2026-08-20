@@ -18,6 +18,8 @@ from billflux.controlers import (
     pdv,
 )
 from billflux.api import auth as api_auth
+from billflux.api import dashboard as api_dashboard
+from billflux.api import sales as api_sales
 
 csrf = CSRFProtect()
 
