@@ -14,6 +14,7 @@ from billflux.infra.entities.product_movement import ProductMovement  # noqa: F4
 from billflux.infra.entities.payment_method import PaymentMethod  # noqa: F401
 from billflux.infra.entities.order import Order  # noqa: F401
 from billflux.infra.entities.order_item import OrderItem  # noqa: F401
+from billflux.infra.entities.order_payment import OrderPayment  # noqa: F401
 
 _database_url = settings.database.url
 _engine_kwargs = {"connect_args": {"check_same_thread": False}}

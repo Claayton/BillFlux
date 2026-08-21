@@ -1,8 +1,10 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
+import { maskMoney, moneyToDecimal } from '@/utils/format'
+import { paymentIcon, paymentColor } from '@/utils/payment'
 
 const router = useRouter()
 
@@ -14,8 +16,9 @@ const highlighted = ref(-1)
 const finishing = ref(false)
 
 const checkoutOpen = ref(false)
-const checkoutMethod = ref(null)
 const checkoutObs = ref('')
+const payAmounts = ref({})
+const payInputs = ref([])
 
 const discountOpen = ref(false)
 const discountType = ref('percent')
@@ -30,6 +33,20 @@ const cartCount = computed(() => cartItems.value.reduce((sum, item) => sum + ite
 const cartTotal = computed(() => cartItems.value.reduce((sum, item) => sum + item.price * item.qty, 0))
 const countLabel = computed(() => cartCount.value + (cartCount.value === 1 ? ' item' : ' itens'))
 const cartTotalAfter = computed(() => Math.max(0, cartTotal.value - (discount.value || 0)))
+
+// Pagamentos preenchidos no fechamento (valor > 0).
+const paymentsEntered = computed(() =>
+  methods.value
+    .map((m) => ({ method_id: m.id, amount: moneyToDecimal(payAmounts.value[m.id]) || 0 }))
+    .filter((p) => p.amount > 0)
+)
+const paymentsTotal = computed(() =>
+  Math.round(paymentsEntered.value.reduce((sum, p) => sum + p.amount, 0) * 100) / 100
+)
+const paymentDiff = computed(
+  () => Math.round((paymentsTotal.value - cartTotalAfter.value) * 100) / 100
+)
+const canConfirm = computed(() => paymentsTotal.value >= cartTotalAfter.value && cartTotalAfter.value >= 0)
 
 const discountPreview = computed(() => {
   if (cartTotal.value <= 0) return 0
@@ -228,14 +245,52 @@ function clearDiscount() {
 // ---------- Finalizar venda (F2) ----------
 function finishSale() {
   if (cart.value.size === 0) return
-  checkoutMethod.value = null
   checkoutObs.value = ''
+  const amounts = {}
+  methods.value.forEach((m) => {
+    amounts[m.id] = ''
+  })
+  payAmounts.value = amounts
+  payInputs.value = []
   checkoutOpen.value = true
+  nextTick(() => focusPayInput(0))
+}
+
+function focusPayInput(index) {
+  const el = payInputs.value[index]
+  if (el) el.focus()
+}
+
+function onPayInput(event, methodId) {
+  payAmounts.value[methodId] = maskMoney(event.target.value)
+}
+
+// Seta para baixo/cima navega entre as formas de pagamento.
+function onPayKeydown(event, index) {
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    if (index + 1 < methods.value.length) focusPayInput(index + 1)
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    if (index > 0) focusPayInput(index - 1)
+  } else if (event.key === 'Enter') {
+    event.preventDefault()
+    confirmCheckout()
+  }
 }
 
 async function confirmCheckout() {
-  if (!checkoutMethod.value) {
-    ElMessage.warning('Selecione a forma de pagamento.')
+  if (!methods.value.length) {
+    ElMessage.warning('Nenhuma forma de pagamento ativa.')
+    return
+  }
+  if (!paymentsEntered.value.length) {
+    ElMessage.warning('Informe o valor recebido.')
+    focusPayInput(0)
+    return
+  }
+  if (!canConfirm.value) {
+    ElMessage.warning('Falta ' + formatBRL(Math.abs(paymentDiff.value)) + ' para fechar o valor.')
     return
   }
   finishing.value = true
@@ -245,7 +300,10 @@ async function confirmCheckout() {
       quantity: item.qty,
     }))
     const data = await api.post('/pdv/complete', {
-      method_id: checkoutMethod.value,
+      payments: paymentsEntered.value.map((p) => ({
+        method_id: p.method_id,
+        amount: p.amount.toFixed(2),
+      })),
       obs: checkoutObs.value || null,
       items,
       discount: discount.value || 0,
@@ -264,8 +322,12 @@ async function confirmCheckout() {
 function onGlobalKeydown(event) {
   if (event.key === 'F2') {
     event.preventDefault()
-    finishSale()
-  } else if (event.key === 'F3') {
+    if (checkoutOpen.value) {
+      confirmCheckout()
+    } else {
+      finishSale()
+    }
+  } else if (event.key === 'F3' && !checkoutOpen.value) {
     event.preventDefault()
     openDiscount()
   } else if (event.key === 'F9') {
@@ -519,23 +581,36 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="pdv-checkout-block">
-            <h3>Forma de pagamento</h3>
-            <div class="pdv-methods">
-              <button
-                v-for="m in methods"
-                :key="m.id"
-                type="button"
-                class="pdv-method"
-                :class="{ 'is-selected': checkoutMethod === m.id }"
-                @click="checkoutMethod = m.id"
-              >
-                {{ m.name }}
-              </button>
-              <p v-if="!methods.length" class="pdv-panel-note">
-                Nenhuma forma ativa. Configure em
-                <router-link to="/payments">Formas de pagamento</router-link>.
+            <h3>Valores por forma de pagamento</h3>
+            <div class="pdv-paylist" v-if="methods.length">
+              <div v-for="(m, i) in methods" :key="m.id" class="pdv-payrow">
+                <span class="pdv-payicon" :class="paymentColor(m.name)">
+                  <i :class="paymentIcon(m.name)"></i>
+                </span>
+                <span class="pdv-payname">{{ m.name }}</span>
+                <div class="pdv-payfield">
+                  <span>R$</span>
+                  <input
+                    :ref="(el) => (payInputs[i] = el)"
+                    :value="payAmounts[m.id]"
+                    type="text"
+                    inputmode="numeric"
+                    :aria-label="'Valor em ' + m.name"
+                    placeholder="0,00"
+                    autocomplete="off"
+                    @input="onPayInput($event, m.id)"
+                    @keydown="onPayKeydown($event, i)"
+                  />
+                </div>
+              </div>
+              <p class="pdv-payhint">
+                <i class="fas fa-arrow-down"></i> Seta para baixo pula para a próxima forma.
               </p>
             </div>
+            <p v-if="!methods.length" class="pdv-panel-note">
+              Nenhuma forma ativa. Configure em
+              <router-link to="/payments">Formas de pagamento</router-link>.
+            </p>
           </div>
 
           <div class="pdv-checkout-block">
@@ -543,15 +618,23 @@ onBeforeUnmount(() => {
             <input v-model="checkoutObs" type="text" placeholder="Opcional..." autocomplete="off" />
           </div>
         </div>
-        <div class="modal-footer">
+        <div class="modal-footer pdv-checkout-footer">
+          <div class="pdv-checkout-status" v-if="paymentsEntered.length">
+            <span v-if="paymentDiff > 0">Troco {{ formatBRL(paymentDiff) }}</span>
+            <span v-else-if="paymentDiff < 0" class="is-missing">
+              Falta {{ formatBRL(Math.abs(paymentDiff)) }}
+            </span>
+            <span v-else><i class="fas fa-check"></i> Valor fechado</span>
+          </div>
           <button type="button" class="btn btn-ghost modal-cancel" @click="checkoutOpen = false">Cancelar</button>
           <button
             type="button"
             class="btn btn-primary"
-            :disabled="finishing || !checkoutMethod"
+            :disabled="finishing || !canConfirm"
             @click="confirmCheckout"
           >
             <i class="fas fa-check-circle"></i> {{ finishing ? 'Concluindo…' : 'Confirmar venda' }}
+            <kbd>F2</kbd>
           </button>
         </div>
       </div>
@@ -584,5 +667,87 @@ onBeforeUnmount(() => {
 .modal-footer {
   margin-top: 0;
   padding: 16px 24px 20px;
+}
+.pdv-checkout-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pdv-checkout-status {
+  margin-right: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--success, #16a34a);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pdv-checkout-status .is-missing {
+  color: var(--danger, #dc2626);
+}
+.pdv-paylist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pdv-payrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--surface, #ffffff);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.pdv-payrow:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+.pdv-payicon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm, 8px);
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  flex-shrink: 0;
+}
+.pdv-payname {
+  flex: 1;
+  font-weight: 600;
+  font-size: 14px;
+}
+.pdv-payfield {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--radius-sm, 8px);
+  padding: 0 10px;
+  height: 36px;
+  background: #ffffff;
+}
+.pdv-payfield span {
+  color: var(--text-muted, #9ca3af);
+  font-size: 13px;
+}
+.pdv-payfield input {
+  border: none;
+  outline: none;
+  width: 96px;
+  text-align: right;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+}
+.pdv-payhint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted, #9ca3af);
 }
 </style>

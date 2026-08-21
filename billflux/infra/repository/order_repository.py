@@ -8,6 +8,9 @@ from sqlmodel import select
 from billflux.infra.config.database import get_session
 from billflux.infra.entities.order import Order as OrderModel
 from billflux.infra.entities.order_item import OrderItem as OrderItemModel
+from billflux.infra.entities.order_payment import (
+    OrderPayment as OrderPaymentModel,
+)
 from billflux.infra.entities.product import Product as ProductModel
 from billflux.infra.entities.product_movement import (
     ProductMovement as ProductMovementModel,
@@ -25,11 +28,14 @@ class OrderRepository:
         payment_method_id: int,
         obs: Optional[str] = None,
         discount: Optional[Decimal] = None,
+        payments: Optional[List[tuple]] = None,
     ) -> Order:
         """Cria um pedido de forma transacional: pedido + itens + baixa de estoque
         + log de movimentação. Levanta ValueError se um produto não existir,
         estiver inativo ou tiver estoque insuficiente (nada é persistido).
-        O desconto (em R$) é abatido do total."""
+        O desconto (em R$) é abatido do total. `payments` é uma lista de
+        (payment_method_id, valor); se não informada, usa um único pagamento
+        na forma indicada pelo total."""
 
         session = get_session()
         try:
@@ -52,14 +58,20 @@ class OrderRepository:
                 if total < 0:
                     total = Decimal("0")
 
+                payments = self._normalize_payments(
+                    session, payments, payment_method_id, total
+                )
+
                 order = OrderModel(
                     total=total,
-                    payment_method_id=payment_method_id,
+                    payment_method_id=payments[0][0],
                     obs=obs,
                     discount=discount or None,
                 )
                 session.add(order)
                 session.flush()
+
+                self._insert_payments(session, order.id, payments)
 
                 for product, quantity in products:
                     session.add(
@@ -142,6 +154,66 @@ class OrderRepository:
         finally:
             session.close()
 
+    def get_order_payments(self, order_id: int) -> List[tuple]:
+        """Returns the payments (method_id, amount) of an order."""
+
+        session = get_session()
+        try:
+            with session:
+                sql = select(OrderPaymentModel).where(
+                    OrderPaymentModel.order_id == order_id
+                )
+                payments = session.exec(sql).all()
+                return [(p.payment_method_id, p.amount) for p in payments]
+        finally:
+            session.close()
+
+    def _normalize_payments(self, session, payments, payment_method_id, total):
+        """Valida a lista de pagamentos (method_id, valor) e a usa, ou cria um
+        único pagamento na forma indicada pelo total."""
+
+        from billflux.infra.entities.payment_method import (
+            PaymentMethod as PaymentMethodModel,
+        )
+
+        if payments is None:
+            payments = [(payment_method_id, total)]
+
+        normalized = []
+        received = Decimal("0")
+        for method_id, amount in payments:
+            method = session.get(PaymentMethodModel, method_id)
+            if not method or not method.active:
+                raise ValueError("Forma de pagamento inválida.")
+            amount = Decimal(str(amount))
+            if amount <= 0:
+                raise ValueError("Valor de pagamento inválido.")
+            normalized.append((method_id, amount))
+            received += amount
+
+        if received < total:
+            raise ValueError("Valores de pagamento insuficientes.")
+        return normalized
+
+    @staticmethod
+    def _insert_payments(session, order_id, payments):
+        for method_id, amount in payments:
+            session.add(
+                OrderPaymentModel(
+                    order_id=order_id,
+                    payment_method_id=method_id,
+                    amount=amount,
+                )
+            )
+
+    def _replace_payments(self, session, order_id, payments):
+        old = session.exec(
+            select(OrderPaymentModel).where(OrderPaymentModel.order_id == order_id)
+        ).all()
+        for payment in old:
+            session.delete(payment)
+        self._insert_payments(session, order_id, payments)
+
     def cancel_order(self, order_id: int) -> bool:
         """Cancela um pedido mantendo-o na lista: marca como cancelado e
         restaura o estoque dos itens com movimentação de entrada.
@@ -184,6 +256,7 @@ class OrderRepository:
         payment_method_id: int,
         obs: Optional[str] = None,
         discount: Optional[Decimal] = None,
+        payments: Optional[List[tuple]] = None,
     ) -> Order:
         """Atualiza um pedido de forma transacional, mantendo o mesmo id.
 
@@ -280,9 +353,13 @@ class OrderRepository:
                 final_total = subtotal - discount
                 if final_total < 0:
                     final_total = Decimal("0")
+                payments = self._normalize_payments(
+                    session, payments, payment_method_id, final_total
+                )
+                self._replace_payments(session, order_id, payments)
                 order.total = final_total
                 order.discount = discount or None
-                order.payment_method_id = payment_method_id
+                order.payment_method_id = payments[0][0]
                 order.obs = obs
                 session.add(order)
                 session.commit()

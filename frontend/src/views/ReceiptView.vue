@@ -92,7 +92,13 @@ onMounted(load)
           <strong>{{ brl(order.total) }}</strong>
         </div>
 
-        <div class="receipt-payment">
+        <template v-if="order.payments && order.payments.length > 1">
+          <div v-for="(payment, i) in order.payments" :key="'pay' + i" class="receipt-payment">
+            <span>Recebido ({{ payment.name }})</span>
+            <strong>{{ brl(payment.amount) }}</strong>
+          </div>
+        </template>
+        <div v-else class="receipt-payment">
           <span>Forma de pagamento</span>
           <strong>{{ order.payment_method }}</strong>
         </div>

@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl, brdateShort, maskMoney, moneyToDecimal } from '@/utils/format'
+import { paymentIcon, paymentColor } from '@/utils/payment'
 import AppShell from '@/components/AppShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import SaleEditModal from '@/views/SaleEditModal.vue'
@@ -14,26 +15,6 @@ const periods = [
   { key: 'mes', label: 'Este mês', icon: 'fas fa-calendar' },
   { key: 'mes_anterior', label: 'Mês passado', icon: 'fas fa-calendar-minus' },
 ]
-
-const PAYMENT_ICONS = {
-  dinheiro: 'fas fa-money-bill-wave',
-  pix: 'fas fa-qrcode',
-  credito: 'fas fa-credit-card',
-  debito: 'fas fa-credit-card',
-  vr: 'fas fa-utensils',
-  va: 'fas fa-utensils',
-  'vr/va': 'fas fa-utensils',
-}
-
-const PAYMENT_COLORS = {
-  dinheiro: 'pi-dinheiro',
-  pix: 'pi-pix',
-  credito: 'pi-credito',
-  debito: 'pi-debito',
-  vr: 'pi-vr',
-  va: 'pi-vr',
-  'vr/va': 'pi-vr',
-}
 
 const active = ref('hoje')
 const showValues = ref(true)
@@ -70,22 +51,6 @@ const filteredSales = computed(() => {
   const wantCancelled = saleFilter.value === 'canceladas'
   return data.value.sales.filter((sale) => Boolean(sale.cancelled) === wantCancelled)
 })
-
-function paymentIcon(payment) {
-  return PAYMENT_ICONS[normalizeKey(payment)] || 'fas fa-credit-card'
-}
-
-function paymentColor(payment) {
-  return PAYMENT_COLORS[normalizeKey(payment)] || ''
-}
-
-function normalizeKey(text) {
-  return (text || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-}
 
 function mask(event) {
   form.value.total = maskMoney(event.target.value)

@@ -294,23 +294,23 @@
   color: var(--text-secondary);
 }
 
-.sale-payment-icon.pi-dinheiro {
+.pi-dinheiro {
   color: #16a34a;
 }
 
-.sale-payment-icon.pi-pix {
+.pi-pix {
   color: #0891b2;
 }
 
-.sale-payment-icon.pi-credito {
+.pi-credito {
   color: #7c3aed;
 }
 
-.sale-payment-icon.pi-debito {
+.pi-debito {
   color: #ea580c;
 }
 
-.sale-payment-icon.pi-vr {
+.pi-vr {
   color: #db2777;
 }
 

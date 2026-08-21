@@ -73,7 +73,7 @@ describe('PdvView', () => {
     expect(wrapper.find('#cart-total').text()).toBe('R$ 15,00')
   })
 
-  it('finaliza a venda e navega para o recibo', async () => {
+  it('finaliza a venda informando o valor na primeira forma', async () => {
     apiMock.post.mockResolvedValue({ order: { order_id: 7 } })
     const wrapper = mountView()
     await flushPromises()
@@ -85,16 +85,18 @@ describe('PdvView', () => {
     await wrapper.find('#pdv-finish').trigger('click')
     await flushPromises()
 
-    // abre o modal de fechamento e escolhe a forma de pagamento
+    // abre o modal de fechamento com foco pronto e digita o valor em dinheiro
     expect(wrapper.find('.pdv-checkout-modal').exists()).toBe(true)
-    await wrapper.find('.pdv-checkout-modal .pdv-method').trigger('click')
+    const inputs = wrapper.findAll('.pdv-payfield input')
+    expect(inputs).toHaveLength(methods.length)
+    await inputs[0].setValue('500') // máscara -> R$ 5,00
     await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
     await flushPromises()
 
     expect(apiMock.post).toHaveBeenCalledWith(
       '/pdv/complete',
       expect.objectContaining({
-        method_id: 1,
+        payments: [{ method_id: 1, amount: '5.00' }],
         items: [{ product_id: 1, quantity: 1 }],
         discount: 0,
       })
@@ -102,7 +104,41 @@ describe('PdvView', () => {
     expect(routerPush).toHaveBeenCalledWith('/pdv/recibo/7')
   })
 
-  it('não finaliza sem forma de pagamento', async () => {
+  it('divide o pagamento entre duas formas navegando com a seta', async () => {
+    apiMock.post.mockResolvedValue({ order: { order_id: 8 } })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('arildo')
+    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+    await wrapper.find('#pdv-finish').trigger('click')
+    await flushPromises()
+
+    const inputs = wrapper.findAll('.pdv-payfield input')
+    // digita 2 reais em dinheiro...
+    await inputs[0].setValue('200')
+    expect(inputs[0].element.value).toBe('2,00')
+    // ...seta para baixo vai para o PIX e digita o restante
+    await inputs[0].trigger('keydown', { key: 'ArrowDown' })
+    await inputs[1].setValue('300')
+
+    await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith(
+      '/pdv/complete',
+      expect.objectContaining({
+        payments: [
+          { method_id: 1, amount: '2.00' },
+          { method_id: 2, amount: '3.00' },
+        ],
+      })
+    )
+    expect(routerPush).toHaveBeenCalledWith('/pdv/recibo/8')
+  })
+
+  it('não finaliza sem valor informado ou com valor menor que o total', async () => {
     const wrapper = mountView()
     await flushPromises()
 
@@ -113,7 +149,14 @@ describe('PdvView', () => {
     await wrapper.find('#pdv-finish').trigger('click')
     await flushPromises()
 
-    // sem selecionar método, confirmar não dispara a venda
+    // sem valor algum, confirmar não dispara a venda
+    await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
+    await flushPromises()
+    expect(apiMock.post).not.toHaveBeenCalled()
+
+    // valor menor que o total também bloqueia
+    const inputs = wrapper.findAll('.pdv-payfield input')
+    await inputs[0].setValue('100')
     await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
     await flushPromises()
     expect(apiMock.post).not.toHaveBeenCalled()

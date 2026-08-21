@@ -39,12 +39,24 @@ def _build_receipt(order_id):
     if not order:
         return None
 
-    method = PaymentMethodRepository().get_method(order.payment_method_id)
+    method_repository = PaymentMethodRepository()
+    method = method_repository.get_method(order.payment_method_id)
     items_detail = repository.get_order_items(order.id)
     products = {}
     for item in items_detail:
         product = ProductRepository().get_product(item.product_id)
         products[item.product_id] = product.name if product else "Item"
+
+    payments_detail = []
+    for payment_method_id, amount in repository.get_order_payments(order.id):
+        payment_method = method_repository.get_method(payment_method_id)
+        payments_detail.append(
+            {
+                "method_id": payment_method_id,
+                "name": payment_method.name if payment_method else "—",
+                "amount": float(amount),
+            }
+        )
 
     return {
         "order_id": order.id,
@@ -53,6 +65,7 @@ def _build_receipt(order_id):
         "discount": float(order.discount or 0),
         "obs": order.obs,
         "payment_method": method.name if method else "—",
+        "payments": payments_detail,
         "items": [
             {
                 "name": products[item.product_id],
@@ -88,15 +101,32 @@ def complete():
     """Finaliza uma venda e devolve o recibo do pedido criado."""
     data = request.get_json(silent=True) or {}
 
-    method_id = data.get("method_id")
-    try:
-        method_id = int(method_id) if method_id else None
-    except (TypeError, ValueError):
-        method_id = None
-
-    method = PaymentMethodRepository().get_method(method_id) if method_id else None
-    if not method or not method.active:
-        return api_error("Selecione a forma de pagamento.", 400)
+    method_id = None
+    payments = None
+    raw_payments = data.get("payments")
+    method_repository = PaymentMethodRepository()
+    if isinstance(raw_payments, list) and raw_payments:
+        payments = []
+        for entry in raw_payments:
+            try:
+                entry_method_id = int(entry.get("method_id"))
+                amount = br_to_decimal(entry.get("amount"))
+            except (TypeError, ValueError):
+                return api_error("Forma de pagamento inválida.", 400)
+            if amount is None or amount <= 0:
+                return api_error("Valor de pagamento inválido.", 400)
+            payment_method = method_repository.get_method(entry_method_id)
+            if not payment_method or not payment_method.active:
+                return api_error("Selecione a forma de pagamento.", 400)
+            payments.append((entry_method_id, amount))
+    else:
+        try:
+            method_id = int(data.get("method_id")) if data.get("method_id") else None
+        except (TypeError, ValueError):
+            method_id = None
+        payment_method = method_repository.get_method(method_id) if method_id else None
+        if not payment_method or not payment_method.active:
+            return api_error("Selecione a forma de pagamento.", 400)
 
     items = data.get("items") or []
     if not isinstance(items, list) or not items:
@@ -125,7 +155,13 @@ def complete():
 
     repository = OrderRepository()
     try:
-        order = repository.create_order(cart, method.id, obs=obs, discount=discount)
+        order = repository.create_order(
+            cart,
+            method_id,
+            obs=obs,
+            discount=discount,
+            payments=payments,
+        )
     except ValueError as error:
         return api_error(str(error), 400)
 

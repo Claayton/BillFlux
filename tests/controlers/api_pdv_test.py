@@ -144,6 +144,84 @@ def test_pdv_complete_with_discount(logged_client):
     assert invalid.status_code == 400
 
 
+def test_pdv_complete_split_payments(logged_client):
+    """POST /complete aceita pagamento dividido entre formas de pagamento."""
+
+    product = ProductRepository().insert_product(
+        name="PDV Split", price=Decimal("2.00"), stock_quantity=5
+    )
+    methods = PaymentMethodRepository().get_active_methods()
+    cash, pix = methods[0], methods[1]
+    token = _csrf(logged_client)
+
+    response = logged_client.post(
+        "/api/pdv/complete",
+        json={
+            "payments": [
+                {"method_id": cash.id, "amount": "2.00"},
+                {"method_id": pix.id, "amount": "2.00"},
+            ],
+            "items": [{"product_id": product.id, "quantity": 2}],
+        },
+        headers={"X-CSRFToken": token},
+    )
+
+    assert response.status_code == 201
+    order = response.get_json()["order"]
+    assert order["total"] == 4.0
+    assert len(order["payments"]) == 2
+    assert order["payment_method"] == cash.name
+    assert {p["name"] for p in order["payments"]} == {cash.name, pix.name}
+    assert sorted(p["amount"] for p in order["payments"]) == [2.0, 2.0]
+
+    updated = ProductRepository().get_product(product.id)
+    assert updated.stock_quantity == 3
+
+
+def test_pdv_complete_split_payments_validation(logged_client):
+    """Pagamento dividido com valores insuficientes ou forma inválida falha."""
+
+    product = ProductRepository().insert_product(
+        name="PDV Split Erro", price=Decimal("5.00"), stock_quantity=3
+    )
+    methods = PaymentMethodRepository().get_active_methods()
+    cash, pix = methods[0], methods[1]
+    token = _csrf(logged_client)
+
+    insufficient = logged_client.post(
+        "/api/pdv/complete",
+        json={
+            "payments": [
+                {"method_id": cash.id, "amount": "2.00"},
+                {"method_id": pix.id, "amount": "1.00"},
+            ],
+            "items": [{"product_id": product.id, "quantity": 2}],
+        },
+        headers={"X-CSRFToken": token},
+    )
+    assert insufficient.status_code == 400
+
+    invalid_method = logged_client.post(
+        "/api/pdv/complete",
+        json={
+            "payments": [{"method_id": 999999, "amount": "10.00"}],
+            "items": [{"product_id": product.id, "quantity": 2}],
+        },
+        headers={"X-CSRFToken": token},
+    )
+    assert invalid_method.status_code == 400
+
+    zero_amount = logged_client.post(
+        "/api/pdv/complete",
+        json={
+            "payments": [{"method_id": cash.id, "amount": "0"}],
+            "items": [{"product_id": product.id, "quantity": 2}],
+        },
+        headers={"X-CSRFToken": token},
+    )
+    assert zero_amount.status_code == 400
+
+
 def test_pdv_receipt(logged_client):
     """GET /api/pdv/recibo/<id> devolve os dados de um pedido."""
 
