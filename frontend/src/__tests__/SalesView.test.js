@@ -86,7 +86,6 @@ describe('SalesView', () => {
     apiMock.del.mockReset()
     routerPush.mockReset()
     apiMock.get.mockResolvedValue(payload)
-    window.confirm = vi.fn(() => true)
   })
 
   it('lista vendas com header, id, valor, itens e ações', async () => {
@@ -153,7 +152,7 @@ describe('SalesView', () => {
     )
   })
 
-  it('cancela venda do PDV restaurando estoque (DELETE orders)', async () => {
+  it('cancela venda do PDV via dialog próprio (DELETE orders)', async () => {
     apiMock.del.mockResolvedValue(payload)
     const wrapper = mountView()
     await flushPromises()
@@ -162,8 +161,15 @@ describe('SalesView', () => {
     await pdvRow.findAll('.sale-actions .icon-btn')[2].trigger('click')
     await flushPromises()
 
-    expect(window.confirm).toHaveBeenCalled()
+    const dialog = wrapper.find('.confirm-body')
+    expect(dialog.exists()).toBe(true)
+    expect(dialog.text()).toContain('#10')
+
+    await wrapper.find('.btn-danger').trigger('click')
+    await flushPromises()
+
     expect(apiMock.del).toHaveBeenCalledWith('/sales/orders/10')
+    expect(wrapper.find('.confirm-body').exists()).toBe(false)
   })
 
   it('expande os itens quando há mais de 3', async () => {

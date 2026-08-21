@@ -396,6 +396,16 @@ a:hover {
   border-color: var(--primary);
 }
 
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+  color: #fff;
+}
+
 .btn-outline:hover {
   background: var(--primary-soft);
 }

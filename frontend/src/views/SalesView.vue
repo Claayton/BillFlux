@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl, brdateShort, maskMoney, moneyToDecimal } from '@/utils/format'
 import AppShell from '@/components/AppShell.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import SaleEditModal from '@/views/SaleEditModal.vue'
 import SaleReceiptModal from '@/views/SaleReceiptModal.vue'
 
@@ -39,6 +40,7 @@ const expandedIds = ref(new Set())
 const editManual = ref({ open: false, sale: null })
 const editPdvId = ref(null)
 const receiptSale = ref(null)
+const cancelTarget = ref(null)
 
 const editForm = ref({ date: '', total: '', obs: '' })
 
@@ -154,9 +156,14 @@ function onPdvEdited() {
   load()
 }
 
-async function cancelSale(sale) {
-  const label = sale.kind === 'pdv' ? 'Cancelar esta venda do PDV?' : 'Excluir esta venda?'
-  if (!window.confirm(label)) return
+function askCancel(sale) {
+  cancelTarget.value = sale
+}
+
+async function confirmCancel() {
+  const sale = cancelTarget.value
+  cancelTarget.value = null
+  if (!sale) return
   try {
     if (sale.kind === 'pdv') {
       data.value = await api.del(`/sales/orders/${sale.id}`)
@@ -343,7 +350,7 @@ onMounted(load)
                   >
                     <i class="fas fa-pen"></i>
                   </button>
-                  <button type="button" class="icon-btn is-danger" title="Cancelar venda" @click="cancelSale(sale)">
+                  <button type="button" class="icon-btn is-danger" title="Cancelar venda" @click="askCancel(sale)">
                     <i class="fas fa-trash"></i>
                   </button>
                 </div>
@@ -401,6 +408,18 @@ onMounted(load)
       v-if="receiptSale"
       :sale="receiptSale"
       @close="receiptSale = null"
+    />
+
+    <ConfirmDialog
+      v-if="cancelTarget"
+      title="Cancelar venda"
+      :message="cancelTarget.kind === 'pdv'
+        ? `Cancelar a venda #${cancelTarget.id}? O estoque dos itens será restaurado.`
+        : `Excluir a venda #${cancelTarget.id}?`"
+      confirm-label="Cancelar venda"
+      danger
+      @confirm="confirmCancel"
+      @cancel="cancelTarget = null"
     />
   </AppShell>
 </template>

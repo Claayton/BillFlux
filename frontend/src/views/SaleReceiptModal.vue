@@ -129,13 +129,13 @@ onMounted(load)
   text-align: center;
 }
 .sale-receipt-modal {
-  max-width: 500px;
+  max-width: 380px;
 }
 .sale-receipt-body {
-  padding: 28px 28px 24px;
+  padding: 20px 20px 16px;
 }
 .sale-receipt-modal .modal-footer {
   margin-top: 0;
-  padding: 18px 28px 22px;
+  padding: 14px 20px 18px;
 }
 </style>
