@@ -22,4 +22,8 @@ export default defineConfig({
     outDir: '../billflux/static/app',
     emptyOutDir: true,
   },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+  },
 })

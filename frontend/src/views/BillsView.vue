@@ -169,7 +169,7 @@ function openNew() {
 function openEdit(bill) {
   editing.value = bill
   form.value = {
-    value: maskMoney(String(bill.value)),
+    value: maskMoney(String(Math.round(bill.value * 100))),
     due_date: bill.due_date || '',
     reference: bill.reference || '',
     suplyer: bill.suplyer || '',

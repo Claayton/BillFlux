@@ -52,8 +52,8 @@ function openEditProduct(product) {
   editingProduct.value = product
   productForm.value = {
     name: product.name,
-    price: maskMoney(String(product.price)),
-    cost: maskMoney(String(product.cost)),
+    price: maskMoney(String(Math.round(product.price * 100))),
+    cost: maskMoney(String(Math.round(product.cost * 100))),
     barcode: product.barcode || '',
     min_stock: product.min_stock,
     obs: product.obs || '',
