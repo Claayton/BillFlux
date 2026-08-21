@@ -15,3 +15,4 @@ class Sale(SQLModel, table=True):
     date: datetime.date = Field(nullable=False, unique=True)
     total: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
     obs: Optional[str] = Field(nullable=True)
+    cancelled: bool = Field(default=False, nullable=False)

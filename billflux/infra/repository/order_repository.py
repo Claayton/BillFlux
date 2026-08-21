@@ -132,18 +132,20 @@ class OrderRepository:
         finally:
             session.close()
 
-    def delete_order(self, order_id: int) -> bool:
-        """Cancela um pedido restaurando o estoque dos itens e o log.
+    def cancel_order(self, order_id: int) -> bool:
+        """Cancela um pedido mantendo-o na lista: marca como cancelado e
+        restaura o estoque dos itens com movimentação de entrada.
 
-        Devolve as quantidades ao estoque com movimentação de entrada e remove
-        o pedido e seus itens. Tudo numa única transação."""
+        Devolve False se o pedido não existe ou já está cancelado."""
 
         session = get_session()
         try:
             with session:
                 order = session.get(OrderModel, order_id)
-                if not order:
+                if not order or order.cancelled:
                     return False
+                order.cancelled = True
+                session.add(order)
                 order_items = session.exec(
                     select(OrderItemModel).where(OrderItemModel.order_id == order_id)
                 ).all()
@@ -160,8 +162,6 @@ class OrderRepository:
                                 obs=f"Venda #{order_id} cancelada",
                             )
                         )
-                    session.delete(item)
-                session.delete(order)
                 session.commit()
                 return True
         finally:
@@ -187,6 +187,8 @@ class OrderRepository:
                 order = session.get(OrderModel, order_id)
                 if not order:
                     raise ValueError("Pedido não encontrado.")
+                if order.cancelled:
+                    raise ValueError("Venda cancelada não pode ser editada.")
 
                 new_products = []
                 total = Decimal("0")

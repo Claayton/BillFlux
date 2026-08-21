@@ -371,6 +371,42 @@
   background: rgba(224, 93, 93, 0.12);
 }
 
+/* ---------- Vendas canceladas ---------- */
+.sale-row.is-cancelled {
+  opacity: 0.75;
+}
+
+.sale-row.is-cancelled .sale-value {
+  color: var(--danger);
+  text-decoration: line-through;
+}
+
+.sale-row.is-cancelled .sale-payment-icon {
+  color: var(--danger);
+}
+
+.sale-origin-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sale-cancelled-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--danger);
+  background: var(--danger-soft);
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.sales-filter {
+  margin-left: auto;
+}
+
 .sale-items-expanded {
   grid-column: 1 / -1;
   margin: 0 20px;

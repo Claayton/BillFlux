@@ -26,9 +26,16 @@ const PAYMENT_ICONS = {
 
 const active = ref('hoje')
 const showValues = ref(true)
+const saleFilter = ref('todas')
 const data = ref(null)
 const loading = ref(false)
 const saving = ref(false)
+
+const filterOptions = [
+  { key: 'todas', label: 'Todas' },
+  { key: 'ativas', label: 'Ativas' },
+  { key: 'canceladas', label: 'Canceladas' },
+]
 
 const form = ref({
   date: new Date().toISOString().slice(0, 10),
@@ -45,6 +52,13 @@ const cancelTarget = ref(null)
 const editForm = ref({ date: '', total: '', obs: '' })
 
 const currentPeriod = computed(() => (data.value?.periods || {})[active.value])
+
+const filteredSales = computed(() => {
+  if (!data.value) return []
+  if (saleFilter.value === 'todas') return data.value.sales
+  const wantCancelled = saleFilter.value === 'canceladas'
+  return data.value.sales.filter((sale) => Boolean(sale.cancelled) === wantCancelled)
+})
 
 function paymentIcon(payment) {
   const key = (payment || '').toLowerCase().trim()
@@ -166,11 +180,11 @@ async function confirmCancel() {
   if (!sale) return
   try {
     if (sale.kind === 'pdv') {
-      data.value = await api.del(`/sales/orders/${sale.id}`)
+      data.value = await api.post(`/sales/orders/${sale.id}/cancel`, {})
       ElMessage.success('Venda cancelada e estoque restaurado.')
     } else {
-      data.value = await api.del(`/sales/${sale.id}`)
-      ElMessage.success('Venda excluída.')
+      data.value = await api.post(`/sales/${sale.id}/cancel`, {})
+      ElMessage.success('Venda cancelada.')
     }
   } catch (error) {
     ElMessage.error(error.message)
@@ -278,10 +292,21 @@ onMounted(load)
         <div class="table-card">
           <div class="table-card-head">
             <h2>Vendas</h2>
+            <div class="filter-segmented sales-filter" role="group" aria-label="Filtrar vendas">
+              <button
+                v-for="opt in filterOptions"
+                :key="opt.key"
+                type="button"
+                :class="{ 'is-active': saleFilter === opt.key }"
+                @click="saleFilter = opt.key"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
           </div>
-          <div v-if="!data.sales.length" class="empty-state">
+          <div v-if="!filteredSales.length" class="empty-state">
             <i class="fas fa-cash-register"></i>
-            <h3>Nenhuma venda ainda</h3>
+            <h3>Nenhuma venda {{ saleFilter === 'canceladas' ? 'cancelada' : 'encontrada' }}</h3>
             <p>Lance uma venda avulsa ou feche uma venda no PDV.</p>
           </div>
           <div v-else class="sales-list">
@@ -293,7 +318,12 @@ onMounted(load)
               <span>Itens</span>
               <span class="sales-th-actions">Ações</span>
             </div>
-            <div v-for="sale in data.sales" :key="sale.kind + '-' + sale.id" class="sale-row">
+            <div
+              v-for="sale in filteredSales"
+              :key="sale.kind + '-' + sale.id"
+              class="sale-row"
+              :class="{ 'is-cancelled': sale.cancelled }"
+            >
               <div class="sale-row-main">
                 <span class="sale-id">#{{ sale.id }}</span>
 
@@ -302,9 +332,12 @@ onMounted(load)
                   {{ brl(sale.total) }}
                 </span>
 
-                <span :class="sale.kind === 'pdv' ? 'source-badge source-badge-pdv' : 'source-badge source-badge-manual'">
-                  <i :class="sale.kind === 'pdv' ? 'fas fa-cash-register' : 'fas fa-hand-holding-usd'"></i>
-                  {{ sale.kind === 'pdv' ? 'PDV' : 'Manual' }}
+                <span class="sale-origin-cell">
+                  <span v-if="sale.cancelled" class="sale-cancelled-badge">Cancelada</span>
+                  <span :class="sale.kind === 'pdv' ? 'source-badge source-badge-pdv' : 'source-badge source-badge-manual'">
+                    <i :class="sale.kind === 'pdv' ? 'fas fa-cash-register' : 'fas fa-hand-holding-usd'"></i>
+                    {{ sale.kind === 'pdv' ? 'PDV' : 'Manual' }}
+                  </span>
                 </span>
 
                 <span class="sale-date">
@@ -343,6 +376,7 @@ onMounted(load)
                     <i class="fas fa-print"></i>
                   </button>
                   <button
+                    v-if="!sale.cancelled"
                     type="button"
                     class="icon-btn"
                     title="Editar venda"
@@ -350,7 +384,13 @@ onMounted(load)
                   >
                     <i class="fas fa-pen"></i>
                   </button>
-                  <button type="button" class="icon-btn is-danger" title="Cancelar venda" @click="askCancel(sale)">
+                  <button
+                    v-if="!sale.cancelled"
+                    type="button"
+                    class="icon-btn is-danger"
+                    title="Cancelar venda"
+                    @click="askCancel(sale)"
+                  >
                     <i class="fas fa-trash"></i>
                   </button>
                 </div>

@@ -82,12 +82,16 @@ def _build_dashboard(sales, orders, start, end):
     day_totals = {}
 
     for sale in sales:
+        if sale.cancelled:
+            continue
         if start <= sale.date <= end:
             total += sale.total
             count += 1
             day_totals[sale.date] = day_totals.get(sale.date, Decimal("0")) + sale.total
 
     for order in orders:
+        if order.cancelled:
+            continue
         order_date = order.created_at.date()
         if start <= order_date <= end:
             total += order.total
@@ -136,15 +140,17 @@ def _build_recent_movement(sales, orders):
 
     items = []
     for sale in sales:
-        items.append({"date": sale.date, "source": "Manual", "value": sale.total})
+        if not sale.cancelled:
+            items.append({"date": sale.date, "source": "Manual", "value": sale.total})
     for order in orders:
-        items.append(
-            {
-                "date": order.created_at.date(),
-                "source": "PDV",
-                "value": order.total,
-            }
-        )
+        if not order.cancelled:
+            items.append(
+                {
+                    "date": order.created_at.date(),
+                    "source": "PDV",
+                    "value": order.total,
+                }
+            )
     return sorted(items, key=lambda item: item["date"], reverse=True)[:5]
 
 
@@ -162,7 +168,8 @@ def _dashboard_context(args):
     in_range_orders = [
         order
         for order in orders
-        if period["start"] <= order.created_at.date() <= period["end"]
+        if not order.cancelled
+        and period["start"] <= order.created_at.date() <= period["end"]
     ]
     profit = _gross_profit(in_range_orders, cost_map)
 

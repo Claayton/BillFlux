@@ -56,6 +56,7 @@ const payload = {
         { name: 'Suco', quantity: 1 },
       ],
       payment: 'Dinheiro',
+      cancelled: false,
     },
     {
       kind: 'manual',
@@ -66,6 +67,18 @@ const payload = {
       time: null,
       items: [],
       payment: null,
+      cancelled: false,
+    },
+    {
+      kind: 'pdv',
+      id: 7,
+      date: '2026-08-19',
+      total: 30,
+      obs: null,
+      time: '10:00',
+      items: [{ name: 'Cancelado', quantity: 1 }],
+      payment: 'PIX',
+      cancelled: true,
     },
   ],
 }
@@ -95,13 +108,44 @@ describe('SalesView', () => {
     expect(wrapper.find('.sales-list-header').text()).toContain('Valor')
     expect(wrapper.find('.sales-list-header').text()).toContain('Origem')
     const rows = wrapper.findAll('.sale-row')
-    expect(rows.length).toBe(2)
+    expect(rows.length).toBe(3)
     expect(rows[0].text()).toContain('#10')
     expect(rows[0].text()).toContain('50,00')
     expect(rows[0].text()).toContain('2x Doces')
     expect(rows[0].findAll('.sale-actions .icon-btn').length).toBe(3)
     expect(rows[1].text()).toContain('#5')
     expect(rows[1].text()).toContain('Sem itens')
+  })
+
+  it('marca a venda cancelada com estilo e sem editar/cancelar', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    const cancelledRow = wrapper.findAll('.sale-row')[2]
+    expect(cancelledRow.classes()).toContain('is-cancelled')
+    expect(cancelledRow.text()).toContain('Cancelada')
+    // só o imprimir fica visível (1 ação)
+    expect(cancelledRow.findAll('.sale-actions .icon-btn').length).toBe(1)
+  })
+
+  it('filtra vendas ativas e canceladas', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.findAll('.sale-row').length).toBe(3) // Todas
+
+    const buttons = wrapper.findAll('.sales-filter button')
+    await buttons[1].trigger('click') // Ativas
+    await flushPromises()
+    const active = wrapper.findAll('.sale-row')
+    expect(active.length).toBe(2)
+    expect(active.every((row) => !row.classes().includes('is-cancelled'))).toBe(true)
+
+    await buttons[2].trigger('click') // Canceladas
+    await flushPromises()
+    const cancelled = wrapper.findAll('.sale-row')
+    expect(cancelled.length).toBe(1)
+    expect(cancelled[0].classes()).toContain('is-cancelled')
   })
 
   it('oculta somente os valores do topo, não os da lista', async () => {
@@ -152,8 +196,8 @@ describe('SalesView', () => {
     )
   })
 
-  it('cancela venda do PDV via dialog próprio (DELETE orders)', async () => {
-    apiMock.del.mockResolvedValue(payload)
+  it('cancela venda do PDV via dialog próprio (POST cancel)', async () => {
+    apiMock.post.mockResolvedValue(payload)
     const wrapper = mountView()
     await flushPromises()
 
@@ -168,7 +212,7 @@ describe('SalesView', () => {
     await wrapper.find('.btn-danger').trigger('click')
     await flushPromises()
 
-    expect(apiMock.del).toHaveBeenCalledWith('/sales/orders/10')
+    expect(apiMock.post).toHaveBeenCalledWith('/sales/orders/10/cancel', {})
     expect(wrapper.find('.confirm-body').exists()).toBe(false)
   })
 

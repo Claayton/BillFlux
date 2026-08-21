@@ -10,5 +10,6 @@ Order = namedtuple(
         "total",
         "payment_method_id",
         "obs",
+        "cancelled",
     ],
 )

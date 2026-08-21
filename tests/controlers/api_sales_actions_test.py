@@ -58,19 +58,73 @@ def test_edit_manual_sale(logged_client):
 
 
 def test_cancel_order_restores_stock(logged_client):
-    """DELETE /api/sales/orders/<id> cancela e devolve o estoque."""
+    """POST /cancel marca o pedido como cancelado e devolve o estoque."""
 
     token = _csrf(logged_client)
     product, _method, order = _make_order(qty=3, stock=10)
 
-    response = logged_client.delete(
-        f"/api/sales/orders/{order.id}", headers={"X-CSRFToken": token}
+    response = logged_client.post(
+        f"/api/sales/orders/{order.id}/cancel", headers={"X-CSRFToken": token}
     )
 
     assert response.status_code == 200
-    assert OrderRepository().get_order(order.id) is None
+    assert OrderRepository().get_order(order.id).cancelled is True  # permanece na lista
     updated = ProductRepository().get_product(product.id)
     assert updated.stock_quantity == 10  # estoque restaurado
+
+    # cancelar de novo -> erro
+    again = logged_client.post(
+        f"/api/sales/orders/{order.id}/cancel", headers={"X-CSRFToken": token}
+    )
+    assert again.status_code == 400
+
+
+def test_cancel_manual_sale_keeps_it_in_list(logged_client):
+    """POST /sales/<id>/cancel marca a venda avulsa sem removê-la."""
+
+    token = _csrf(logged_client)
+    sale = SaleRepository().insert_sale(
+        __import__("datetime").date(2026, 7, 15), Decimal("60.00"), "Cancelar"
+    )
+
+    response = logged_client.post(
+        f"/api/sales/{sale.id}/cancel", headers={"X-CSRFToken": token}
+    )
+
+    assert response.status_code == 200
+    sales = response.get_json()["sales"]
+    cancelled = next(s for s in sales if s["kind"] == "manual" and s["id"] == sale.id)
+    assert cancelled["cancelled"] is True
+
+    # cancelar de novo -> erro
+    again = logged_client.post(
+        f"/api/sales/{sale.id}/cancel", headers={"X-CSRFToken": token}
+    )
+    assert again.status_code == 400
+
+
+def test_cancelled_sales_excluded_from_periods(logged_client):
+    """Venda cancelada sai dos totais mas permanece na lista."""
+
+    token = _csrf(logged_client)
+    before = logged_client.get("/api/sales").get_json()["periods"]["hoje"]["total"]
+
+    product = ProductRepository().insert_product(
+        name="Cancelada", price=Decimal("10.00"), stock_quantity=5
+    )
+    method = PaymentMethodRepository().get_active_methods()[0]
+    order = OrderRepository().create_order([(product.id, 1)], method.id)
+
+    with_order = logged_client.get("/api/sales").get_json()["periods"]["hoje"]["total"]
+    assert with_order == before + 10.0
+
+    logged_client.post(
+        f"/api/sales/orders/{order.id}/cancel", headers={"X-CSRFToken": token}
+    )
+
+    data = logged_client.get("/api/sales").get_json()
+    assert data["periods"]["hoje"]["total"] == before  # saiu dos totais
+    assert next(s for s in data["sales"] if s["id"] == order.id)["cancelled"] is True
 
 
 def test_edit_order_keeps_id_and_adjusts_stock(logged_client):

@@ -17,18 +17,23 @@ from billflux.infra.repository.sale_repository import SaleRepository
 def _build_range_summary(sales, orders, start, end):
     """Resumo das vendas (total, nº de vendas, dias e média) num período.
 
-    Considera lançamentos manuais (sales) e pedidos fechados no PDV (orders)."""
+    Considera lançamentos manuais (sales) e pedidos fechados no PDV (orders),
+    ignorando os cancelados."""
     total = Decimal("0")
     count = 0
     days = set()
 
     for sale in sales:
+        if sale.cancelled:
+            continue
         if start <= sale.date <= end:
             total += sale.total
             count += 1
             days.add(sale.date)
 
     for order in orders:
+        if order.cancelled:
+            continue
         order_date = order.created_at.date()
         if start <= order_date <= end:
             total += order.total
@@ -98,6 +103,7 @@ def _combine_sales(sales, orders, payment_names):
                 "time": None,
                 "items": [],
                 "payment": None,
+                "cancelled": sale.cancelled,
             }
         )
     for order in orders:
@@ -112,6 +118,7 @@ def _combine_sales(sales, orders, payment_names):
                 "time": detail["time"],
                 "items": detail["items"],
                 "payment": payment_names.get(order.payment_method_id, "—"),
+                "cancelled": order.cancelled,
             }
         )
     return sorted(combined, key=lambda item: item["date"], reverse=True)
@@ -145,6 +152,7 @@ def _sales_payload():
                 "time": item["time"],
                 "items": item["items"],
                 "payment": item["payment"],
+                "cancelled": item["cancelled"],
             }
             for item in combined
         ],
@@ -183,10 +191,22 @@ def sales_create():
 @bp.route("/sales/<int:sale_id>", methods=["DELETE"])
 @api_login_required
 def sales_delete(sale_id):
-    """Exclui um lançamento avulso de venda."""
+    """Exclui definitivamente um lançamento avulso de venda."""
     if SaleRepository().delete_sale(sale_id):
         return api_response(_sales_payload())
     return api_error("Venda não encontrada.", 404)
+
+
+@bp.route("/sales/<int:sale_id>/cancel", methods=["POST"])
+@api_login_required
+def sales_cancel(sale_id):
+    """Cancela uma venda avulsa mantendo-a na lista (marca como cancelada)."""
+    repository = SaleRepository()
+    if not repository.get_sale(sale_id):
+        return api_error("Venda não encontrada.", 404)
+    if not repository.cancel_sale(sale_id):
+        return api_error("Venda já cancelada.", 400)
+    return api_response(_sales_payload())
 
 
 def _parse_sale_data(data):
@@ -215,8 +235,11 @@ def _parse_sale_data(data):
 def sales_edit(sale_id):
     """Edita uma venda avulsa (valor, data e observações)."""
     repository = SaleRepository()
-    if not repository.get_sale(sale_id):
+    sale = repository.get_sale(sale_id)
+    if not sale:
         return api_error("Venda não encontrada.", 404)
+    if sale.cancelled:
+        return api_error("Venda cancelada não pode ser editada.", 400)
 
     formated_date, formated_total, obs, error = _parse_sale_data(
         request.get_json(silent=True) or {}
@@ -289,13 +312,14 @@ def order_detail(order_id):
     )
 
 
-@bp.route("/sales/orders/<int:order_id>", methods=["DELETE"])
+@bp.route("/sales/orders/<int:order_id>/cancel", methods=["POST"])
 @api_login_required
 def order_cancel(order_id):
-    """Cancela uma venda do PDV, restaurando o estoque dos itens."""
-    if OrderRepository().delete_order(order_id):
+    """Cancela uma venda do PDV mantendo-a na lista: marca como cancelada e
+    restaura o estoque dos itens."""
+    if OrderRepository().cancel_order(order_id):
         return api_response(_sales_payload())
-    return api_error("Pedido não encontrado.", 404)
+    return api_error("Pedido não encontrado ou já cancelado.", 400)
 
 
 @bp.route("/sales/orders/<int:order_id>", methods=["PUT"])

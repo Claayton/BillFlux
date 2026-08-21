@@ -9,5 +9,6 @@ Sale = namedtuple(
         "date",
         "total",
         "obs",
+        "cancelled",
     ],
 )

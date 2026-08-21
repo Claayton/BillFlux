@@ -20,3 +20,4 @@ class Order(SQLModel, table=True):
         default=None, foreign_key="paymentmethod.id", nullable=False
     )
     obs: Optional[str] = Field(nullable=True)
+    cancelled: bool = Field(default=False, nullable=False)
