@@ -1,0 +1,16 @@
+# Dependências de runtime (imagem de produção)
+annotated-types==0.7.0
+blinker==1.8.2
+dynaconf==3.2.6
+Flask==3.0.3
+Flask-WTF==1.3.0
+greenlet==3.0.3
+itsdangerous==2.2.0
+Jinja2==3.1.4
+MarkupSafe==2.1.5
+pydantic==2.8.2
+pydantic_core==2.20.1
+SQLAlchemy==2.0.32
+sqlmodel==0.0.21
+typing_extensions==4.12.2
+Werkzeug==3.0.3

@@ -6,8 +6,8 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt gunicorn
+COPY requirements-prod.txt .
+RUN pip install --no-cache-dir -r requirements-prod.txt gunicorn
 
 COPY billflux/ ./billflux/
 COPY run.py settings.toml ./
