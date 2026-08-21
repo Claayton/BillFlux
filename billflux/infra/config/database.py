@@ -44,6 +44,7 @@ def create_db():
     _add_column_if_missing("bill", "pix_image")
     _add_column_if_missing("bill", "account_id", "INTEGER")
     _add_column_if_missing("orders", "cancelled", "BOOLEAN DEFAULT 0")
+    _add_column_if_missing("orders", "discount", "NUMERIC(10,2)")
     _add_column_if_missing("sale", "cancelled", "BOOLEAN DEFAULT 0")
 
     return base

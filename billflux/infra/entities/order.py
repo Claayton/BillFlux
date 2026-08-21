@@ -21,3 +21,6 @@ class Order(SQLModel, table=True):
     )
     obs: Optional[str] = Field(nullable=True)
     cancelled: bool = Field(default=False, nullable=False)
+    discount: Optional[Decimal] = Field(
+        default=None, sa_column=Column(Numeric(10, 2), nullable=True)
+    )

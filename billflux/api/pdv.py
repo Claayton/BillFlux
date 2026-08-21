@@ -1,8 +1,16 @@
 """Endpoints do PDV (ponto de venda) da API JSON."""
 
+from decimal import Decimal
+
 from flask import request
 
-from billflux.api import bp, api_error, api_login_required, api_response
+from billflux.api import (
+    bp,
+    api_error,
+    api_login_required,
+    api_response,
+    br_to_decimal,
+)
 from billflux.infra.repository.order_repository import OrderRepository
 from billflux.infra.repository.payment_method_repository import (
     PaymentMethodRepository,
@@ -42,6 +50,7 @@ def _build_receipt(order_id):
         "order_id": order.id,
         "date": order.created_at.isoformat(),
         "total": float(order.total),
+        "discount": float(order.discount or 0),
         "obs": order.obs,
         "payment_method": method.name if method else "—",
         "items": [
@@ -108,9 +117,15 @@ def complete():
 
     obs = (data.get("obs") or "").strip() or None
 
+    discount = br_to_decimal(data.get("discount"))
+    if discount is None:
+        discount = Decimal("0")
+    if discount < 0:
+        return api_error("Desconto inválido.", 400)
+
     repository = OrderRepository()
     try:
-        order = repository.create_order(cart, method.id, obs=obs)
+        order = repository.create_order(cart, method.id, obs=obs, discount=discount)
     except ValueError as error:
         return api_error(str(error), 400)
 

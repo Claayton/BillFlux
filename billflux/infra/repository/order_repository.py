@@ -24,16 +24,18 @@ class OrderRepository:
         items: List[tuple],
         payment_method_id: int,
         obs: Optional[str] = None,
+        discount: Optional[Decimal] = None,
     ) -> Order:
         """Cria um pedido de forma transacional: pedido + itens + baixa de estoque
         + log de movimentação. Levanta ValueError se um produto não existir,
-        estiver inativo ou tiver estoque insuficiente (nada é persistido)."""
+        estiver inativo ou tiver estoque insuficiente (nada é persistido).
+        O desconto (em R$) é abatido do total."""
 
         session = get_session()
         try:
             with session:
                 products = []
-                total = Decimal("0")
+                subtotal = Decimal("0")
                 for product_id, quantity in items:
                     if quantity <= 0:
                         raise ValueError("Quantidade inválida.")
@@ -43,10 +45,18 @@ class OrderRepository:
                     if product.stock_quantity < quantity:
                         raise ValueError(f"Estoque insuficiente para {product.name}.")
                     products.append((product, quantity))
-                    total += product.price * quantity
+                    subtotal += product.price * quantity
+
+                discount = discount or Decimal("0")
+                total = subtotal - discount
+                if total < 0:
+                    total = Decimal("0")
 
                 order = OrderModel(
-                    total=total, payment_method_id=payment_method_id, obs=obs
+                    total=total,
+                    payment_method_id=payment_method_id,
+                    obs=obs,
+                    discount=discount or None,
                 )
                 session.add(order)
                 session.flush()
@@ -173,13 +183,15 @@ class OrderRepository:
         items: List[tuple],
         payment_method_id: int,
         obs: Optional[str] = None,
+        discount: Optional[Decimal] = None,
     ) -> Order:
         """Atualiza um pedido de forma transacional, mantendo o mesmo id.
 
         Valida os itens novos, devolve o estoque do que saiu/reduziu e baixa o
         estoque do que entrou/aumentou, registrando as movimentações. Levanta
         ValueError se um produto não existir, estiver inativo ou sem estoque
-        (nada é persistido)."""
+        (nada é persistido). O desconto (em R$) é abatido do total; se não
+        informado, mantém o desconto atual."""
 
         session = get_session()
         try:
@@ -191,7 +203,7 @@ class OrderRepository:
                     raise ValueError("Venda cancelada não pode ser editada.")
 
                 new_products = []
-                total = Decimal("0")
+                subtotal = Decimal("0")
                 for product_id, quantity in items:
                     if quantity <= 0:
                         raise ValueError("Quantidade inválida.")
@@ -199,7 +211,7 @@ class OrderRepository:
                     if not product or not product.active:
                         raise ValueError("Produto não encontrado.")
                     new_products.append((product, quantity))
-                    total += product.price * quantity
+                    subtotal += product.price * quantity
 
                 old_items = session.exec(
                     select(OrderItemModel).where(OrderItemModel.order_id == order_id)
@@ -263,7 +275,13 @@ class OrderRepository:
                             )
                         session.delete(old_item)
 
-                order.total = total
+                if discount is None:
+                    discount = order.discount or Decimal("0")
+                final_total = subtotal - discount
+                if final_total < 0:
+                    final_total = Decimal("0")
+                order.total = final_total
+                order.discount = discount or None
                 order.payment_method_id = payment_method_id
                 order.obs = obs
                 session.add(order)

@@ -108,6 +108,42 @@ def test_pdv_complete_validation(logged_client):
     assert no_stock.status_code == 400
 
 
+def test_pdv_complete_with_discount(logged_client):
+    """POST /complete aceita desconto e o abate do total e do recibo."""
+
+    product = ProductRepository().insert_product(
+        name="PDV Desconto", price=Decimal("10.00"), stock_quantity=5
+    )
+    method = PaymentMethodRepository().get_active_methods()[0]
+    token = _csrf(logged_client)
+
+    response = logged_client.post(
+        "/api/pdv/complete",
+        json={
+            "method_id": method.id,
+            "items": [{"product_id": product.id, "quantity": 2}],
+            "discount": 5,
+        },
+        headers={"X-CSRFToken": token},
+    )
+
+    assert response.status_code == 201
+    order = response.get_json()["order"]
+    assert order["total"] == 15.0  # 20 - 5
+    assert order["discount"] == 5.0
+
+    invalid = logged_client.post(
+        "/api/pdv/complete",
+        json={
+            "method_id": method.id,
+            "items": [{"product_id": product.id, "quantity": 1}],
+            "discount": -1,
+        },
+        headers={"X-CSRFToken": token},
+    )
+    assert invalid.status_code == 400
+
+
 def test_pdv_receipt(logged_client):
     """GET /api/pdv/recibo/<id> devolve os dados de um pedido."""
 

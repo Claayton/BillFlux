@@ -82,8 +82,13 @@ describe('PdvView', () => {
     await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
     await nextTick()
 
-    await wrapper.find('.pdv-method').trigger('click')
     await wrapper.find('#pdv-finish').trigger('click')
+    await flushPromises()
+
+    // abre o modal de fechamento e escolhe a forma de pagamento
+    expect(wrapper.find('.pdv-checkout-modal').exists()).toBe(true)
+    await wrapper.find('.pdv-checkout-modal .pdv-method').trigger('click')
+    await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
     await flushPromises()
 
     expect(apiMock.post).toHaveBeenCalledWith(
@@ -91,6 +96,7 @@ describe('PdvView', () => {
       expect.objectContaining({
         method_id: 1,
         items: [{ product_id: 1, quantity: 1 }],
+        discount: 0,
       })
     )
     expect(routerPush).toHaveBeenCalledWith('/pdv/recibo/7')
@@ -107,6 +113,32 @@ describe('PdvView', () => {
     await wrapper.find('#pdv-finish').trigger('click')
     await flushPromises()
 
+    // sem selecionar método, confirmar não dispara a venda
+    await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
+    await flushPromises()
     expect(apiMock.post).not.toHaveBeenCalled()
+  })
+
+  it('aplica desconto percentual e recalcula o total', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('arildo')
+    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+
+    // F3 / botão Desconto abre o modal
+    await wrapper.find('.pdv-discount-btn').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.modal.is-open').text()).toContain('Desconto')
+
+    await wrapper.find('#discount_input').setValue('10')
+    await flushPromises()
+    await wrapper.find('.modal.is-open .btn-primary').trigger('click')
+    await flushPromises()
+
+    // 10% de R$ 5,00 = R$ 0,50 de desconto -> total R$ 4,50
+    expect(wrapper.find('#cart-total').text()).toBe('R$ 4,50')
+    expect(wrapper.find('.pdv-footer-discount').exists()).toBe(true)
   })
 })

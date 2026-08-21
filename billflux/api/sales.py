@@ -362,6 +362,7 @@ def manual_receipt(sale_id):
         "order_id": sale.id,
         "date": datetime.combine(sale.date, datetime.min.time()).isoformat(),
         "total": float(sale.total),
+        "discount": 0.0,
         "obs": sale.obs,
         "payment_method": None,
         "items": [

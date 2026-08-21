@@ -88,6 +88,11 @@ onMounted(load)
             </tbody>
           </table>
 
+          <div v-if="order.discount > 0" class="receipt-discount">
+            <span>Desconto</span>
+            <strong>&minus;{{ brl(order.discount) }}</strong>
+          </div>
+
           <div class="receipt-total">
             <span>TOTAL</span>
             <strong>{{ brl(order.total) }}</strong>
