@@ -40,6 +40,10 @@ async function load() {
   }
 }
 
+function printReceipt() {
+  window.print()
+}
+
 onMounted(load)
 </script>
 
@@ -110,7 +114,7 @@ onMounted(load)
 
       <div class="modal-footer">
         <button type="button" class="btn btn-ghost modal-cancel" @click="emit('close')">Fechar</button>
-        <button type="button" class="btn btn-primary" :disabled="loading || !order" @click="window.print()">
+        <button type="button" class="btn btn-primary" :disabled="loading || !order" @click="printReceipt">
           <i class="fas fa-print"></i> Imprimir recibo
         </button>
       </div>
@@ -125,9 +129,13 @@ onMounted(load)
   text-align: center;
 }
 .sale-receipt-modal {
-  max-width: 420px;
+  max-width: 500px;
 }
 .sale-receipt-body {
-  padding: 24px;
+  padding: 28px 28px 24px;
+}
+.sale-receipt-modal .modal-footer {
+  margin-top: 0;
+  padding: 18px 28px 22px;
 }
 </style>

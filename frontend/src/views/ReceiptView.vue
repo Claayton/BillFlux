@@ -33,6 +33,10 @@ async function load() {
   }
 }
 
+function printReceipt() {
+  window.print()
+}
+
 onMounted(load)
 </script>
 
@@ -40,7 +44,7 @@ onMounted(load)
   <div class="pdv-screen">
     <div class="receipt-wrap">
       <div class="receipt-actions no-print">
-        <button type="button" class="btn btn-primary" @click="window.print()">
+        <button type="button" class="btn btn-primary" @click="printReceipt">
           <i class="fas fa-print"></i> Imprimir recibo
         </button>
         <router-link class="btn btn-ghost" to="/pdv"><i class="fas fa-plus"></i> Nova venda</router-link>
