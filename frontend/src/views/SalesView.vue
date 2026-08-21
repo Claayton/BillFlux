@@ -333,12 +333,12 @@ onMounted(load)
           </div>
           <div v-else class="sales-list">
             <div class="sales-list-header">
-              <span class="sales-th-center">ID</span>
+              <span>ID</span>
               <span>Valor</span>
-              <span class="sales-th-center">Origem</span>
-              <span class="sales-th-center">Data / hora</span>
+              <span>Origem</span>
+              <span>Data / hora</span>
               <span>Itens</span>
-              <span class="sales-th-center">Ações</span>
+              <span>Ações</span>
             </div>
             <div
               v-for="sale in filteredSales"
