@@ -36,7 +36,23 @@ describe('PdvView', () => {
     apiMock.get.mockReset()
     apiMock.post.mockReset()
     routerPush.mockReset()
-    apiMock.get.mockResolvedValue({ products, methods })
+    apiMock.get.mockImplementation((url) => {
+      if (String(url).startsWith('/pdv/recibo')) {
+        const id = String(url).split('/').pop()
+        return Promise.resolve({
+          order: {
+            order_id: Number(id),
+            date: '2026-08-21T12:00:00',
+            total: 5,
+            discount: 0,
+            items: [],
+            payments: [],
+            payment_method: 'Dinheiro',
+          },
+        })
+      }
+      return Promise.resolve({ products, methods })
+    })
   })
 
   it('carrega produtos e formas de pagamento', async () => {
@@ -101,7 +117,9 @@ describe('PdvView', () => {
         discount: 0,
       })
     )
-    expect(routerPush).toHaveBeenCalledWith('/pdv/recibo/7')
+    // recibo abre como modal, sem sair do PDV
+    expect(wrapper.find('.sale-receipt-modal').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Recibo #7')
   })
 
   it('divide o pagamento entre duas formas navegando com a seta', async () => {
@@ -135,7 +153,8 @@ describe('PdvView', () => {
         ],
       })
     )
-    expect(routerPush).toHaveBeenCalledWith('/pdv/recibo/8')
+    expect(wrapper.find('.sale-receipt-modal').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Recibo #8')
   })
 
   it('não finaliza sem valor informado ou com valor menor que o total', async () => {

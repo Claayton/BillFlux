@@ -1,12 +1,10 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { maskMoney, moneyToDecimal } from '@/utils/format'
 import { paymentIcon, paymentColor } from '@/utils/payment'
-
-const router = useRouter()
+import SaleReceiptModal from '@/views/SaleReceiptModal.vue'
 
 const products = ref([])
 const methods = ref([])
@@ -14,6 +12,7 @@ const search = ref('')
 const suggestions = ref([])
 const highlighted = ref(-1)
 const finishing = ref(false)
+const receiptOrder = ref(null)
 
 const checkoutOpen = ref(false)
 const checkoutObs = ref('')
@@ -311,12 +310,17 @@ async function confirmCheckout() {
     cart.value.clear()
     discount.value = null
     checkoutOpen.value = false
-    router.push(`/pdv/recibo/${data.order.order_id}`)
+    receiptOrder.value = { id: data.order.order_id, kind: 'pdv' }
   } catch (error) {
     ElMessage.error(error.message)
   } finally {
     finishing.value = false
   }
+}
+
+function closeReceipt() {
+  receiptOrder.value = null
+  searchInput.value?.focus()
 }
 
 function onGlobalKeydown(event) {
@@ -639,6 +643,13 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+
+    <!-- Recibo da venda concluída -->
+    <SaleReceiptModal
+      v-if="receiptOrder"
+      :sale="receiptOrder"
+      @close="closeReceipt"
+    />
   </div>
 </template>
 
