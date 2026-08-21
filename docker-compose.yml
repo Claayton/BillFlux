@@ -1,8 +1,8 @@
 services:
-  web:
-    build: .
-    ports:
-      - "5000:5000"
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment:
       BILLFLUX_DATABASE__URL: sqlite:///data/billflux.db
       BILLFLUX_SECRET_KEY: ${BILLFLUX_SECRET_KEY}
@@ -11,6 +11,17 @@ services:
       BILLFLUX_AUTH__PASSWORD_HASH: ${BILLFLUX_AUTH__PASSWORD_HASH:-}
     volumes:
       - billflux-data:/app/data
+    expose:
+      - "5000"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports:
+      - "80:80"
+    depends_on:
+      - api
 
 volumes:
   billflux-data:

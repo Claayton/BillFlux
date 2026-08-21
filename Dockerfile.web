@@ -1,0 +1,16 @@
+# ---------- Frontend: build do SPA e servir via nginx ----------
+FROM node:20-alpine AS frontend
+
+WORKDIR /workspace/frontend
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ .
+# Saída (vite.config.js, outDir): ../billflux/static/app -> /workspace/billflux/static/app
+RUN npm run build
+
+FROM nginx:alpine
+
+COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY --from=frontend /workspace/billflux/static/app /usr/share/nginx/html

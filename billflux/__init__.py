@@ -72,7 +72,7 @@ def _seed_default_payment_methods():
 def create_app():
     """Function that creates the app"""
 
-    app = Flask(__name__)
+    app = Flask(__name__, static_folder=None)
     FlaskDynaconf(app, dynaconf_instance=settings)
     app.secret_key = settings.secret_key
     csrf.init_app(app)
@@ -82,15 +82,5 @@ def create_app():
     _seed_default_payment_methods()
 
     app.register_blueprint(api_bp)
-
-    @app.route("/", defaults={"path": ""})
-    @app.route("/<path:path>")
-    def spa_app(path):
-        """Entrega o SPA (build do Vite) para qualquer rota não-reservada."""
-        from flask import abort, send_from_directory
-
-        if path.startswith(("api/", "static/")):
-            return abort(404)
-        return send_from_directory(app.static_folder, "app/index.html")
 
     return app
