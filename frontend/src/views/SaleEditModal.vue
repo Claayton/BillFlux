@@ -355,4 +355,8 @@ onMounted(load)
   font-size: 18px;
   font-weight: 700;
 }
+.sale-edit-modal .modal-footer {
+  margin-top: 0;
+  padding: 16px 24px 20px;
+}
 </style>

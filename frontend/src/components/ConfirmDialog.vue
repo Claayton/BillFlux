@@ -35,4 +35,11 @@ const emit = defineEmits(['confirm', 'cancel'])
   color: var(--text);
   line-height: 1.5;
 }
+.confirm-body p {
+  margin: 0;
+}
+.modal-footer {
+  margin-top: 0;
+  padding: 16px 24px 20px;
+}
 </style>
