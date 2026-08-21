@@ -8,7 +8,6 @@ import { brl } from '@/utils/format'
 const route = useRoute()
 const order = ref(null)
 const loading = ref(true)
-const isManual = route.meta.manual
 
 function formatDateTime(iso) {
   if (!iso) return '—'
@@ -25,10 +24,7 @@ function formatDateTime(iso) {
 
 async function load() {
   try {
-    const path = isManual
-      ? `/sales/recibo/${route.params.id}`
-      : `/pdv/recibo/${route.params.id}`
-    const data = await api.get(path)
+    const data = await api.get(`/pdv/recibo/${route.params.id}`)
     order.value = data.order
   } catch (error) {
     ElMessage.error(error.message)
@@ -47,7 +43,7 @@ onMounted(load)
         <button type="button" class="btn btn-primary" @click="window.print()">
           <i class="fas fa-print"></i> Imprimir recibo
         </button>
-        <router-link class="btn btn-ghost" :to="isManual ? '/sales' : '/pdv'"><i class="fas fa-plus"></i> Nova venda</router-link>
+        <router-link class="btn btn-ghost" to="/pdv"><i class="fas fa-plus"></i> Nova venda</router-link>
       </div>
 
       <div v-if="loading" class="receipt-empty no-print">Carregando recibo…</div>

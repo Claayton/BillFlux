@@ -219,10 +219,28 @@
   min-height: 38px;
 }
 
-/* ---------- Lista de vendas (linhas-cartão) ---------- */
+/* ---------- Lista de vendas (colunas alinhadas) ---------- */
 .sales-list {
-  display: flex;
-  flex-direction: column;
+  --sales-cols: 56px 150px 90px 170px minmax(160px, 1fr) 120px;
+}
+
+.sales-list-header {
+  display: grid;
+  grid-template-columns: var(--sales-cols);
+  gap: 16px;
+  align-items: center;
+  padding: 12px 20px;
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sales-list-header .sales-th-actions {
+  text-align: right;
 }
 
 .sale-row {
@@ -234,11 +252,11 @@
 }
 
 .sale-row-main {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: var(--sales-cols);
   gap: 16px;
+  align-items: center;
   padding: 14px 20px;
-  flex-wrap: wrap;
 }
 
 .sale-row-main:hover {
@@ -249,7 +267,6 @@
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--text-muted);
-  min-width: 48px;
 }
 
 .sale-value {
@@ -268,12 +285,18 @@
 }
 
 .sale-date {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  min-width: 0;
+}
+
+.sale-date-line {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--text-secondary);
-  font-size: 14px;
-  white-space: nowrap;
 }
 
 .sale-today {
@@ -292,8 +315,7 @@
 }
 
 .sale-items {
-  flex: 1;
-  min-width: 180px;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -333,8 +355,8 @@
 .sale-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 4px;
-  margin-left: auto;
 }
 
 .sale-actions .icon-btn.is-danger {
@@ -346,7 +368,9 @@
 }
 
 .sale-items-expanded {
-  padding: 4px 20px 14px 20px;
+  grid-column: 1 / -1;
+  margin: 0 20px;
+  padding: 4px 0 14px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 6px 20px;
@@ -366,6 +390,25 @@
 .sale-item-expanded strong {
   color: var(--text);
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Impressão do recibo (modal) ---------- */
+@media print {
+  body {
+    visibility: hidden;
+  }
+  #sale-receipt-print,
+  #sale-receipt-print * {
+    visibility: visible;
+  }
+  #sale-receipt-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    box-shadow: none;
+    border: none;
+  }
 }
 
 /* ---------- Tabela ---------- */

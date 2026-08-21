@@ -1,13 +1,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl, brdateShort, maskMoney, moneyToDecimal } from '@/utils/format'
 import AppShell from '@/components/AppShell.vue'
 import SaleEditModal from '@/views/SaleEditModal.vue'
-
-const router = useRouter()
+import SaleReceiptModal from '@/views/SaleReceiptModal.vue'
 
 const periods = [
   { key: 'hoje', label: 'Hoje', icon: 'fas fa-calendar-day' },
@@ -40,6 +38,7 @@ const form = ref({
 const expandedIds = ref(new Set())
 const editManual = ref({ open: false, sale: null })
 const editPdvId = ref(null)
+const receiptSale = ref(null)
 
 const editForm = ref({ date: '', total: '', obs: '' })
 
@@ -111,7 +110,7 @@ async function submit() {
 }
 
 function printSale(sale) {
-  router.push(sale.kind === 'pdv' ? `/pdv/recibo/${sale.id}` : `/recibo/venda/${sale.id}`)
+  receiptSale.value = sale
 }
 
 function openEditManual(sale) {
@@ -279,6 +278,14 @@ onMounted(load)
             <p>Lance uma venda avulsa ou feche uma venda no PDV.</p>
           </div>
           <div v-else class="sales-list">
+            <div class="sales-list-header">
+              <span>ID</span>
+              <span>Valor</span>
+              <span>Origem</span>
+              <span>Data / hora</span>
+              <span>Itens</span>
+              <span class="sales-th-actions">Ações</span>
+            </div>
             <div v-for="sale in data.sales" :key="sale.kind + '-' + sale.id" class="sale-row">
               <div class="sale-row-main">
                 <span class="sale-id">#{{ sale.id }}</span>
@@ -294,13 +301,11 @@ onMounted(load)
                 </span>
 
                 <span class="sale-date">
-                  {{ brdateShort(sale.date) }}
-                  <template v-if="sale.date === data.today">
-                    <span class="sale-today">hoje</span>
-                  </template>
-                  <template v-if="sale.time">
-                    <span class="sale-time">{{ sale.time }}</span>
-                  </template>
+                  <span class="sale-date-line">
+                    {{ brdateShort(sale.date) }}
+                    <span v-if="sale.date === data.today" class="sale-today">hoje</span>
+                  </span>
+                  <span v-if="sale.time" class="sale-time">{{ sale.time }}</span>
                 </span>
 
                 <div class="sale-items">
@@ -390,6 +395,12 @@ onMounted(load)
       :order-id="editPdvId"
       @saved="onPdvEdited"
       @close="editPdvId = null"
+    />
+
+    <SaleReceiptModal
+      v-if="receiptSale"
+      :sale="receiptSale"
+      @close="receiptSale = null"
     />
   </AppShell>
 </template>

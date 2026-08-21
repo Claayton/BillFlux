@@ -18,6 +18,12 @@ vi.mock('@/components/AppShell.vue', () => ({
 vi.mock('@/views/SaleEditModal.vue', () => ({
   default: { template: '<div />' },
 }))
+vi.mock('@/views/SaleReceiptModal.vue', () => ({
+  default: {
+    props: ['sale'],
+    template: '<div class="sale-receipt-stub">RECEIPT #{{ sale.id }} ({{ sale.kind }})</div>',
+  },
+}))
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))
@@ -83,10 +89,12 @@ describe('SalesView', () => {
     window.confirm = vi.fn(() => true)
   })
 
-  it('lista vendas com id, valor, itens e ações', async () => {
+  it('lista vendas com header, id, valor, itens e ações', async () => {
     const wrapper = mountView()
     await flushPromises()
 
+    expect(wrapper.find('.sales-list-header').text()).toContain('Valor')
+    expect(wrapper.find('.sales-list-header').text()).toContain('Origem')
     const rows = wrapper.findAll('.sale-row')
     expect(rows.length).toBe(2)
     expect(rows[0].text()).toContain('#10')
@@ -109,17 +117,20 @@ describe('SalesView', () => {
     expect(wrapper.find('.sale-value').text()).toContain('50,00')
   })
 
-  it('imprime recibo conforme o tipo', async () => {
+  it('abre o modal de recibo ao clicar em imprimir', async () => {
     const wrapper = mountView()
     await flushPromises()
 
     const printButtons = wrapper.findAll('.sale-actions .icon-btn')
-    await printButtons[0].trigger('click') // PDV
-    expect(routerPush).toHaveBeenCalledWith('/pdv/recibo/10')
+    await printButtons[0].trigger('click')
+    await flushPromises()
 
-    routerPush.mockReset()
-    await wrapper.findAll('.sale-row')[1].findAll('.sale-actions .icon-btn')[0].trigger('click') // manual
-    expect(routerPush).toHaveBeenCalledWith('/recibo/venda/5')
+    const stub = wrapper.find('.sale-receipt-stub')
+    expect(stub.exists()).toBe(true)
+    expect(stub.text()).toContain('RECEIPT #10')
+
+    // fecha o modal
+    expect(routerPush).not.toHaveBeenCalled()
   })
 
   it('edita venda avulsa via PUT', async () => {

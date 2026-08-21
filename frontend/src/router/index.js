@@ -69,12 +69,6 @@ const routes = [
     meta: { auth: true },
   },
   {
-    path: '/recibo/venda/:id',
-    name: 'receipt_manual',
-    component: () => import('@/views/ReceiptView.vue'),
-    meta: { auth: true, manual: true },
-  },
-  {
     path: '/:pathMatch(.*)*',
     redirect: '/sales',
   },
