@@ -239,7 +239,7 @@
   border-bottom: 1px solid var(--border);
 }
 
-.sales-list-header > * {
+.sales-list-header > .sales-th-center {
   text-align: center;
 }
 
@@ -257,23 +257,31 @@
   gap: 16px;
   align-items: center;
   padding: 14px 20px;
-  text-align: center;
 }
 
 .sale-row-main:hover {
   background: var(--surface-hover);
 }
 
+/* Colunas centradas; Valor e Itens ficam alinhados à esquerda (padrão). */
+.sale-id,
+.sale-origin-cell,
+.sale-date,
+.sale-actions {
+  justify-self: center;
+}
+
 .sale-id {
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--text-muted);
+  text-align: center;
 }
 
 .sale-value {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
   font-size: 15px;
   font-weight: 700;
@@ -282,8 +290,28 @@
 }
 
 .sale-payment-icon {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
+}
+
+.sale-payment-icon.pi-dinheiro {
+  color: #16a34a;
+}
+
+.sale-payment-icon.pi-pix {
+  color: #0891b2;
+}
+
+.sale-payment-icon.pi-credito {
+  color: #7c3aed;
+}
+
+.sale-payment-icon.pi-debito {
+  color: #ea580c;
+}
+
+.sale-payment-icon.pi-vr {
+  color: #db2777;
 }
 
 .sale-date {
@@ -321,7 +349,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 6px;
   flex-wrap: wrap;
 }

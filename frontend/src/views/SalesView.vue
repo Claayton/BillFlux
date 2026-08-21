@@ -22,6 +22,17 @@ const PAYMENT_ICONS = {
   debito: 'fas fa-credit-card',
   vr: 'fas fa-utensils',
   va: 'fas fa-utensils',
+  'vr/va': 'fas fa-utensils',
+}
+
+const PAYMENT_COLORS = {
+  dinheiro: 'pi-dinheiro',
+  pix: 'pi-pix',
+  credito: 'pi-credito',
+  debito: 'pi-debito',
+  vr: 'pi-vr',
+  va: 'pi-vr',
+  'vr/va': 'pi-vr',
 }
 
 const active = ref('hoje')
@@ -61,8 +72,19 @@ const filteredSales = computed(() => {
 })
 
 function paymentIcon(payment) {
-  const key = (payment || '').toLowerCase().trim()
-  return PAYMENT_ICONS[key] || 'fas fa-credit-card'
+  return PAYMENT_ICONS[normalizeKey(payment)] || 'fas fa-credit-card'
+}
+
+function paymentColor(payment) {
+  return PAYMENT_COLORS[normalizeKey(payment)] || ''
+}
+
+function normalizeKey(text) {
+  return (text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
 }
 
 function mask(event) {
@@ -311,12 +333,12 @@ onMounted(load)
           </div>
           <div v-else class="sales-list">
             <div class="sales-list-header">
-              <span>ID</span>
+              <span class="sales-th-center">ID</span>
               <span>Valor</span>
-              <span>Origem</span>
-              <span>Data / hora</span>
+              <span class="sales-th-center">Origem</span>
+              <span class="sales-th-center">Data / hora</span>
               <span>Itens</span>
-              <span class="sales-th-actions">Ações</span>
+              <span class="sales-th-center">Ações</span>
             </div>
             <div
               v-for="sale in filteredSales"
@@ -328,7 +350,11 @@ onMounted(load)
                 <span class="sale-id">#{{ sale.id }}</span>
 
                 <span class="sale-value">
-                  <i class="sale-payment-icon" :class="paymentIcon(sale.payment)" :title="sale.payment || ''"></i>
+                  <i
+                    class="sale-payment-icon"
+                    :class="[paymentIcon(sale.payment), paymentColor(sale.payment)]"
+                    :title="sale.payment || ''"
+                  ></i>
                   {{ brl(sale.total) }}
                 </span>
 
