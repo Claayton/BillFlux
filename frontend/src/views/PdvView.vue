@@ -83,12 +83,13 @@ function byId(productId) {
   return products.value.find((p) => p.id === productId)
 }
 
+// Estoque pode ficar negativo: sem bloqueio por estoque.
 function incQty(productId) {
   const product = byId(productId)
-  if (!product || product.stock <= 0) return
+  if (!product) return
   const item = cart.value.get(productId)
   if (item) {
-    if (item.qty < product.stock) item.qty += 1
+    item.qty += 1
   } else {
     cart.value.set(productId, {
       id: product.id,
@@ -102,8 +103,8 @@ function incQty(productId) {
 
 function setQty(productId, quantity) {
   const product = byId(productId)
-  if (!product || product.stock <= 0) return
-  const target = Math.min(Math.max(1, quantity), product.stock)
+  if (!product) return
+  const target = Math.max(1, quantity)
   cart.value.set(productId, {
     id: product.id,
     name: product.name,
@@ -117,7 +118,7 @@ function changeQty(productId, delta) {
   const item = cart.value.get(productId)
   if (!item) return
   const next = item.qty + delta
-  if (next < 1 || next > item.stock) return
+  if (next < 1) return
   item.qty = next
 }
 
@@ -136,13 +137,9 @@ function buildSuggestions(term) {
   )
 }
 
-// Adiciona um produto ao carrinho com feedback claro se estiver sem estoque.
+// Adiciona um produto ao carrinho (estoque pode ficar negativo, sem bloqueio).
 function tryAdd(product) {
   if (!product) return false
-  if (product.stock <= 0) {
-    ElMessage.warning(`"${product.name}" está sem estoque.`)
-    return false
-  }
   incQty(product.id)
   return true
 }
@@ -179,12 +176,8 @@ function handleEnter() {
       products.value.find((p) => p.barcode === term) ||
       products.value.find((p) => p.name.toLowerCase() === term)
     if (product) {
-      if (product.stock <= 0) {
-        ElMessage.warning(`"${product.name}" está sem estoque.`)
-      } else {
-        setQty(product.id, n)
-        clearSearch()
-      }
+      setQty(product.id, n)
+      clearSearch()
       return
     }
   }
@@ -452,7 +445,6 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 :aria-label="'Aumentar quantidade de ' + item.name"
-                :disabled="item.qty >= item.stock"
                 @click="changeQty(item.id, 1)"
               >
                 +

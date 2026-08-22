@@ -54,18 +54,17 @@ def test_create_order_multiple_items():
     assert len(items) == 2
 
 
-def test_create_order_insufficient_stock_rolls_back():
-    """Insufficient stock should raise and persist nothing."""
+def test_create_order_without_stock_allows_negative():
+    """Venda sem estoque é permitida e o estoque fica negativo."""
 
     product = _product(name="Item Escasso Teste", price="1.00", stock=2)
     method = _method()
     repository = OrderRepository()
 
-    with pytest.raises(ValueError):
-        repository.create_order([(product.id, 5)], method.id)
+    order = repository.create_order([(product.id, 5)], method.id)
 
-    assert repository.get_orders_by_date(date.today()) or True  # sanity no crash
-    assert ProductRepository().get_product(product.id).stock_quantity == 2
+    assert order.total == Decimal("5.00")
+    assert ProductRepository().get_product(product.id).stock_quantity == -3
 
 
 def test_get_order_and_items():

@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl, maskMoney, moneyToDecimal } from '@/utils/format'
 import AppShell from '@/components/AppShell.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { useRowMenu } from '@/composables/useRowMenu'
 
 const { openMenu, menuPos, toggleMenu, closeMenus } = useRowMenu()
@@ -26,6 +27,8 @@ const adjustForm = ref({ delta: '', obs: '' })
 
 const showMovementsModal = ref(false)
 const movementsData = ref(null)
+
+const deleteTarget = ref(null)
 
 function blankProduct() {
   return {
@@ -201,14 +204,24 @@ async function saveAdjust() {
   }
 }
 
-async function removeProduct(product) {
-  if (!window.confirm(`Excluir o produto "${product.name}"?`)) return
+function removeProduct(product) {
+  deleteTarget.value = product
+}
+
+async function confirmDelete() {
+  const product = deleteTarget.value
+  deleteTarget.value = null
+  if (!product) return
   try {
     data.value = await api.del(`/products/${product.id}`)
     ElMessage.success('Produto excluído.')
   } catch (error) {
     ElMessage.error(error.message)
   }
+}
+
+function deleteMessage() {
+  return 'Excluir o produto "' + (deleteTarget.value?.name || '') + '"? Essa ação não pode ser desfeita.'
 }
 
 onMounted(() => {
@@ -560,6 +573,15 @@ function onModalKeydown(event) {
         </div>
       </div>
     </div>
+    <ConfirmDialog
+      v-if="deleteTarget"
+      title="Excluir produto"
+      :message="deleteMessage()"
+      confirm-label="Excluir"
+      danger
+      @confirm="confirmDelete"
+      @cancel="deleteTarget = null"
+    />
   </AppShell>
 </template>
 

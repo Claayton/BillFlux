@@ -158,6 +158,26 @@ describe('ProductsView', () => {
     expect(apiMock.put).toHaveBeenCalledWith('/products/3', expect.anything())
   })
 
+  it('excluir abre modal de confirmação do sistema (sem window.confirm)', async () => {
+    const confirmSpy = vi.fn()
+    window.confirm = confirmSpy
+    apiMock.del.mockResolvedValue({ products: [] })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('.row-menu-btn').trigger('click')
+    const items = wrapper.findAll('.dropdown-item')
+    await items[items.length - 1].trigger('click') // Excluir
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Excluir o produto "Doces arildo"?')
+    expect(confirmSpy).not.toHaveBeenCalled()
+
+    await wrapper.find('.btn-danger').trigger('click')
+    await flushPromises()
+    expect(apiMock.del).toHaveBeenCalledWith('/products/3')
+  })
+
   it('salva edição enviando os campos novos', async () => {
     apiMock.put.mockResolvedValue({ products })
     const wrapper = mountView()

@@ -75,7 +75,7 @@ def test_pdv_complete_creates_order(logged_client):
 
 
 def test_pdv_complete_validation(logged_client):
-    """POST sem forma de pagamento, sem itens ou sem estoque devolve 400."""
+    """POST sem forma de pagamento ou sem itens devolve 400."""
 
     product = ProductRepository().insert_product(
         name="PDV Erro", price=Decimal("2.00"), stock_quantity=0
@@ -97,15 +97,29 @@ def test_pdv_complete_validation(logged_client):
     )
     assert no_items.status_code == 400
 
-    no_stock = logged_client.post(
+
+def test_pdv_complete_without_stock_allows_negative(logged_client):
+    """Venda sem estoque é permitida e deixa o estoque negativo."""
+
+    product = ProductRepository().insert_product(
+        name="Sem Estoque", price=Decimal("2.00"), stock_quantity=0
+    )
+    method = PaymentMethodRepository().get_active_methods()[0]
+    token = _csrf(logged_client)
+
+    response = logged_client.post(
         "/api/pdv/complete",
         json={
             "method_id": method.id,
-            "items": [{"product_id": product.id, "quantity": 1}],
+            "items": [{"product_id": product.id, "quantity": 3}],
         },
         headers={"X-CSRFToken": token},
     )
-    assert no_stock.status_code == 400
+
+    assert response.status_code == 201
+    assert response.get_json()["order"]["total"] == 6.0
+    updated = ProductRepository().get_product(product.id)
+    assert updated.stock_quantity == -3
 
 
 def test_pdv_complete_with_discount(logged_client):

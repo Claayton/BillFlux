@@ -31,11 +31,11 @@ class OrderRepository:
         payments: Optional[List[tuple]] = None,
     ) -> Order:
         """Cria um pedido de forma transacional: pedido + itens + baixa de estoque
-        + log de movimentação. Levanta ValueError se um produto não existir,
-        estiver inativo ou tiver estoque insuficiente (nada é persistido).
-        O desconto (em R$) é abatido do total. `payments` é uma lista de
-        (payment_method_id, valor); se não informada, usa um único pagamento
-        na forma indicada pelo total."""
+        + log de movimentação. Levanta ValueError se um produto não existir ou
+        estiver inativo (nada é persistido). O estoque pode ficar negativo
+        (venda sem estoque é permitida). O desconto (em R$) é abatido do total.
+        `payments` é uma lista de (payment_method_id, valor); se não informada,
+        usa um único pagamento na forma indicada pelo total."""
 
         session = get_session()
         try:
@@ -48,8 +48,6 @@ class OrderRepository:
                     product = session.get(ProductModel, product_id)
                     if not product or not product.active:
                         raise ValueError("Produto não encontrado.")
-                    if product.stock_quantity < quantity:
-                        raise ValueError(f"Estoque insuficiente para {product.name}.")
                     products.append((product, quantity))
                     subtotal += product.price * quantity
 

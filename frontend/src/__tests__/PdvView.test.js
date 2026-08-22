@@ -230,7 +230,7 @@ describe('PdvView', () => {
     expect(wrapper.findAll('.pdv-suggestion').length).toBeGreaterThan(0)
   })
 
-  it('avisa quando o produto escaneado está sem estoque', async () => {
+  it('permite vender produto sem estoque (estoque pode ficar negativo)', async () => {
     apiMock.get.mockResolvedValue({
       products: [{ id: 9, name: 'Esgotado', price: 1, stock: 0, barcode: '999999999' }],
       methods,
@@ -242,8 +242,12 @@ describe('PdvView', () => {
     await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
     await nextTick()
 
-    expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('sem estoque'))
-    expect(wrapper.find('#cart-count').text()).toBe('0 itens')
+    expect(wrapper.find('#cart-count').text()).toBe('1 item')
+    // consegue passar do estoque atual (sem teto)
+    const ctrlButtons = wrapper.findAll('.pdv-row-qty-ctrl button')
+    await ctrlButtons[ctrlButtons.length - 1].trigger('click')
+    await nextTick()
+    expect(wrapper.find('#cart-count').text()).toBe('2 itens')
   })
 
   it('avisa quando o código de barras não é encontrado', async () => {
