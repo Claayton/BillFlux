@@ -12,16 +12,18 @@ const { apiMock, routerPush } = vi.hoisted(() => ({
 
 vi.mock('@/api/client', () => ({ api: apiMock }))
 vi.mock('element-plus', () => ({
-  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }))
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush }),
 }))
 
+import { ElMessage } from 'element-plus'
 import PdvView from '@/views/PdvView.vue'
 
 const products = [
   { id: 1, name: 'Doces arildo', price: 5, stock: 9, barcode: '040141018496' },
+  { id: 2, name: 'Bolo de fubá', price: 3, stock: 4, barcode: null },
 ]
 const methods = [{ id: 1, name: 'Dinheiro' }, { id: 2, name: 'PIX' }]
 
@@ -217,6 +219,42 @@ describe('PdvView', () => {
     await nextTick()
     expect(wrapper.find('.sale-receipt-modal').exists()).toBe(false)
     expect(wrapper.find('#pdv-search').exists()).toBe(true)
+  })
+
+  it('não quebra a busca quando existe produto sem código de barras', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('040141018496')
+    await nextTick()
+    expect(wrapper.findAll('.pdv-suggestion').length).toBeGreaterThan(0)
+  })
+
+  it('avisa quando o produto escaneado está sem estoque', async () => {
+    apiMock.get.mockResolvedValue({
+      products: [{ id: 9, name: 'Esgotado', price: 1, stock: 0, barcode: '999999999' }],
+      methods,
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('999999999')
+    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+
+    expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('sem estoque'))
+    expect(wrapper.find('#cart-count').text()).toBe('0 itens')
+  })
+
+  it('avisa quando o código de barras não é encontrado', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('123456789')
+    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+
+    expect(ElMessage.warning).toHaveBeenCalledWith('Produto não encontrado.')
   })
 
   it('aplica desconto percentual e recalcula o total', async () => {

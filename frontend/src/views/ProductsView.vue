@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl, maskMoney, moneyToDecimal } from '@/utils/format'
@@ -213,7 +213,21 @@ async function removeProduct(product) {
 
 onMounted(() => {
   load()
+  document.addEventListener('keydown', onModalKeydown)
 })
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onModalKeydown)
+})
+
+// No modal de produto, Enter (leitor de código de barras) não salva:
+// só F2 ou o botão "Salvar produto".
+function onModalKeydown(event) {
+  if (event.key === 'F2' && showProductModal.value && detailsTab.value === 'dados') {
+    event.preventDefault()
+    saveProduct()
+  }
+}
 </script>
 
 <template>
@@ -350,7 +364,12 @@ onMounted(() => {
           </button>
         </div>
 
-        <form v-show="detailsTab === 'dados'" class="modal-form" @submit.prevent="saveProduct">
+        <form
+          v-show="detailsTab === 'dados'"
+          class="modal-form"
+          @submit.prevent="saveProduct"
+          @keydown.enter.prevent
+        >
           <div class="form-grid" v-if="editingProduct">
             <div class="form-field">
               <label>Código (ID)</label>

@@ -130,8 +130,21 @@ function removeItem(productId) {
 function buildSuggestions(term) {
   const lower = term.toLowerCase()
   return products.value.filter(
-    (p) => p.name.toLowerCase().includes(lower) || p.barcode.toLowerCase().includes(lower)
+    (p) =>
+      p.name.toLowerCase().includes(lower) ||
+      (p.barcode || '').toLowerCase().includes(lower)
   )
+}
+
+// Adiciona um produto ao carrinho com feedback claro se estiver sem estoque.
+function tryAdd(product) {
+  if (!product) return false
+  if (product.stock <= 0) {
+    ElMessage.warning(`"${product.name}" está sem estoque.`)
+    return false
+  }
+  incQty(product.id)
+  return true
 }
 
 function showSuggestions() {
@@ -151,8 +164,7 @@ function clearSearch() {
 }
 
 function addFromSuggestion(product) {
-  incQty(product.id)
-  clearSearch()
+  if (tryAdd(product)) clearSearch()
 }
 
 function handleEnter() {
@@ -167,8 +179,12 @@ function handleEnter() {
       products.value.find((p) => p.barcode === term) ||
       products.value.find((p) => p.name.toLowerCase() === term)
     if (product) {
-      setQty(product.id, n)
-      clearSearch()
+      if (product.stock <= 0) {
+        ElMessage.warning(`"${product.name}" está sem estoque.`)
+      } else {
+        setQty(product.id, n)
+        clearSearch()
+      }
       return
     }
   }
@@ -176,21 +192,21 @@ function handleEnter() {
   const lower = raw.toLowerCase()
   const byBarcode = products.value.find((p) => p.barcode === lower)
   if (byBarcode) {
-    incQty(byBarcode.id)
-    clearSearch()
+    if (tryAdd(byBarcode)) clearSearch()
     return
   }
 
   if (highlighted.value >= 0 && suggestions.value[highlighted.value]) {
-    incQty(suggestions.value[highlighted.value].id)
-    clearSearch()
+    if (tryAdd(suggestions.value[highlighted.value])) clearSearch()
     return
   }
 
   if (suggestions.value.length === 1) {
-    incQty(suggestions.value[0].id)
-    clearSearch()
+    if (tryAdd(suggestions.value[0])) clearSearch()
+    return
   }
+
+  ElMessage.warning('Produto não encontrado.')
 }
 
 function onSearchInput() {

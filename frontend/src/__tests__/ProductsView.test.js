@@ -137,6 +137,27 @@ describe('ProductsView', () => {
     )
   })
 
+  it('Enter (leitor) não salva o modal; F2 salva', async () => {
+    apiMock.put.mockResolvedValue({ products })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('.row-menu-btn').trigger('click')
+    await wrapper.findAll('.dropdown-item')[0].trigger('click')
+    await flushPromises()
+
+    // Enter em qualquer campo não dispara o salvar
+    await wrapper.find('#product_name').trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(apiMock.put).not.toHaveBeenCalled()
+    expect(wrapper.find('.modal.is-open').exists()).toBe(true)
+
+    // F2 salva
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2' }))
+    await flushPromises()
+    expect(apiMock.put).toHaveBeenCalledWith('/products/3', expect.anything())
+  })
+
   it('salva edição enviando os campos novos', async () => {
     apiMock.put.mockResolvedValue({ products })
     const wrapper = mountView()
