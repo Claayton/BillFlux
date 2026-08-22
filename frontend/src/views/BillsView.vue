@@ -6,6 +6,9 @@ import qrcode from 'qrcode-generator'
 import { api } from '@/api/client'
 import { brl, brdate, brdateShort, maskMoney, moneyToDecimal } from '@/utils/format'
 import AppShell from '@/components/AppShell.vue'
+import { useRowMenu } from '@/composables/useRowMenu'
+
+const { openMenu, menuPos, toggleMenu, closeMenus } = useRowMenu()
 
 const data = ref(null)
 const loading = ref(false)
@@ -15,15 +18,6 @@ const editing = ref(null)
 
 const search = ref('')
 const filterStatus = ref('Todas')
-const openMenu = ref(null)
-
-function toggleMenu(id) {
-  openMenu.value = openMenu.value === id ? null : id
-}
-
-function closeMenus() {
-  openMenu.value = null
-}
 
 const detailsModal = ref(false)
 const detailsBill = ref(null)
@@ -450,7 +444,6 @@ async function confirmPay() {
 
 onMounted(() => {
   load()
-  document.addEventListener('click', closeMenus)
 })
 </script>
 
@@ -564,11 +557,16 @@ onMounted(() => {
                         aria-haspopup="true"
                         aria-expanded="false"
                         aria-label="Ações da conta"
+                        :data-menu="bill.id"
                         @click.stop="toggleMenu(bill.id)"
                       >
                         <i class="fas fa-ellipsis-h"></i>
                       </button>
-                      <div class="dropdown-panel" v-show="openMenu === bill.id">
+                      <div
+                        class="dropdown-panel"
+                        v-show="openMenu === bill.id"
+                        :style="{ top: menuPos.top + 'px', left: menuPos.left + 'px' }"
+                      >
                         <button type="button" class="dropdown-item" @click="openDetails(bill)">
                           <i class="fas fa-eye"></i> Ver detalhes
                         </button>

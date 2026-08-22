@@ -26,6 +26,9 @@ class ProductRepository:
         active: bool = True,
         obs: Optional[str] = None,
         cost: Decimal = Decimal("0"),
+        secondary_code: Optional[str] = None,
+        category: Optional[str] = None,
+        suppliers: Optional[str] = None,
     ) -> Product:
         """Inserts a new product into the Product table."""
 
@@ -37,6 +40,9 @@ class ProductRepository:
                     price=price,
                     cost=cost,
                     barcode=barcode,
+                    secondary_code=secondary_code,
+                    category=category,
+                    suppliers=suppliers,
                     stock_quantity=stock_quantity,
                     min_stock=min_stock,
                     active=active,

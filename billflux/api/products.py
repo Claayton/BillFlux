@@ -13,6 +13,9 @@ def _serialize_product(product):
         "price": float(product.price),
         "cost": float(product.cost),
         "barcode": product.barcode,
+        "secondary_code": product.secondary_code,
+        "category": product.category,
+        "suppliers": product.suppliers,
         "stock_quantity": product.stock_quantity,
         "min_stock": product.min_stock,
         "obs": product.obs,
@@ -53,6 +56,9 @@ def products_create():
     price = br_to_decimal(data.get("price"))
     cost = br_to_decimal(data.get("cost"))
     barcode = (data.get("barcode") or "").strip() or None
+    secondary_code = (data.get("secondary_code") or "").strip() or None
+    category = (data.get("category") or "").strip() or None
+    suppliers = (data.get("suppliers") or "").strip() or None
     obs = (data.get("obs") or "").strip() or None
 
     if not name:
@@ -81,6 +87,9 @@ def products_create():
         price=price,
         cost=cost,
         barcode=barcode,
+        secondary_code=secondary_code,
+        category=category,
+        suppliers=suppliers,
         stock_quantity=stock,
         min_stock=min_stock,
         obs=obs,
@@ -101,6 +110,9 @@ def products_edit(product_id):
     price = br_to_decimal(data.get("price"))
     cost = br_to_decimal(data.get("cost"))
     barcode = (data.get("barcode") or "").strip() or None
+    secondary_code = (data.get("secondary_code") or "").strip() or None
+    category = (data.get("category") or "").strip() or None
+    suppliers = (data.get("suppliers") or "").strip() or None
     obs = (data.get("obs") or "").strip() or None
     active = bool(data.get("active"))
 
@@ -128,6 +140,9 @@ def products_edit(product_id):
         price=price,
         cost=cost,
         barcode=barcode,
+        secondary_code=secondary_code,
+        category=category,
+        suppliers=suppliers,
         min_stock=min_stock,
         obs=obs,
         active=active,

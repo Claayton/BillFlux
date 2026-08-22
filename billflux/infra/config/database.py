@@ -47,6 +47,9 @@ def create_db():
     _add_column_if_missing("orders", "cancelled", "BOOLEAN DEFAULT 0")
     _add_column_if_missing("orders", "discount", "NUMERIC(10,2)")
     _add_column_if_missing("sale", "cancelled", "BOOLEAN DEFAULT 0")
+    _add_column_if_missing("product", "secondary_code", "VARCHAR")
+    _add_column_if_missing("product", "category", "VARCHAR")
+    _add_column_if_missing("product", "suppliers", "VARCHAR")
 
     return base
 

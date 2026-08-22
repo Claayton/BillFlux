@@ -84,6 +84,66 @@ def test_products_create_validation(logged_client):
     assert invalid.status_code == 400
 
 
+def test_products_create_with_details(logged_client):
+    """POST cadastra produto com categoria, código secundário e fornecedores."""
+
+    token = _csrf(logged_client)
+    response = logged_client.post(
+        "/api/products",
+        json={
+            "name": "Com detalhes",
+            "price": "12,50",
+            "cost": "6,00",
+            "barcode": "7900000000100",
+            "secondary_code": "SEC-007",
+            "category": "Bebidas",
+            "suppliers": "Distribuidora ABC, Atacadão",
+            "min_stock": 3,
+        },
+        headers={"X-CSRFToken": token},
+    )
+
+    assert response.status_code == 201
+    product = next(
+        p for p in response.get_json()["products"] if p["name"] == "Com detalhes"
+    )
+    assert product["secondary_code"] == "SEC-007"
+    assert product["category"] == "Bebidas"
+    assert product["suppliers"] == "Distribuidora ABC, Atacadão"
+    assert product["min_stock"] == 3
+
+
+def test_products_edit_details(logged_client):
+    """PUT atualiza os campos de detalhe do produto."""
+
+    token = _csrf(logged_client)
+    created = logged_client.post(
+        "/api/products",
+        json={"name": "Detalhe", "price": "1,00"},
+        headers={"X-CSRFToken": token},
+    ).get_json()
+    product_id = next(p["id"] for p in created["products"] if p["name"] == "Detalhe")
+
+    response = logged_client.put(
+        f"/api/products/{product_id}",
+        json={
+            "name": "Detalhe",
+            "price": "1,00",
+            "cost": "0,50",
+            "category": "Padaria",
+            "secondary_code": "SEC-999",
+            "suppliers": "Fornecedor X",
+        },
+        headers={"X-CSRFToken": token},
+    )
+
+    assert response.status_code == 200
+    product = next(p for p in response.get_json()["products"] if p["id"] == product_id)
+    assert product["category"] == "Padaria"
+    assert product["secondary_code"] == "SEC-999"
+    assert product["suppliers"] == "Fornecedor X"
+
+
 def test_products_edit(logged_client):
     """PUT atualiza nome, preço e status."""
 

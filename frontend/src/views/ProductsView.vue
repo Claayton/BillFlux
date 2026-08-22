@@ -4,15 +4,20 @@ import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl, maskMoney, moneyToDecimal } from '@/utils/format'
 import AppShell from '@/components/AppShell.vue'
+import { useRowMenu } from '@/composables/useRowMenu'
+
+const { openMenu, menuPos, toggleMenu, closeMenus } = useRowMenu()
 
 const data = ref(null)
 const loading = ref(false)
 const saving = ref(false)
-const openMenu = ref(null)
 
 const showProductModal = ref(false)
 const editingProduct = ref(null)
 const productForm = ref({})
+const detailsTab = ref('dados')
+const movementsLoading = ref(false)
+const movementsList = ref([])
 
 const showAdjustModal = ref(false)
 const adjustTarget = ref(null)
@@ -21,20 +26,15 @@ const adjustForm = ref({ delta: '', obs: '' })
 const showMovementsModal = ref(false)
 const movementsData = ref(null)
 
-function toggleMenu(id) {
-  openMenu.value = openMenu.value === id ? null : id
-}
-
-function closeMenus() {
-  openMenu.value = null
-}
-
 function blankProduct() {
   return {
     name: '',
     price: '',
     cost: '0,00',
     barcode: '',
+    secondary_code: '',
+    category: '',
+    suppliers: '',
     stock_quantity: 0,
     min_stock: 0,
     obs: '',
@@ -45,6 +45,7 @@ function blankProduct() {
 function openNewProduct() {
   editingProduct.value = null
   productForm.value = blankProduct()
+  detailsTab.value = 'dados'
   showProductModal.value = true
 }
 
@@ -55,11 +56,31 @@ function openEditProduct(product) {
     price: maskMoney(String(Math.round(product.price * 100))),
     cost: maskMoney(String(Math.round(product.cost * 100))),
     barcode: product.barcode || '',
+    secondary_code: product.secondary_code || '',
+    category: product.category || '',
+    suppliers: product.suppliers || '',
     min_stock: product.min_stock,
     obs: product.obs || '',
     active: product.active,
   }
+  detailsTab.value = 'dados'
+  movementsList.value = []
   showProductModal.value = true
+}
+
+async function openDetailsTab(tab) {
+  detailsTab.value = tab
+  if (tab === 'transacoes' && editingProduct.value && !movementsList.value.length) {
+    movementsLoading.value = true
+    try {
+      const data = await api.get(`/products/${editingProduct.value.id}/movements`)
+      movementsList.value = data.movements || []
+    } catch (error) {
+      ElMessage.error(error.message)
+    } finally {
+      movementsLoading.value = false
+    }
+  }
 }
 
 function maskPrice(event) {
@@ -108,6 +129,9 @@ async function saveProduct() {
       price: String(price),
       cost: String(cost),
       barcode: productForm.value.barcode,
+      secondary_code: productForm.value.secondary_code,
+      category: productForm.value.category,
+      suppliers: productForm.value.suppliers,
       min_stock: Number(productForm.value.min_stock) || 0,
       obs: productForm.value.obs,
       active: productForm.value.active,
@@ -120,6 +144,36 @@ async function saveProduct() {
     }
     showProductModal.value = false
     ElMessage.success(editingProduct.value ? 'Produto atualizado!' : 'Produto cadastrado!')
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    saving.value = false
+  }
+}
+
+// Clona o produto em edição: mesmo cadastro, código novo (sem barras) e
+// estoque zerado.
+async function cloneProduct() {
+  if (!editingProduct.value) return
+  const product = editingProduct.value
+  saving.value = true
+  try {
+    const payload = {
+      name: product.name + ' (cópia)',
+      price: String(product.price),
+      cost: String(product.cost),
+      barcode: null,
+      secondary_code: null,
+      category: product.category || '',
+      suppliers: product.suppliers || '',
+      min_stock: product.min_stock,
+      stock_quantity: 0,
+      obs: product.obs || '',
+      active: product.active,
+    }
+    data.value = await api.post('/products', payload)
+    showProductModal.value = false
+    ElMessage.success('Produto clonado!')
   } catch (error) {
     ElMessage.error(error.message)
   } finally {
@@ -160,7 +214,6 @@ async function removeProduct(product) {
 
 onMounted(() => {
   load()
-  document.addEventListener('click', closeMenus)
 })
 </script>
 
@@ -223,11 +276,16 @@ onMounted(() => {
                         aria-haspopup="true"
                         aria-expanded="false"
                         aria-label="Ações do produto"
+                        :data-menu="product.id"
                         @click.stop="toggleMenu(product.id)"
                       >
                         <i class="fas fa-ellipsis-h"></i>
                       </button>
-                      <div class="dropdown-panel" v-show="openMenu === product.id">
+                      <div
+                        class="dropdown-panel"
+                        v-show="openMenu === product.id"
+                        :style="{ top: menuPos.top + 'px', left: menuPos.left + 'px' }"
+                      >
                         <button type="button" class="dropdown-item" @click="openEditProduct(product)">
                           <i class="fas fa-pen"></i> Editar
                         </button>
@@ -266,13 +324,54 @@ onMounted(() => {
     <div class="modal" :class="{ 'is-open': showProductModal }">
       <div class="modal-content modal-content-sm">
         <div class="modal-header">
-          <h2>{{ editingProduct ? 'Editar produto' : 'Novo produto' }}</h2>
+          <h2>{{ editingProduct ? 'Detalhes do produto' : 'Novo produto' }}</h2>
           <button type="button" class="modal-close" aria-label="Fechar" @click="showProductModal = false">&times;</button>
         </div>
-        <form class="modal-form" @submit.prevent="saveProduct">
+
+        <div class="modal-tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            :class="{ 'is-active': detailsTab === 'dados' }"
+            @click="detailsTab = 'dados'"
+          >
+            <i class="fas fa-box"></i> Dados
+          </button>
+          <button
+            type="button"
+            role="tab"
+            :class="{ 'is-active': detailsTab === 'transacoes' }"
+            @click="openDetailsTab('transacoes')"
+          >
+            <i class="fas fa-history"></i> Transações
+          </button>
+        </div>
+
+        <form v-show="detailsTab === 'dados'" class="modal-form" @submit.prevent="saveProduct">
+          <div v-if="editingProduct" class="form-field">
+            <label>Código (ID)</label>
+            <input type="text" :value="'#' + editingProduct.id" readonly />
+          </div>
+
           <div class="form-field">
             <label for="product_name">Nome do produto</label>
             <input id="product_name" v-model="productForm.name" type="text" placeholder="Ex: Coca-Cola 2L" required />
+          </div>
+
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="product_barcode">Código de barras (EAN)</label>
+              <input id="product_barcode" v-model="productForm.barcode" type="text" placeholder="Opcional..." />
+            </div>
+            <div class="form-field">
+              <label for="product_secondary_code">Código secundário</label>
+              <input id="product_secondary_code" v-model="productForm.secondary_code" type="text" placeholder="Opcional..." />
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label for="product_category">Categoria</label>
+            <input id="product_category" v-model="productForm.category" type="text" placeholder="Ex: Bebidas, Padaria..." />
           </div>
 
           <div class="form-grid">
@@ -284,11 +383,6 @@ onMounted(() => {
               <label for="product_cost">Custo (R$)</label>
               <input id="product_cost" :value="productForm.cost" type="text" placeholder="0,00" inputmode="decimal" required @input="maskCost" />
             </div>
-          </div>
-
-          <div class="form-field">
-            <label for="product_barcode">Código de barras (opcional)</label>
-            <input id="product_barcode" v-model="productForm.barcode" type="text" placeholder="Ex: 7891000112345" />
           </div>
 
           <div class="form-grid">
@@ -309,8 +403,13 @@ onMounted(() => {
           </div>
 
           <div class="form-field">
+            <label for="product_suppliers">Fornecedores</label>
+            <input id="product_suppliers" v-model="productForm.suppliers" type="text" placeholder="Ex: Distribuidora ABC, Atacadão..." />
+          </div>
+
+          <div class="form-field">
             <label for="product_obs">Observações (opcional)</label>
-            <input id="product_obs" v-model="productForm.obs" type="text" placeholder="Ex: fornecedor, validade..." />
+            <input id="product_obs" v-model="productForm.obs" type="text" placeholder="Ex: validade, lote..." />
           </div>
 
           <label class="form-check">
@@ -319,12 +418,51 @@ onMounted(() => {
           </label>
 
           <div class="modal-footer">
+            <button
+              v-if="editingProduct"
+              type="button"
+              class="btn btn-ghost modal-clone"
+              :disabled="saving"
+              @click="cloneProduct"
+            >
+              <i class="fas fa-clone"></i> Clonar
+            </button>
             <button type="button" class="btn btn-ghost modal-cancel" @click="showProductModal = false">Cancelar</button>
             <button type="submit" class="btn btn-primary" :disabled="saving">
               <i class="fas fa-check"></i> {{ saving ? 'Salvando…' : 'Salvar produto' }}
             </button>
           </div>
         </form>
+
+        <div v-show="detailsTab === 'transacoes'" class="modal-body product-movements">
+          <p v-if="editingProduct" class="adjust-current-stock">
+            {{ editingProduct.name }} — estoque atual: {{ editingProduct.stock_quantity }} unidade(s)
+          </p>
+          <p v-if="movementsLoading" class="muted">Carregando movimentações…</p>
+          <table v-else-if="movementsList.length" class="data-table">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Tipo</th>
+                <th class="th-number">Qtd</th>
+                <th>Motivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="move in movementsList" :key="move.id">
+                <td class="cell-sub">{{ move.date.replace('T', ' ').slice(0, 16) }}</td>
+                <td>
+                  <span class="status-badge" :class="move.quantity >= 0 ? 'is-active' : 'is-inactive'">
+                    {{ move.movement_type }}
+                  </span>
+                </td>
+                <td class="cell-number">{{ move.quantity >= 0 ? '+' : '' }}{{ move.quantity }}</td>
+                <td class="cell-obs">{{ move.obs || '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-else class="adjust-current-stock">Nenhuma movimentação registrada.</p>
+        </div>
       </div>
     </div>
 
