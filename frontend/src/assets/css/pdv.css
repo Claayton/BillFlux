@@ -796,6 +796,15 @@ kbd {
   font-variant-numeric: tabular-nums;
 }
 
+.receipt-payment.receipt-troco {
+  color: var(--primary);
+  font-size: 13px;
+}
+
+.receipt-payment.receipt-troco strong {
+  font-variant-numeric: tabular-nums;
+}
+
 .receipt-obs {
   margin-top: 14px;
   font-size: 12px;

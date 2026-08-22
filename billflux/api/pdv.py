@@ -48,7 +48,9 @@ def _build_receipt(order_id):
         products[item.product_id] = product.name if product else "Item"
 
     payments_detail = []
+    received_total = Decimal("0")
     for payment_method_id, amount in repository.get_order_payments(order.id):
+        received_total += amount
         payment_method = method_repository.get_method(payment_method_id)
         payments_detail.append(
             {
@@ -58,6 +60,8 @@ def _build_receipt(order_id):
             }
         )
 
+    troco = max(Decimal("0"), received_total - order.total)
+
     return {
         "order_id": order.id,
         "date": order.created_at.isoformat(),
@@ -66,6 +70,7 @@ def _build_receipt(order_id):
         "obs": order.obs,
         "payment_method": method.name if method else "—",
         "payments": payments_detail,
+        "troco": float(troco),
         "items": [
             {
                 "name": products[item.product_id],

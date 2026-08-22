@@ -245,6 +245,35 @@ describe('PdvView', () => {
     await flushPromises()
   }
 
+  it('recibo mostra quanto foi pago em cada forma e o troco', async () => {
+    apiMock.get.mockImplementation((url) => {
+      if (String(url).startsWith('/pdv/recibo')) {
+        return Promise.resolve({
+          order: {
+            order_id: 21,
+            date: '2026-08-21T12:00:00',
+            total: 5,
+            discount: 0,
+            items: [],
+            payments: [{ name: 'Dinheiro', amount: 10 }],
+            troco: 5,
+            payment_method: 'Dinheiro',
+          },
+        })
+      }
+      return Promise.resolve({ products, methods })
+    })
+    const wrapper = mountView()
+    await flushPromises()
+    await completeSale(wrapper, 21)
+
+    expect(wrapper.find('.sale-receipt-modal').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Pago (Dinheiro)')
+    expect(wrapper.text()).toContain('10,00')
+    expect(wrapper.text()).toContain('Troco')
+    expect(wrapper.text()).toContain('5,00')
+  })
+
   it('recibo: F2 imprime e o modal fecha sozinho', async () => {
     const printSpy = vi.fn()
     window.print = printSpy

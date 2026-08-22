@@ -236,6 +236,34 @@ def test_pdv_complete_split_payments_validation(logged_client):
     assert zero_amount.status_code == 400
 
 
+def test_pdv_complete_with_change(logged_client):
+    """Recibo informa quanto foi pago em cada forma e o troco."""
+
+    product = ProductRepository().insert_product(
+        name="PDV Troco", price=Decimal("2.00"), stock_quantity=5
+    )
+    methods = PaymentMethodRepository().get_active_methods()
+    cash = methods[0]
+    token = _csrf(logged_client)
+
+    response = logged_client.post(
+        "/api/pdv/complete",
+        json={
+            "payments": [{"method_id": cash.id, "amount": "10.00"}],
+            "items": [{"product_id": product.id, "quantity": 2}],
+        },
+        headers={"X-CSRFToken": token},
+    )
+
+    assert response.status_code == 201
+    order = response.get_json()["order"]
+    assert order["total"] == 4.0
+    assert order["payments"] == [
+        {"method_id": cash.id, "name": cash.name, "amount": 10.0}
+    ]
+    assert order["troco"] == 6.0
+
+
 def test_pdv_receipt(logged_client):
     """GET /api/pdv/recibo/<id> devolve os dados de um pedido."""
 
