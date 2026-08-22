@@ -47,6 +47,10 @@ const paymentDiff = computed(
 )
 const canConfirm = computed(() => paymentsTotal.value >= cartTotalAfter.value && cartTotalAfter.value >= 0)
 
+// Valor que "carrega" junto com o foco: pré-preenche o primeiro método e,
+// enquanto não for digitado por cima, a seta move esse valor entre formas.
+const defaultPayAmount = computed(() => maskMoney(String(Math.round(cartTotalAfter.value * 100))))
+
 const discountPreview = computed(() => {
   if (cartTotal.value <= 0) return 0
   const raw = parseFloat(
@@ -258,6 +262,10 @@ function finishSale() {
   methods.value.forEach((m) => {
     amounts[m.id] = ''
   })
+  if (cartTotalAfter.value > 0 && methods.value.length) {
+    // Dinheiro (primeira forma) já vem com o total, selecionado
+    amounts[methods.value[0].id] = defaultPayAmount.value
+  }
   payAmounts.value = amounts
   payInputs.value = []
   checkoutOpen.value = true
@@ -266,21 +274,44 @@ function finishSale() {
 
 function focusPayInput(index) {
   const el = payInputs.value[index]
-  if (el) el.focus()
+  if (!el) return
+  el.focus()
+  // se o campo ainda guarda o total padrão, deixa selecionado pra digitar
+  // por cima (ex: nota de 10,00 na compra de 5,00)
+  if (payAmounts.value[methods.value[index]?.id] === defaultPayAmount.value) {
+    el.select()
+  }
 }
 
 function onPayInput(event, methodId) {
   payAmounts.value[methodId] = maskMoney(event.target.value)
 }
 
-// Seta para baixo/cima navega entre as formas de pagamento.
+// Seta para baixo/cima navega entre as formas; se o campo ainda guarda o
+// total padrão, o valor "pula" para a próxima forma.
+function movePayAmount(fromIndex, toIndex) {
+  const from = methods.value[fromIndex]
+  const to = methods.value[toIndex]
+  if (!from || !to) return
+  if (payAmounts.value[from.id] === defaultPayAmount.value) {
+    payAmounts.value[from.id] = ''
+    payAmounts.value[to.id] = defaultPayAmount.value
+  }
+}
+
 function onPayKeydown(event, index) {
   if (event.key === 'ArrowDown') {
     event.preventDefault()
-    if (index + 1 < methods.value.length) focusPayInput(index + 1)
+    if (index + 1 < methods.value.length) {
+      movePayAmount(index, index + 1)
+      focusPayInput(index + 1)
+    }
   } else if (event.key === 'ArrowUp') {
     event.preventDefault()
-    if (index > 0) focusPayInput(index - 1)
+    if (index > 0) {
+      movePayAmount(index, index - 1)
+      focusPayInput(index - 1)
+    }
   } else if (event.key === 'Enter') {
     event.preventDefault()
     confirmCheckout()
@@ -292,30 +323,36 @@ async function confirmCheckout() {
     ElMessage.warning('Nenhuma forma de pagamento ativa.')
     return
   }
-  if (!paymentsEntered.value.length) {
-    ElMessage.warning('Informe o valor recebido.')
-    focusPayInput(0)
-    return
+  const items = cartItems.value.map((item) => ({
+    product_id: item.id,
+    quantity: item.qty,
+  }))
+  const payload = {
+    obs: checkoutObs.value || null,
+    items,
+    discount: discount.value || 0,
   }
-  if (!canConfirm.value) {
-    ElMessage.warning('Falta ' + formatBRL(Math.abs(paymentDiff.value)) + ' para fechar o valor.')
-    return
+  if (cartTotalAfter.value <= 0) {
+    // venda de valor zero: fecha na primeira forma sem valores
+    payload.method_id = methods.value[0].id
+  } else {
+    if (!paymentsEntered.value.length) {
+      ElMessage.warning('Informe o valor recebido.')
+      focusPayInput(0)
+      return
+    }
+    if (!canConfirm.value) {
+      ElMessage.warning('Falta ' + formatBRL(Math.abs(paymentDiff.value)) + ' para fechar o valor.')
+      return
+    }
+    payload.payments = paymentsEntered.value.map((p) => ({
+      method_id: p.method_id,
+      amount: p.amount.toFixed(2),
+    }))
   }
   finishing.value = true
   try {
-    const items = cartItems.value.map((item) => ({
-      product_id: item.id,
-      quantity: item.qty,
-    }))
-    const data = await api.post('/pdv/complete', {
-      payments: paymentsEntered.value.map((p) => ({
-        method_id: p.method_id,
-        amount: p.amount.toFixed(2),
-      })),
-      obs: checkoutObs.value || null,
-      items,
-      discount: discount.value || 0,
-    })
+    const data = await api.post('/pdv/complete', payload)
     cart.value.clear()
     discount.value = null
     checkoutOpen.value = false

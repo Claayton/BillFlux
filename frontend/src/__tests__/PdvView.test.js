@@ -159,7 +159,56 @@ describe('PdvView', () => {
     expect(wrapper.text()).toContain('Recibo #8')
   })
 
-  it('não finaliza sem valor informado ou com valor menor que o total', async () => {
+  it('F2 abre com Dinheiro pré-preenchido e selecionado para digitar por cima', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('arildo')
+    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+    await wrapper.find('#pdv-finish').trigger('click')
+    await flushPromises()
+
+    const inputs = wrapper.findAll('.pdv-payfield input')
+    expect(inputs[0].element.value).toBe('5,00') // total pré-preenchido
+    // selecionado: digitar sobrescreve (ex: nota de 10,00 -> 1000)
+    expect(inputs[0].element.selectionStart).toBe(0)
+    expect(inputs[0].element.selectionEnd).toBe(4)
+    await inputs[0].setValue('1000')
+    expect(inputs[0].element.value).toBe('10,00')
+  })
+
+  it('seta para baixo carrega o valor pré-preenchido para a próxima forma', async () => {
+    apiMock.post.mockResolvedValue({ order: { order_id: 11 } })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('arildo')
+    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+    await wrapper.find('#pdv-finish').trigger('click')
+    await flushPromises()
+
+    const inputs = wrapper.findAll('.pdv-payfield input')
+    expect(inputs[0].element.value).toBe('5,00')
+    await inputs[0].trigger('keydown', { key: 'ArrowDown' })
+    await nextTick()
+
+    // o valor pulou para o PIX e o dinheiro ficou vazio
+    expect(inputs[0].element.value).toBe('')
+    expect(inputs[1].element.value).toBe('5,00')
+
+    await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
+    await flushPromises()
+    expect(apiMock.post).toHaveBeenCalledWith(
+      '/pdv/complete',
+      expect.objectContaining({
+        payments: [{ method_id: 2, amount: '5.00' }],
+      })
+    )
+  })
+
+  it('não finaliza sem valor ou com valor menor que o total', async () => {
     const wrapper = mountView()
     await flushPromises()
 
@@ -170,13 +219,14 @@ describe('PdvView', () => {
     await wrapper.find('#pdv-finish').trigger('click')
     await flushPromises()
 
-    // sem valor algum, confirmar não dispara a venda
+    const inputs = wrapper.findAll('.pdv-payfield input')
+    // apaga o pré-preenchido: sem valor, confirmar não dispara a venda
+    await inputs[0].setValue('')
     await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
     await flushPromises()
     expect(apiMock.post).not.toHaveBeenCalled()
 
     // valor menor que o total também bloqueia
-    const inputs = wrapper.findAll('.pdv-payfield input')
     await inputs[0].setValue('100')
     await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
     await flushPromises()
