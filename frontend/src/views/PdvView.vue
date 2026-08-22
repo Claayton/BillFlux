@@ -15,7 +15,6 @@ const finishing = ref(false)
 const receiptOrder = ref(null)
 
 const checkoutOpen = ref(false)
-const checkoutObs = ref('')
 const payAmounts = ref({})
 const payInputs = ref([])
 
@@ -257,7 +256,6 @@ function clearDiscount() {
 // ---------- Finalizar venda (F2) ----------
 function finishSale() {
   if (cart.value.size === 0) return
-  checkoutObs.value = ''
   const amounts = {}
   methods.value.forEach((m) => {
     amounts[m.id] = ''
@@ -328,7 +326,6 @@ async function confirmCheckout() {
     quantity: item.qty,
   }))
   const payload = {
-    obs: checkoutObs.value || null,
     items,
     discount: discount.value || 0,
   }
@@ -384,6 +381,8 @@ function onGlobalKeydown(event) {
   } else if (event.key === 'F9') {
     event.preventDefault()
     ElMessage.info('Entrega disponível em breve.')
+  } else if (event.key === 'Escape') {
+    if (checkoutOpen.value) checkoutOpen.value = false
   }
 }
 
@@ -611,72 +610,50 @@ onBeforeUnmount(() => {
           <button type="button" class="modal-close" aria-label="Fechar" @click="checkoutOpen = false">&times;</button>
         </div>
         <div class="pdv-modal-body">
-          <div class="pdv-checkout-summary">
-            <div class="pdv-discount-line">
-              <span>Itens</span>
-              <strong>{{ countLabel }}</strong>
-            </div>
-            <div class="pdv-discount-line">
-              <span>Subtotal</span>
-              <strong>{{ formatBRL(cartTotal) }}</strong>
-            </div>
-            <div class="pdv-discount-line" v-if="discount">
-              <span>Desconto</span>
-              <strong class="is-negative">&minus;{{ formatBRL(discount) }}</strong>
-            </div>
-            <div class="pdv-discount-line is-total">
-              <span>Total</span>
-              <strong>{{ formatBRL(cartTotalAfter) }}</strong>
-            </div>
+          <div class="pdv-checkout-total">
+            <span>Total</span>
+            <strong>{{ formatBRL(cartTotalAfter) }}</strong>
           </div>
 
-          <div class="pdv-checkout-block">
-            <h3>Valores por forma de pagamento</h3>
-            <div class="pdv-paylist" v-if="methods.length">
-              <div v-for="(m, i) in methods" :key="m.id" class="pdv-payrow">
-                <span class="pdv-payicon" :class="paymentColor(m.name)">
-                  <i :class="paymentIcon(m.name)"></i>
-                </span>
-                <span class="pdv-payname">{{ m.name }}</span>
-                <div class="pdv-payfield">
-                  <span>R$</span>
-                  <input
-                    :ref="(el) => (payInputs[i] = el)"
-                    :value="payAmounts[m.id]"
-                    type="text"
-                    inputmode="numeric"
-                    :aria-label="'Valor em ' + m.name"
-                    placeholder="0,00"
-                    autocomplete="off"
-                    @input="onPayInput($event, m.id)"
-                    @keydown="onPayKeydown($event, i)"
-                  />
-                </div>
+          <div class="pdv-paylist" v-if="methods.length">
+            <div v-for="(m, i) in methods" :key="m.id" class="pdv-payrow">
+              <span class="pdv-payicon" :class="paymentColor(m.name)">
+                <i :class="paymentIcon(m.name)"></i>
+              </span>
+              <span class="pdv-payname">{{ m.name }}</span>
+              <div class="pdv-payfield">
+                <span>R$</span>
+                <input
+                  :ref="(el) => (payInputs[i] = el)"
+                  :value="payAmounts[m.id]"
+                  type="text"
+                  inputmode="numeric"
+                  :aria-label="'Valor em ' + m.name"
+                  placeholder="0,00"
+                  autocomplete="off"
+                  @input="onPayInput($event, m.id)"
+                  @keydown="onPayKeydown($event, i)"
+                />
               </div>
-              <p class="pdv-payhint">
-                <i class="fas fa-arrow-down"></i> Seta para baixo pula para a próxima forma.
-              </p>
             </div>
-            <p v-if="!methods.length" class="pdv-panel-note">
-              Nenhuma forma ativa. Configure em
-              <router-link to="/payments">Formas de pagamento</router-link>.
+            <div class="pdv-paystatus" v-if="paymentsEntered.length">
+              <span v-if="paymentDiff > 0" class="is-troco">Troco {{ formatBRL(paymentDiff) }}</span>
+              <span v-else-if="paymentDiff < 0" class="is-missing">
+                Falta {{ formatBRL(Math.abs(paymentDiff)) }}
+              </span>
+              <span v-else class="is-ok"><i class="fas fa-check"></i> Valor fechado</span>
+            </div>
+            <p class="pdv-payhint">
+              <i class="fas fa-arrow-down"></i> Seta para baixo pula para a próxima forma.
             </p>
           </div>
-
-          <div class="pdv-checkout-block">
-            <h3>Observações</h3>
-            <input v-model="checkoutObs" type="text" placeholder="Opcional..." autocomplete="off" />
-          </div>
+          <p v-if="!methods.length" class="pdv-panel-note">
+            Nenhuma forma ativa. Configure em
+            <router-link to="/payments">Formas de pagamento</router-link>.
+          </p>
         </div>
         <div class="modal-footer pdv-checkout-footer">
-          <div class="pdv-checkout-status" v-if="paymentsEntered.length">
-            <span v-if="paymentDiff > 0">Troco {{ formatBRL(paymentDiff) }}</span>
-            <span v-else-if="paymentDiff < 0" class="is-missing">
-              Falta {{ formatBRL(Math.abs(paymentDiff)) }}
-            </span>
-            <span v-else><i class="fas fa-check"></i> Valor fechado</span>
-          </div>
-          <button type="button" class="btn btn-ghost modal-cancel" @click="checkoutOpen = false">Cancelar</button>
+          <button type="button" class="btn btn-ghost modal-cancel" @click="checkoutOpen = false">Cancelar <kbd>Esc</kbd></button>
           <button
             type="button"
             class="btn btn-primary"
@@ -727,20 +704,30 @@ onBeforeUnmount(() => {
 }
 .pdv-checkout-footer {
   display: flex;
+  justify-content: flex-end;
   align-items: center;
   gap: 10px;
 }
-.pdv-checkout-status {
-  margin-right: auto;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--success, #16a34a);
+.pdv-checkout-total {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
+  padding: 4px 0 16px;
 }
-.pdv-checkout-status .is-missing {
-  color: var(--danger, #dc2626);
+.pdv-checkout-total span {
+  font-size: 13px;
+  color: var(--text-muted, #9ca3af);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.pdv-checkout-total strong {
+  font-size: 40px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
 }
 .pdv-paylist {
   display: flex;
@@ -755,11 +742,6 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border, #e5e7eb);
   border-radius: var(--radius-sm, 8px);
   background: var(--surface, #ffffff);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-.pdv-payrow:focus-within {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent);
 }
 .pdv-payicon {
   width: 32px;
@@ -785,6 +767,7 @@ onBeforeUnmount(() => {
   padding: 0 10px;
   height: 36px;
   background: #ffffff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .pdv-payfield span {
   color: var(--text-muted, #9ca3af);
@@ -800,9 +783,37 @@ onBeforeUnmount(() => {
   font-variant-numeric: tabular-nums;
   background: transparent;
 }
+.pdv-payfield:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+.pdv-payfield input:focus {
+  box-shadow: none;
+  outline: none;
+}
+.pdv-paystatus {
+  display: flex;
+  justify-content: flex-end;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 2px 24px 0;
+}
+.pdv-paystatus .is-troco {
+  color: var(--primary, #4f46e5);
+}
+.pdv-paystatus .is-missing {
+  color: var(--danger, #dc2626);
+}
+.pdv-paystatus .is-ok {
+  color: var(--success, #16a34a);
+}
+.pdv-paystatus .is-ok i {
+  margin-right: 4px;
+}
 .pdv-payhint {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   font-size: 12px;
   color: var(--text-muted, #9ca3af);
