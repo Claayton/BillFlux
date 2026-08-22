@@ -262,10 +262,8 @@ function onModalKeydown(event) {
                 <tr>
                   <th>Produto</th>
                   <th class="th-amount">Preço</th>
-                  <th class="th-amount">Custo</th>
                   <th class="th-number">Estoque</th>
                   <th>Código de barras</th>
-                  <th>Status</th>
                   <th class="th-actions"></th>
                 </tr>
               </thead>
@@ -273,24 +271,18 @@ function onModalKeydown(event) {
                 <tr
                   v-for="product in data.products"
                   :key="product.id"
-                  :class="{ 'is-inactive': !product.active }"
+                  :class="{ 'is-active': product.active, 'is-inactive': !product.active }"
                 >
                   <td>
                     <span class="cell-title">{{ product.name }}</span>
                     <span v-if="product.obs" class="cell-sub">{{ product.obs }}</span>
                   </td>
                   <td class="cell-amount">{{ brl(product.price) }}</td>
-                  <td class="cell-amount">{{ brl(product.cost) }}</td>
                   <td class="cell-stock" :class="{ 'cell-stock-low': product.min_stock && product.stock_quantity <= product.min_stock }">
                     {{ product.stock_quantity }}
                     <span v-if="product.min_stock" class="cell-sub">mín. {{ product.min_stock }}</span>
                   </td>
                   <td class="cell-barcode">{{ product.barcode || '—' }}</td>
-                  <td>
-                    <span class="status-badge" :class="product.active ? 'is-active' : 'is-inactive'">
-                      {{ product.active ? 'Ativo' : 'Inativo' }}
-                    </span>
-                  </td>
                   <td class="cell-actions">
                     <div class="product-actions">
                       <button
@@ -333,7 +325,7 @@ function onModalKeydown(event) {
                   </td>
                 </tr>
                 <tr v-if="!data.products.length" class="empty-row">
-                  <td colspan="7" class="empty-state">
+                  <td colspan="5" class="empty-state">
                     <i class="fas fa-box-open"></i>
                     <h3>Nenhum produto cadastrado</h3>
                     <p>Cadastre os itens vendidos no PDV para começar.</p>

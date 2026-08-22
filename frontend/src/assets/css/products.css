@@ -101,6 +101,14 @@
   border-bottom: none;
 }
 
+.data-table tbody tr.is-active td:first-child {
+  box-shadow: inset 3px 0 0 #16a34a;
+}
+
+.data-table tbody tr.is-inactive td:first-child {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
 .data-table tbody tr.is-inactive td {
   opacity: 0.55;
 }
@@ -143,7 +151,7 @@
 
 .cell-actions {
   text-align: right;
-  width: 56px;
+  width: 140px;
 }
 
 /* ---------- Status ---------- */
