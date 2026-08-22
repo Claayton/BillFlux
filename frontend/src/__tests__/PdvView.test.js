@@ -181,6 +181,32 @@ describe('PdvView', () => {
     expect(apiMock.post).not.toHaveBeenCalled()
   })
 
+  it('recibo: F2 imprime e Esc fecha voltando ao PDV', async () => {
+    const printSpy = vi.fn()
+    window.print = printSpy
+    apiMock.post.mockResolvedValue({ order: { order_id: 9 } })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('arildo')
+    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+    await wrapper.find('#pdv-finish').trigger('click')
+    await flushPromises()
+    await wrapper.findAll('.pdv-payfield input')[0].setValue('500')
+    await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.sale-receipt-modal').exists()).toBe(true)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2' }))
+    expect(printSpy).toHaveBeenCalled()
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(wrapper.find('.sale-receipt-modal').exists()).toBe(false)
+  })
+
   it('aplica desconto percentual e recalcula o total', async () => {
     const wrapper = mountView()
     await flushPromises()

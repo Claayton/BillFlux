@@ -324,6 +324,7 @@ function closeReceipt() {
 }
 
 function onGlobalKeydown(event) {
+  if (receiptOrder.value) return // recibo aberto: F2 imprime lá dentro
   if (event.key === 'F2') {
     event.preventDefault()
     if (checkoutOpen.value) {

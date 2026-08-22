@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl } from '@/utils/format'
@@ -44,7 +44,25 @@ function printReceipt() {
   window.print()
 }
 
-onMounted(load)
+// F2 imprime, Esc fecha.
+function onKeydown(event) {
+  if (event.key === 'F2') {
+    event.preventDefault()
+    printReceipt()
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    emit('close')
+  }
+}
+
+onMounted(() => {
+  load()
+  document.addEventListener('keydown', onKeydown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onKeydown)
+})
 </script>
 
 <template>
@@ -124,9 +142,9 @@ onMounted(load)
       </div>
 
       <div class="modal-footer">
-        <button type="button" class="btn btn-ghost modal-cancel" @click="emit('close')">Fechar</button>
+        <button type="button" class="btn btn-ghost modal-cancel" @click="emit('close')">Fechar <kbd>Esc</kbd></button>
         <button type="button" class="btn btn-primary" :disabled="loading || !order" @click="printReceipt">
-          <i class="fas fa-print"></i> Imprimir recibo
+          <i class="fas fa-print"></i> Imprimir recibo <kbd>F2</kbd>
         </button>
       </div>
     </div>
