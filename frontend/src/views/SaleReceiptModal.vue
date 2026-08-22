@@ -41,7 +41,9 @@ async function load() {
 }
 
 function printReceipt() {
+  // window.print() bloqueia até a caixa de impressão fechar; só então o modal fecha.
   window.print()
+  emit('close')
 }
 
 // F2 imprime, Esc fecha.

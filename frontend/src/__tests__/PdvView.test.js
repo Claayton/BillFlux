@@ -181,13 +181,8 @@ describe('PdvView', () => {
     expect(apiMock.post).not.toHaveBeenCalled()
   })
 
-  it('recibo: F2 imprime e Esc fecha voltando ao PDV', async () => {
-    const printSpy = vi.fn()
-    window.print = printSpy
-    apiMock.post.mockResolvedValue({ order: { order_id: 9 } })
-    const wrapper = mountView()
-    await flushPromises()
-
+  async function completeSale(wrapper, orderId = 9) {
+    apiMock.post.mockResolvedValue({ order: { order_id: orderId } })
     await wrapper.find('#pdv-search').setValue('arildo')
     await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
     await nextTick()
@@ -196,15 +191,32 @@ describe('PdvView', () => {
     await wrapper.findAll('.pdv-payfield input')[0].setValue('500')
     await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
     await flushPromises()
+  }
+
+  it('recibo: F2 imprime e o modal fecha sozinho', async () => {
+    const printSpy = vi.fn()
+    window.print = printSpy
+    const wrapper = mountView()
+    await flushPromises()
+    await completeSale(wrapper)
 
     expect(wrapper.find('.sale-receipt-modal').exists()).toBe(true)
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2' }))
     expect(printSpy).toHaveBeenCalled()
+    await nextTick()
+    expect(wrapper.find('.sale-receipt-modal').exists()).toBe(false)
+  })
+
+  it('recibo: Esc fecha o modal voltando ao PDV', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await completeSale(wrapper, 10)
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await nextTick()
     expect(wrapper.find('.sale-receipt-modal').exists()).toBe(false)
+    expect(wrapper.find('#pdv-search').exists()).toBe(true)
   })
 
   it('aplica desconto percentual e recalcula o total', async () => {
