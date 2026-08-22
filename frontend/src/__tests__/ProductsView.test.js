@@ -16,7 +16,7 @@ vi.mock('@/components/AppShell.vue', () => ({
   default: { template: '<div><slot /></div>' },
 }))
 vi.mock('element-plus', () => ({
-  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }))
 
 import ProductsView from '@/views/ProductsView.vue'
@@ -102,8 +102,7 @@ describe('ProductsView', () => {
     expect(wrapper.text()).toContain('+9')
   })
 
-  it('clona o produto criando uma cópia sem códigos', async () => {
-    apiMock.post.mockResolvedValue({ products })
+  it('clona pré-preenchendo o formulário sem fechar o modal', async () => {
     const wrapper = mountView()
     await flushPromises()
 
@@ -114,15 +113,26 @@ describe('ProductsView', () => {
     await wrapper.find('.modal-clone').trigger('click')
     await flushPromises()
 
+    // não posta nem fecha: vira produto novo preenchido
+    expect(apiMock.post).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Novo produto')
+    expect(wrapper.text()).toContain('Clonando de "Doces arildo"')
+    expect(wrapper.find('#product_name').element.value).toBe('Doces arildo')
+    expect(wrapper.find('#product_category').element.value).toBe('Doces')
+    expect(wrapper.find('#product_suppliers').element.value).toBe('Fornecedor X')
+    expect(wrapper.find('#product_barcode').element.value).toBe('')
+    expect(wrapper.find('#product_stock').element.value).toBe('0')
+
+    // altera o que precisar e salva como produto novo
+    await wrapper.find('#product_name').setValue('Doces arildo Lata')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
     expect(apiMock.post).toHaveBeenCalledWith(
       '/products',
       expect.objectContaining({
-        name: 'Doces arildo (cópia)',
-        barcode: null,
-        secondary_code: null,
+        name: 'Doces arildo Lata',
         category: 'Doces',
         suppliers: 'Fornecedor X',
-        stock_quantity: 0,
       })
     )
   })

@@ -15,6 +15,7 @@ const saving = ref(false)
 const showProductModal = ref(false)
 const editingProduct = ref(null)
 const productForm = ref({})
+const cloneSource = ref(null)
 const detailsTab = ref('dados')
 const movementsLoading = ref(false)
 const movementsList = ref([])
@@ -45,12 +46,14 @@ function blankProduct() {
 function openNewProduct() {
   editingProduct.value = null
   productForm.value = blankProduct()
+  cloneSource.value = null
   detailsTab.value = 'dados'
   showProductModal.value = true
 }
 
 function openEditProduct(product) {
   editingProduct.value = product
+  cloneSource.value = null
   productForm.value = {
     name: product.name,
     price: maskMoney(String(Math.round(product.price * 100))),
@@ -143,6 +146,7 @@ async function saveProduct() {
       data.value = await api.post('/products', payload)
     }
     showProductModal.value = false
+    cloneSource.value = null
     ElMessage.success(editingProduct.value ? 'Produto atualizado!' : 'Produto cadastrado!')
   } catch (error) {
     ElMessage.error(error.message)
@@ -151,34 +155,29 @@ async function saveProduct() {
   }
 }
 
-// Clona o produto em edição: mesmo cadastro, código novo (sem barras) e
-// estoque zerado.
-async function cloneProduct() {
+// Clona o produto em edição: preenche o modal como produto novo com as
+// mesmas informações (menos o id e o código de barras), sem fechar.
+function cloneProduct() {
   if (!editingProduct.value) return
   const product = editingProduct.value
-  saving.value = true
-  try {
-    const payload = {
-      name: product.name + ' (cópia)',
-      price: String(product.price),
-      cost: String(product.cost),
-      barcode: null,
-      secondary_code: null,
-      category: product.category || '',
-      suppliers: product.suppliers || '',
-      min_stock: product.min_stock,
-      stock_quantity: 0,
-      obs: product.obs || '',
-      active: product.active,
-    }
-    data.value = await api.post('/products', payload)
-    showProductModal.value = false
-    ElMessage.success('Produto clonado!')
-  } catch (error) {
-    ElMessage.error(error.message)
-  } finally {
-    saving.value = false
+  cloneSource.value = product.name
+  editingProduct.value = null
+  productForm.value = {
+    name: product.name,
+    price: maskMoney(String(Math.round(product.price * 100))),
+    cost: maskMoney(String(Math.round(product.cost * 100))),
+    barcode: '',
+    secondary_code: product.secondary_code || '',
+    category: product.category || '',
+    suppliers: product.suppliers || '',
+    stock_quantity: 0,
+    min_stock: product.min_stock,
+    obs: product.obs || '',
+    active: product.active,
   }
+  detailsTab.value = 'dados'
+  movementsList.value = []
+  ElMessage.info('Altere as informações e salve o novo produto.')
 }
 
 async function saveAdjust() {
@@ -322,11 +321,15 @@ onMounted(() => {
     </div>
 
     <div class="modal" :class="{ 'is-open': showProductModal }">
-      <div class="modal-content modal-content-sm">
+      <div class="modal-content modal-content-wide">
         <div class="modal-header">
           <h2>{{ editingProduct ? 'Detalhes do produto' : 'Novo produto' }}</h2>
           <button type="button" class="modal-close" aria-label="Fechar" @click="showProductModal = false">&times;</button>
         </div>
+
+        <p v-if="cloneSource" class="clone-hint">
+          <i class="fas fa-clone"></i> Clonando de "{{ cloneSource }}" — altere o que precisar e salve.
+        </p>
 
         <div class="modal-tabs" role="tablist">
           <button
@@ -348,12 +351,18 @@ onMounted(() => {
         </div>
 
         <form v-show="detailsTab === 'dados'" class="modal-form" @submit.prevent="saveProduct">
-          <div v-if="editingProduct" class="form-field">
-            <label>Código (ID)</label>
-            <input type="text" :value="'#' + editingProduct.id" readonly />
+          <div class="form-grid" v-if="editingProduct">
+            <div class="form-field">
+              <label>Código (ID)</label>
+              <input type="text" :value="'#' + editingProduct.id" readonly />
+            </div>
+            <div class="form-field">
+              <label for="product_name">Nome do produto</label>
+              <input id="product_name" v-model="productForm.name" type="text" placeholder="Ex: Coca-Cola 2L" required />
+            </div>
           </div>
 
-          <div class="form-field">
+          <div class="form-field" v-else>
             <label for="product_name">Nome do produto</label>
             <input id="product_name" v-model="productForm.name" type="text" placeholder="Ex: Coca-Cola 2L" required />
           </div>
@@ -369,9 +378,15 @@ onMounted(() => {
             </div>
           </div>
 
-          <div class="form-field">
-            <label for="product_category">Categoria</label>
-            <input id="product_category" v-model="productForm.category" type="text" placeholder="Ex: Bebidas, Padaria..." />
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="product_category">Categoria</label>
+              <input id="product_category" v-model="productForm.category" type="text" placeholder="Ex: Bebidas, Padaria..." />
+            </div>
+            <div class="form-field">
+              <label for="product_suppliers">Fornecedores</label>
+              <input id="product_suppliers" v-model="productForm.suppliers" type="text" placeholder="Ex: Distribuidora ABC, Atacadão..." />
+            </div>
           </div>
 
           <div class="form-grid">
@@ -400,11 +415,6 @@ onMounted(() => {
               <label for="product_min_stock">Estoque mínimo</label>
               <input id="product_min_stock" v-model="productForm.min_stock" type="number" min="0" />
             </div>
-          </div>
-
-          <div class="form-field">
-            <label for="product_suppliers">Fornecedores</label>
-            <input id="product_suppliers" v-model="productForm.suppliers" type="text" placeholder="Ex: Distribuidora ABC, Atacadão..." />
           </div>
 
           <div class="form-field">
