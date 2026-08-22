@@ -5,9 +5,6 @@ import { api } from '@/api/client'
 import { brl, maskMoney, moneyToDecimal } from '@/utils/format'
 import AppShell from '@/components/AppShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import { useRowMenu } from '@/composables/useRowMenu'
-
-const { openMenu, menuPos, toggleMenu, closeMenus } = useRowMenu()
 
 const data = ref(null)
 const loading = ref(false)
@@ -295,36 +292,43 @@ function onModalKeydown(event) {
                     </span>
                   </td>
                   <td class="cell-actions">
-                    <div class="dropdown">
+                    <div class="product-actions">
                       <button
                         type="button"
-                        class="icon-btn row-menu-btn"
-                        aria-haspopup="true"
-                        aria-expanded="false"
-                        aria-label="Ações do produto"
-                        :data-menu="product.id"
-                        @click.stop="toggleMenu(product.id)"
+                        class="icon-btn"
+                        title="Editar"
+                        aria-label="Editar produto"
+                        @click="openEditProduct(product)"
                       >
-                        <i class="fas fa-ellipsis-h"></i>
+                        <i class="fas fa-pen"></i>
                       </button>
-                      <div
-                        class="dropdown-panel"
-                        v-show="openMenu === product.id"
-                        :style="{ top: menuPos.top + 'px', left: menuPos.left + 'px' }"
+                      <button
+                        type="button"
+                        class="icon-btn"
+                        title="Ajustar estoque"
+                        aria-label="Ajustar estoque"
+                        @click="openAdjust(product)"
                       >
-                        <button type="button" class="dropdown-item" @click="openEditProduct(product)">
-                          <i class="fas fa-pen"></i> Editar
-                        </button>
-                        <button type="button" class="dropdown-item" @click="openAdjust(product)">
-                          <i class="fas fa-balance-scale"></i> Ajustar estoque
-                        </button>
-                        <button type="button" class="dropdown-item" @click="openMovements(product)">
-                          <i class="fas fa-history"></i> Movimentações
-                        </button>
-                        <button type="button" class="dropdown-item is-danger" @click="removeProduct(product)">
-                          <i class="fas fa-trash"></i> Excluir
-                        </button>
-                      </div>
+                        <i class="fas fa-balance-scale"></i>
+                      </button>
+                      <button
+                        type="button"
+                        class="icon-btn"
+                        title="Movimentações"
+                        aria-label="Movimentações"
+                        @click="openMovements(product)"
+                      >
+                        <i class="fas fa-history"></i>
+                      </button>
+                      <button
+                        type="button"
+                        class="icon-btn is-danger"
+                        title="Excluir"
+                        aria-label="Excluir produto"
+                        @click="removeProduct(product)"
+                      >
+                        <i class="fas fa-trash"></i>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -589,5 +593,22 @@ function onModalKeydown(event) {
 .muted {
   color: var(--text-muted);
   padding: 24px 4px;
+}
+.product-actions {
+  display: flex;
+  gap: 2px;
+  justify-content: flex-end;
+}
+.product-actions .icon-btn {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+}
+.product-actions .icon-btn.is-danger {
+  color: var(--danger, #dc2626);
+}
+.product-actions .icon-btn.is-danger:hover {
+  background: color-mix(in srgb, var(--danger, #dc2626) 10%, transparent);
+  color: var(--danger, #dc2626);
 }
 </style>

@@ -44,6 +44,12 @@ function mountView() {
   })
 }
 
+// ícones diretos na linha: [Editar, Ajustar estoque, Movimentações, Excluir]
+async function openEdit(wrapper) {
+  await wrapper.findAll('.product-actions button')[0].trigger('click')
+  await flushPromises()
+}
+
 describe('ProductsView', () => {
   beforeEach(() => {
     apiMock.get.mockReset()
@@ -53,23 +59,21 @@ describe('ProductsView', () => {
     apiMock.get.mockResolvedValue({ products })
   })
 
-  it('abre o menu de ações da linha sem cortar (position fixed)', async () => {
+  it('mostra ações diretas com ícones na linha', async () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.find('.row-menu-btn').trigger('click')
-    await nextTick()
-    expect(wrapper.find('.dropdown-panel').isVisible()).toBe(true)
-    expect(wrapper.find('.dropdown-panel').attributes('style')).toContain('top:')
+    const buttons = wrapper.findAll('.product-actions button')
+    expect(buttons.length).toBe(4)
+    expect(buttons[0].find('i').classes()).toContain('fa-pen') // Editar
+    expect(buttons[3].classes()).toContain('is-danger') // Excluir
   })
 
   it('editar mostra código, categoria, código secundário e fornecedores', async () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.find('.row-menu-btn').trigger('click')
-    await wrapper.findAll('.dropdown-item')[0].trigger('click')
-    await flushPromises()
+    await openEdit(wrapper)
 
     expect(wrapper.find('input[readonly]').element.value).toBe('#3')
     expect(wrapper.find('#product_category').element.value).toBe('Doces')
@@ -89,9 +93,7 @@ describe('ProductsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.find('.row-menu-btn').trigger('click')
-    await wrapper.findAll('.dropdown-item')[0].trigger('click')
-    await flushPromises()
+    await openEdit(wrapper)
 
     const tabs = wrapper.findAll('.modal-tabs button')
     await tabs[1].trigger('click')
@@ -106,9 +108,7 @@ describe('ProductsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.find('.row-menu-btn').trigger('click')
-    await wrapper.findAll('.dropdown-item')[0].trigger('click')
-    await flushPromises()
+    await openEdit(wrapper)
 
     await wrapper.find('.modal-clone').trigger('click')
     await flushPromises()
@@ -142,9 +142,7 @@ describe('ProductsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.find('.row-menu-btn').trigger('click')
-    await wrapper.findAll('.dropdown-item')[0].trigger('click')
-    await flushPromises()
+    await openEdit(wrapper)
 
     // Enter em qualquer campo não dispara o salvar
     await wrapper.find('#product_name').trigger('keydown', { key: 'Enter' })
@@ -165,9 +163,7 @@ describe('ProductsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.find('.row-menu-btn').trigger('click')
-    const items = wrapper.findAll('.dropdown-item')
-    await items[items.length - 1].trigger('click') // Excluir
+    await wrapper.findAll('.product-actions button')[3].trigger('click') // Excluir
     await nextTick()
 
     expect(wrapper.text()).toContain('Excluir o produto "Doces arildo"?')
@@ -183,9 +179,7 @@ describe('ProductsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.find('.row-menu-btn').trigger('click')
-    await wrapper.findAll('.dropdown-item')[0].trigger('click')
-    await flushPromises()
+    await openEdit(wrapper)
 
     await wrapper.find('#product_category').setValue('Guloseimas')
     await wrapper.find('form').trigger('submit')
