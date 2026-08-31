@@ -24,3 +24,6 @@ class Order(SQLModel, table=True):
     discount: Optional[Decimal] = Field(
         default=None, sa_column=Column(Numeric(10, 2), nullable=True)
     )
+    customer_id: Optional[int] = Field(
+        default=None, foreign_key="customer.id", nullable=True
+    )

@@ -14,6 +14,35 @@ def _csrf(client):
     return response.get_json()["csrf_token"]
 
 
+def _open_caixa(client):
+    """Abre um caixa no banco de testes pra permitir vendas."""
+    from billflux.infra.config.database import get_session
+    from billflux.infra.entities.cash_register import CashRegister
+    from sqlmodel import select
+
+    session = get_session()
+    with session:
+        existing = session.exec(
+            select(CashRegister).where(CashRegister.status == "open")
+        ).first()
+        if existing:
+            existing.status = "closed"
+            existing.closed_by = "test"
+            existing.closed_at = "2026-08-23 00:00:00"
+            existing.closing_amount = existing.opening_amount
+            existing.expected_amount = existing.opening_amount
+            session.add(existing)
+            session.commit()
+        cr = CashRegister(
+            opened_by="test",
+            opened_at="2026-08-23 00:00:00",
+            opening_amount=100.0,
+            status="open",
+        )
+        session.add(cr)
+        session.commit()
+
+
 def test_pdv_requires_login(client):
     """Sem sessão, /api/pdv deve devolver 401 JSON."""
 
@@ -46,6 +75,7 @@ def test_pdv_returns_products_and_methods(logged_client):
 def test_pdv_complete_creates_order(logged_client):
     """POST /complete finaliza a venda, baixa estoque e devolve o recibo."""
 
+    _open_caixa(logged_client)
     product = ProductRepository().insert_product(
         name="PDV Venda", price=Decimal("10.00"), cost=Decimal("3.00"), stock_quantity=5
     )
@@ -101,6 +131,7 @@ def test_pdv_complete_validation(logged_client):
 def test_pdv_complete_without_stock_allows_negative(logged_client):
     """Venda sem estoque é permitida e deixa o estoque negativo."""
 
+    _open_caixa(logged_client)
     product = ProductRepository().insert_product(
         name="Sem Estoque", price=Decimal("2.00"), stock_quantity=0
     )
@@ -125,6 +156,7 @@ def test_pdv_complete_without_stock_allows_negative(logged_client):
 def test_pdv_complete_with_discount(logged_client):
     """POST /complete aceita desconto e o abate do total e do recibo."""
 
+    _open_caixa(logged_client)
     product = ProductRepository().insert_product(
         name="PDV Desconto", price=Decimal("10.00"), stock_quantity=5
     )
@@ -161,6 +193,7 @@ def test_pdv_complete_with_discount(logged_client):
 def test_pdv_complete_split_payments(logged_client):
     """POST /complete aceita pagamento dividido entre formas de pagamento."""
 
+    _open_caixa(logged_client)
     product = ProductRepository().insert_product(
         name="PDV Split", price=Decimal("2.00"), stock_quantity=5
     )
@@ -239,6 +272,7 @@ def test_pdv_complete_split_payments_validation(logged_client):
 def test_pdv_complete_with_change(logged_client):
     """Recibo informa quanto foi pago em cada forma e o troco."""
 
+    _open_caixa(logged_client)
     product = ProductRepository().insert_product(
         name="PDV Troco", price=Decimal("2.00"), stock_quantity=5
     )
@@ -267,6 +301,7 @@ def test_pdv_complete_with_change(logged_client):
 def test_pdv_receipt(logged_client):
     """GET /api/pdv/recibo/<id> devolve os dados de um pedido."""
 
+    _open_caixa(logged_client)
     product = ProductRepository().insert_product(
         name="PDV Recibo", price=Decimal("7.50"), stock_quantity=4
     )

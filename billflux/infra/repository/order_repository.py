@@ -29,6 +29,7 @@ class OrderRepository:
         obs: Optional[str] = None,
         discount: Optional[Decimal] = None,
         payments: Optional[List[tuple]] = None,
+        customer_id: Optional[int] = None,
     ) -> Order:
         """Cria um pedido de forma transacional: pedido + itens + baixa de estoque
         + log de movimentação. Levanta ValueError se um produto não existir ou
@@ -65,6 +66,7 @@ class OrderRepository:
                     payment_method_id=payments[0][0],
                     obs=obs,
                     discount=discount or None,
+                    customer_id=customer_id,
                 )
                 session.add(order)
                 session.flush()
@@ -103,6 +105,22 @@ class OrderRepository:
         try:
             with session:
                 sql = select(OrderModel).order_by(OrderModel.created_at.desc())
+                orders = session.exec(sql).all()
+                return [Order(**dict(order)) for order in orders]
+        finally:
+            session.close()
+
+    def get_orders_by_customer(self, customer_id: int) -> List[Order]:
+        """Returns orders for a specific customer, newest first."""
+
+        session = get_session()
+        try:
+            with session:
+                sql = (
+                    select(OrderModel)
+                    .where(OrderModel.customer_id == customer_id)
+                    .order_by(OrderModel.created_at.desc())
+                )
                 orders = session.exec(sql).all()
                 return [Order(**dict(order)) for order in orders]
         finally:

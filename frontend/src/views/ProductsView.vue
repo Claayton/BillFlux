@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl, maskMoney, moneyToDecimal } from '@/utils/format'
@@ -7,6 +7,8 @@ import AppShell from '@/components/AppShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const data = ref(null)
+const categories = ref([])
+const suppliers = ref([])
 const loading = ref(false)
 const saving = ref(false)
 
@@ -25,7 +27,30 @@ const adjustForm = ref({ delta: '', obs: '' })
 const showMovementsModal = ref(false)
 const movementsData = ref(null)
 
+const showNewCategory = ref(false)
+const newCategoryName = ref('')
+const creatingCategory = ref(false)
 const deleteTarget = ref(null)
+const searchQuery = ref('')
+const activeCategoryId = ref(null)
+
+const filteredProducts = computed(() => {
+  if (!data.value) return []
+  let list = data.value.products || []
+  if (activeCategoryId.value !== null) {
+    list = list.filter(p => p.category_id === activeCategoryId.value)
+  }
+  const q = searchQuery.value.trim().toLowerCase()
+  if (q) {
+    list = list.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      (p.barcode || '').toLowerCase().includes(q) ||
+      (p.secondary_code || '').toLowerCase().includes(q) ||
+      (p.category_name || '').toLowerCase().includes(q)
+    )
+  }
+  return list
+})
 
 function blankProduct() {
   return {
@@ -34,8 +59,9 @@ function blankProduct() {
     cost: '0,00',
     barcode: '',
     secondary_code: '',
-    category: '',
+    category_id: null,
     suppliers: '',
+    supplier_id: null,
     stock_quantity: 0,
     min_stock: 0,
     obs: '',
@@ -47,6 +73,8 @@ function openNewProduct() {
   editingProduct.value = null
   productForm.value = blankProduct()
   cloneSource.value = null
+  showNewCategory.value = false
+  newCategoryName.value = ''
   detailsTab.value = 'dados'
   showProductModal.value = true
 }
@@ -54,14 +82,17 @@ function openNewProduct() {
 function openEditProduct(product) {
   editingProduct.value = product
   cloneSource.value = null
+  showNewCategory.value = false
+  newCategoryName.value = ''
   productForm.value = {
     name: product.name,
     price: maskMoney(String(Math.round(product.price * 100))),
     cost: maskMoney(String(Math.round(product.cost * 100))),
     barcode: product.barcode || '',
     secondary_code: product.secondary_code || '',
-    category: product.category || '',
+    category_id: product.category_id || null,
     suppliers: product.suppliers || '',
+    supplier_id: product.supplier_id || null,
     min_stock: product.min_stock,
     obs: product.obs || '',
     active: product.active,
@@ -118,6 +149,25 @@ async function load() {
   }
 }
 
+async function createQuickCategory() {
+  const name = newCategoryName.value.trim()
+  if (!name) return
+  creatingCategory.value = true
+  try {
+    const res = await api.post('/categories', { name })
+    categories.value = res.categories || []
+    const created = categories.value.find(c => c.name.toLowerCase() === name.toLowerCase())
+    if (created) productForm.value.category_id = created.id
+    newCategoryName.value = ''
+    showNewCategory.value = false
+    ElMessage.success('Categoria criada!')
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    creatingCategory.value = false
+  }
+}
+
 async function saveProduct() {
   const price = moneyToDecimal(productForm.value.price)
   const cost = moneyToDecimal(productForm.value.cost)
@@ -133,8 +183,9 @@ async function saveProduct() {
       cost: String(cost),
       barcode: productForm.value.barcode,
       secondary_code: productForm.value.secondary_code,
-      category: productForm.value.category,
+      category_id: productForm.value.category_id,
       suppliers: productForm.value.suppliers,
+      supplier_id: productForm.value.supplier_id,
       min_stock: Number(productForm.value.min_stock) || 0,
       obs: productForm.value.obs,
       active: productForm.value.active,
@@ -168,8 +219,9 @@ function cloneProduct() {
     cost: maskMoney(String(Math.round(product.cost * 100))),
     barcode: '',
     secondary_code: product.secondary_code || '',
-    category: product.category || '',
+    category_id: product.category_id || null,
     suppliers: product.suppliers || '',
+    supplier_id: product.supplier_id || null,
     stock_quantity: 0,
     min_stock: product.min_stock,
     obs: product.obs || '',
@@ -221,8 +273,16 @@ function deleteMessage() {
   return 'Excluir o produto "' + (deleteTarget.value?.name || '') + '"? Essa ação não pode ser desfeita.'
 }
 
-onMounted(() => {
+onMounted(async () => {
   load()
+  try {
+    const res = await api.get('/categories')
+    categories.value = res.categories || []
+  } catch { /* ignora */ }
+  try {
+    const res = await api.get('/products')
+    suppliers.value = res.suppliers || []
+  } catch { /* ignora */ }
   document.addEventListener('keydown', onModalKeydown)
 })
 
@@ -242,7 +302,7 @@ function onModalKeydown(event) {
 
 <template>
   <AppShell>
-    <div class="dashboard">
+    <div class="dashboard products-page">
       <div class="page-header">
         <div>
           <h1 class="page-title">Produtos</h1>
@@ -255,36 +315,82 @@ function onModalKeydown(event) {
 
       <div v-if="loading" class="muted">Carregando…</div>
       <template v-else-if="data">
-        <div class="table-card">
-          <div class="table-container">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Produto</th>
-                  <th class="th-amount">Preço</th>
-                  <th class="th-number">Estoque</th>
-                  <th>Código de barras</th>
-                  <th class="th-actions"></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="product in data.products"
-                  :key="product.id"
-                  :class="{ 'is-active': product.active, 'is-inactive': !product.active }"
+        <div class="products-layout">
+          <aside class="products-sidebar">
+            <h3 class="sidebar-title">Categorias</h3>
+            <ul class="sidebar-list">
+              <li>
+                <button
+                  type="button"
+                  class="sidebar-item"
+                  :class="{ 'is-active': activeCategoryId === null }"
+                  @click="activeCategoryId = null"
                 >
-                  <td>
-                    <span class="cell-title">{{ product.name }}</span>
-                    <span v-if="product.obs" class="cell-sub">{{ product.obs }}</span>
-                  </td>
-                  <td class="cell-amount">{{ brl(product.price) }}</td>
-                  <td class="cell-stock" :class="{ 'cell-stock-low': product.min_stock && product.stock_quantity <= product.min_stock }">
-                    {{ product.stock_quantity }}
-                    <span v-if="product.min_stock" class="cell-sub">mín. {{ product.min_stock }}</span>
-                  </td>
-                  <td class="cell-barcode">{{ product.barcode || '—' }}</td>
-                  <td class="cell-actions">
-                    <div class="product-actions">
+                  <i class="fas fa-layer-group"></i> Todos
+                  <span class="sidebar-count">{{ data.products.length }}</span>
+                </button>
+              </li>
+              <li v-for="cat in categories.filter(c => c.active)" :key="cat.id">
+                <button
+                  type="button"
+                  class="sidebar-item"
+                  :class="{ 'is-active': activeCategoryId === cat.id }"
+                  @click="activeCategoryId = cat.id"
+                >
+                  {{ cat.name }}
+                  <span class="sidebar-count">{{ data.products.filter(p => p.category_id === cat.id).length }}</span>
+                </button>
+              </li>
+            </ul>
+          </aside>
+
+          <div class="products-main">
+            <div class="products-search">
+              <i class="fas fa-search"></i>
+              <input
+                v-model="searchQuery"
+                type="text"
+                placeholder="Buscar por nome, código ou categoria..."
+              />
+              <button
+                v-if="searchQuery"
+                type="button"
+                class="search-clear"
+                @click="searchQuery = ''"
+              >
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+
+            <div class="table-card">
+              <div class="table-container">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Produto</th>
+                      <th class="th-amount">Preço</th>
+                      <th class="th-number">Estoque</th>
+                      <th class="th-actions"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="product in filteredProducts"
+                      :key="product.id"
+                      :class="{ 'is-active': product.active, 'is-inactive': !product.active }"
+                    >
+                      <td>
+                        <span class="cell-title">{{ product.name }}</span>
+                        <span v-if="product.category_name" class="cell-sub">{{ product.category_name }}</span>
+                        <span v-else-if="product.obs" class="cell-sub">{{ product.obs }}</span>
+                      </td>
+                      <td class="cell-amount">{{ brl(product.price) }}</td>
+                      <td class="cell-stock" :class="{ 'cell-stock-low': product.min_stock && product.stock_quantity <= product.min_stock }">
+                        {{ product.stock_quantity }}
+                        <span v-if="product.min_stock" class="cell-sub">mín. {{ product.min_stock }}</span>
+                      </td>
+                      <td class="cell-actions">
+                        <div class="product-actions">
                       <button
                         type="button"
                         class="icon-btn"
@@ -324,15 +430,19 @@ function onModalKeydown(event) {
                     </div>
                   </td>
                 </tr>
-                <tr v-if="!data.products.length" class="empty-row">
-                  <td colspan="5" class="empty-state">
+                <tr v-if="!filteredProducts.length" class="empty-row">
+                  <td colspan="4" class="empty-state">
                     <i class="fas fa-box-open"></i>
-                    <h3>Nenhum produto cadastrado</h3>
-                    <p>Cadastre os itens vendidos no PDV para começar.</p>
+                    <h3 v-if="searchQuery || activeCategoryId !== null">Nenhum produto encontrado</h3>
+                    <h3 v-else>Nenhum produto cadastrado</h3>
+                    <p v-if="searchQuery || activeCategoryId !== null">Tente outros filtros ou limpe a busca.</p>
+                    <p v-else>Cadastre os itens vendidos no PDV para começar.</p>
                   </td>
                 </tr>
               </tbody>
             </table>
+          </div>
+        </div>
           </div>
         </div>
 
@@ -409,11 +519,55 @@ function onModalKeydown(event) {
           <div class="form-grid">
             <div class="form-field">
               <label for="product_category">Categoria</label>
-              <input id="product_category" v-model="productForm.category" type="text" placeholder="Ex: Bebidas, Padaria..." />
+              <div class="category-row">
+                <select id="product_category" v-model="productForm.category_id">
+                  <option :value="null">Sem categoria</option>
+                  <option
+                    v-for="cat in categories.filter(c => c.active)"
+                    :key="cat.id"
+                    :value="cat.id"
+                  >{{ cat.name }}</option>
+                </select>
+                <button
+                  type="button"
+                  class="icon-btn category-add-btn"
+                  title="Nova categoria"
+                  aria-label="Adicionar nova categoria"
+                  @click="showNewCategory = !showNewCategory"
+                >
+                  <i class="fas fa-plus"></i>
+                </button>
+              </div>
+              <div v-if="showNewCategory" class="category-inline">
+                <input
+                  v-model="newCategoryName"
+                  type="text"
+                  placeholder="Nome da categoria..."
+                  class="category-inline-input"
+                  @keydown.enter.prevent="createQuickCategory"
+                  @keydown.escape="showNewCategory = false"
+                />
+                <button
+                  type="button"
+                  class="icon-btn"
+                  title="Criar categoria"
+                  :disabled="creatingCategory || !newCategoryName.trim()"
+                  @click="createQuickCategory"
+                >
+                  <i class="fas fa-check"></i>
+                </button>
+              </div>
             </div>
             <div class="form-field">
-              <label for="product_suppliers">Fornecedores</label>
-              <input id="product_suppliers" v-model="productForm.suppliers" type="text" placeholder="Ex: Distribuidora ABC, Atacadão..." />
+              <label for="product_supplier">Fornecedor</label>
+              <select id="product_supplier" v-model="productForm.supplier_id">
+                <option :value="null">Sem fornecedor</option>
+                <option
+                  v-for="sup in suppliers.filter(s => s.active)"
+                  :key="sup.id"
+                  :value="sup.id"
+                >{{ sup.name }}</option>
+              </select>
             </div>
           </div>
 
@@ -602,5 +756,171 @@ function onModalKeydown(event) {
 .product-actions .icon-btn.is-danger:hover {
   background: color-mix(in srgb, var(--danger, #dc2626) 10%, transparent);
   color: var(--danger, #dc2626);
+}
+.category-row {
+  display: flex;
+  gap: 4px;
+}
+.category-row select {
+  flex: 1;
+}
+.category-add-btn {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 1px dashed var(--border, #ccc);
+  border-radius: 6px;
+  color: var(--primary, #2563eb);
+}
+.category-add-btn:hover {
+  background: color-mix(in srgb, var(--primary, #2563eb) 10%, transparent);
+}
+.category-inline {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.category-inline-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.category-inline .icon-btn {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  color: var(--primary, #2563eb);
+}
+.category-inline .icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Products layout: sidebar + main */
+.products-page {
+  padding-left: 0;
+  padding-right: 0;
+}
+.products-page .page-header {
+  padding: 0 24px;
+}
+.products-page .account-hint {
+  padding: 0 24px;
+}
+.products-layout {
+  display: flex;
+  gap: 0;
+}
+.products-sidebar {
+  width: 210px;
+  flex-shrink: 0;
+  padding: 0 20px 0 0;
+  border-right: 1px solid var(--border, #e5e7eb);
+}
+.sidebar-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #999);
+  margin: 0 0 8px 8px;
+  font-weight: 600;
+}
+.sidebar-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  color: var(--text, #333);
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  border-bottom: 1px solid var(--border, #f0f0f0);
+}
+.sidebar-item:last-child {
+  border-bottom: none;
+}
+.sidebar-item:hover {
+  background: var(--hover, #f5f5f5);
+}
+.sidebar-item.is-active {
+  background: color-mix(in srgb, var(--primary, #2563eb) 8%, transparent);
+  color: var(--primary, #2563eb);
+  font-weight: 600;
+}
+.sidebar-item i {
+  width: 16px;
+  text-align: center;
+  font-size: 12px;
+}
+.sidebar-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-muted, #999);
+  background: var(--bg, #f3f4f6);
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+/* Search bar */
+.products-main {
+  flex: 1;
+  min-width: 0;
+  padding: 0 24px;
+}
+.products-search {
+  position: relative;
+  margin-bottom: 16px;
+}
+.products-search i.fa-search {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted, #999);
+  font-size: 14px;
+  pointer-events: none;
+}
+.products-search input {
+  width: 100%;
+  padding: 10px 36px 10px 40px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--surface, #fff);
+  color: var(--text, #333);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.products-search input:focus {
+  border-color: var(--primary, #2563eb);
+}
+.search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted, #999);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 13px;
+}
+.search-clear:hover {
+  color: var(--text, #333);
 }
 </style>

@@ -16,6 +16,7 @@ from billflux.infra.repository.payment_method_repository import (
     PaymentMethodRepository,
 )
 from billflux.infra.repository.product_repository import ProductRepository
+from billflux.infra.repository.customer_repository import CustomerRepository
 
 
 def _serialize_product(product):
@@ -47,6 +48,15 @@ def _build_receipt(order_id):
         product = ProductRepository().get_product(item.product_id)
         products[item.product_id] = product.name if product else "Item"
 
+    customer_name = None
+    if order.customer_id:
+        from billflux.infra.repository.customer_repository import (
+            CustomerRepository,
+        )
+        customer = CustomerRepository().get_customer(order.customer_id)
+        if customer:
+            customer_name = customer.name
+
     payments_detail = []
     received_total = Decimal("0")
     for payment_method_id, amount in repository.get_order_payments(order.id):
@@ -71,6 +81,8 @@ def _build_receipt(order_id):
         "payment_method": method.name if method else "—",
         "payments": payments_detail,
         "troco": float(troco),
+        "customer_id": order.customer_id,
+        "customer_name": customer_name,
         "items": [
             {
                 "name": products[item.product_id],
@@ -96,6 +108,10 @@ def pdv():
                 _serialize_method(m)
                 for m in PaymentMethodRepository().get_active_methods()
             ],
+            "customers": [
+                {"id": c.id, "name": c.name, "cpf_cnpj": c.cpf_cnpj or ""}
+                for c in CustomerRepository().get_customers(active_only=True)
+            ],
         }
     )
 
@@ -104,6 +120,14 @@ def pdv():
 @api_login_required
 def complete():
     """Finaliza uma venda e devolve o recibo do pedido criado."""
+
+    from billflux.infra.repository.cash_register_repository import (
+        CashRegisterRepository,
+    )
+
+    if not CashRegisterRepository().get_open():
+        return api_error("Nenhum caixa aberto. Abra o caixa antes de registrar vendas.", 400)
+
     data = request.get_json(silent=True) or {}
 
     method_id = None
@@ -151,6 +175,13 @@ def complete():
         return api_error("Adicione ao menos um item ao carrinho.", 400)
 
     obs = (data.get("obs") or "").strip() or None
+    customer_id = None
+    raw_customer = data.get("customer_id")
+    if raw_customer:
+        try:
+            customer_id = int(raw_customer)
+        except (TypeError, ValueError):
+            customer_id = None
 
     discount = br_to_decimal(data.get("discount"))
     if discount is None:
@@ -166,6 +197,7 @@ def complete():
             obs=obs,
             discount=discount,
             payments=payments,
+            customer_id=customer_id,
         )
     except ValueError as error:
         return api_error(str(error), 400)

@@ -13,7 +13,12 @@ from billflux.api import bills as api_bills
 from billflux.api import products as api_products
 from billflux.api import accounts as api_accounts
 from billflux.api import payments as api_payments
+from billflux.api import categories as api_categories
+from billflux.api import cash_register as api_cash_register
+from billflux.api import customers as api_customers
+from billflux.api import suppliers as api_suppliers
 from billflux.api import pdv as api_pdv
+from billflux.api import purchases as api_purchases
 
 csrf = CSRFProtect()
 

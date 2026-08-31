@@ -53,6 +53,11 @@ describe('PdvView', () => {
           },
         })
       }
+      if (String(url).includes('/caixa')) {
+        return Promise.resolve({
+          open: { id: 1, opened_by: 'test', opening_amount: 100, status: 'open' },
+        })
+      }
       return Promise.resolve({ products, methods })
     })
   })

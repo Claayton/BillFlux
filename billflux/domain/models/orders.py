@@ -12,5 +12,6 @@ Order = namedtuple(
         "obs",
         "cancelled",
         "discount",
+        "customer_id",
     ],
 )

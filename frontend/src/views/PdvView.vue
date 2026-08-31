@@ -8,11 +8,16 @@ import SaleReceiptModal from '@/views/SaleReceiptModal.vue'
 
 const products = ref([])
 const methods = ref([])
+const customers = ref([])
+const selectedCustomer = ref(null)
+const customerSearch = ref('')
+const showCustomerDropdown = ref(false)
 const search = ref('')
 const suggestions = ref([])
 const highlighted = ref(-1)
 const finishing = ref(false)
 const receiptOrder = ref(null)
+const caixaOpen = ref(false)
 
 const checkoutOpen = ref(false)
 const payAmounts = ref({})
@@ -28,9 +33,9 @@ const cart = ref(new Map())
 
 const cartItems = computed(() => Array.from(cart.value.values()))
 const cartCount = computed(() => cartItems.value.reduce((sum, item) => sum + item.qty, 0))
-const cartTotal = computed(() => cartItems.value.reduce((sum, item) => sum + item.price * item.qty, 0))
+const cartTotal = computed(() => Math.round(cartItems.value.reduce((sum, item) => sum + item.price * item.qty, 0) * 100) / 100)
 const countLabel = computed(() => cartCount.value + (cartCount.value === 1 ? ' item' : ' itens'))
-const cartTotalAfter = computed(() => Math.max(0, cartTotal.value - (discount.value || 0)))
+const cartTotalAfter = computed(() => Math.round(Math.max(0, cartTotal.value - (discount.value || 0)) * 100) / 100)
 
 // Pagamentos preenchidos no fechamento (valor > 0).
 const paymentsEntered = computed(() =>
@@ -73,9 +78,14 @@ function formatBRL(value) {
 
 async function load() {
   try {
-    const data = await api.get('/pdv')
-    products.value = data.products
-    methods.value = data.methods
+    const [pdvData, caixaData] = await Promise.all([
+      api.get('/pdv'),
+      api.get('/caixa').catch(() => ({ open: null })),
+    ])
+    products.value = pdvData.products
+    methods.value = pdvData.methods
+    customers.value = pdvData.customers || []
+    caixaOpen.value = !!caixaData.open
     searchInput.value?.focus()
   } catch (error) {
     ElMessage.error(error.message)
@@ -234,6 +244,35 @@ function hideSuggestions() {
   }, 150)
 }
 
+// ---------- Cliente ----------
+const filteredCustomers = computed(() => {
+  const q = customerSearch.value.toLowerCase()
+  if (!q) return customers.value
+  return customers.value.filter((c) =>
+    c.name.toLowerCase().includes(q) ||
+    (c.cpf_cnpj && c.cpf_cnpj.includes(q))
+  )
+})
+
+function selectCustomer(customer) {
+  selectedCustomer.value = customer
+  customerSearch.value = customer.name
+  showCustomerDropdown.value = false
+}
+
+function clearCustomer() {
+  selectedCustomer.value = null
+  customerSearch.value = ''
+}
+
+function onCustomerInput(event) {
+  customerSearch.value = event.target.value
+  showCustomerDropdown.value = true
+  if (!event.target.value) {
+    selectedCustomer.value = null
+  }
+}
+
 // ---------- Desconto (F3) ----------
 function openDiscount() {
   if (cart.value.size === 0) return
@@ -255,6 +294,10 @@ function clearDiscount() {
 
 // ---------- Finalizar venda (F2) ----------
 function finishSale() {
+  if (!caixaOpen.value) {
+    ElMessage.warning('Nenhum caixa aberto. Abra o caixa antes de registrar vendas.')
+    return
+  }
   if (cart.value.size === 0) return
   const amounts = {}
   methods.value.forEach((m) => {
@@ -328,6 +371,9 @@ async function confirmCheckout() {
   const payload = {
     items,
     discount: discount.value || 0,
+  }
+  if (selectedCustomer.value) {
+    payload.customer_id = selectedCustomer.value.id
   }
   if (cartTotalAfter.value <= 0) {
     // venda de valor zero: fecha na primeira forma sem valores
@@ -411,6 +457,12 @@ onBeforeUnmount(() => {
       </router-link>
     </header>
 
+    <div v-if="!caixaOpen" class="pdv-caixa-warning">
+      <i class="fas fa-exclamation-triangle"></i>
+      <span>Caixa fechado — abra o caixa para iniciar as vendas.</span>
+      <router-link to="/caixa" class="btn btn-sm btn-warning">Abrir caixa</router-link>
+    </div>
+
     <main class="pdv-main">
       <section class="pdv-items" id="pdv-items">
         <div class="pdv-search-wrap">
@@ -492,6 +544,43 @@ onBeforeUnmount(() => {
               </button>
             </span>
           </div>
+        </div>
+
+        <div class="pdv-customer-row">
+          <div class="pdv-customer-search">
+            <i class="fas fa-user"></i>
+            <input
+              :value="customerSearch"
+              type="text"
+              placeholder="Buscar cliente (nome ou CPF/CNPJ)…"
+              @input="onCustomerInput"
+              @focus="showCustomerDropdown = true"
+              @click.outside="showCustomerDropdown = false"
+            />
+            <button
+              v-if="selectedCustomer"
+              type="button"
+              class="pdv-customer-clear"
+              @click="clearCustomer"
+              title="Limpar cliente"
+            >
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div v-if="showCustomerDropdown && filteredCustomers.length" class="pdv-customer-dropdown">
+            <div
+              v-for="c in filteredCustomers"
+              :key="c.id"
+              class="pdv-customer-option"
+              @click="selectCustomer(c)"
+            >
+              <span class="pdv-customer-name">{{ c.name }}</span>
+              <span v-if="c.cpf_cnpj" class="pdv-customer-doc">{{ c.cpf_cnpj }}</span>
+            </div>
+          </div>
+          <span v-if="selectedCustomer" class="pdv-customer-badge">
+            <i class="fas fa-user-check"></i> {{ selectedCustomer.name }}
+          </span>
         </div>
 
         <div class="pdv-footer-inline">
@@ -677,6 +766,35 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.pdv-caixa-warning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: color-mix(in srgb, #f59e0b 12%, white);
+  border-bottom: 1px solid color-mix(in srgb, #f59e0b 30%, transparent);
+  color: #92400e;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.pdv-caixa-warning i {
+  font-size: 16px;
+}
+.pdv-caixa-warning .btn-warning {
+  margin-left: auto;
+  padding: 5px 14px;
+  font-size: 13px;
+  background: #f59e0b;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.pdv-caixa-warning .btn-warning:hover {
+  background: #d97706;
+}
 .pdv-screen {
   height: 100vh;
   display: flex;
@@ -817,5 +935,83 @@ onBeforeUnmount(() => {
   gap: 6px;
   font-size: 12px;
   color: var(--text-muted, #9ca3af);
+}
+
+/* Customer selector */
+.pdv-customer-row {
+  position: relative;
+  padding: 8px 16px;
+}
+.pdv-customer-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.pdv-customer-search i {
+  color: var(--text-muted, #999);
+  font-size: 13px;
+}
+.pdv-customer-search input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  background: transparent;
+}
+.pdv-customer-clear {
+  background: none;
+  border: none;
+  color: var(--text-muted, #999);
+  cursor: pointer;
+  padding: 2px;
+}
+.pdv-customer-clear:hover {
+  color: var(--danger, #dc2626);
+}
+.pdv-customer-dropdown {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  max-height: 160px;
+  overflow-y: auto;
+  z-index: 20;
+}
+.pdv-customer-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.pdv-customer-option:hover {
+  background: var(--surface-hover, #f3f4f6);
+}
+.pdv-customer-name {
+  font-weight: 600;
+}
+.pdv-customer-doc {
+  color: var(--text-muted, #999);
+  font-size: 12px;
+}
+.pdv-customer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary, #2563eb);
+  background: color-mix(in srgb, var(--primary, #2563eb) 10%, transparent);
+  padding: 3px 8px;
+  border-radius: 4px;
 }
 </style>

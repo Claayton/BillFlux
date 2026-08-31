@@ -21,6 +21,11 @@ vi.mock('element-plus', () => ({
 
 import ProductsView from '@/views/ProductsView.vue'
 
+const categories = [
+  { id: 1, name: 'Doces', active: true, product_count: 1 },
+  { id: 2, name: 'Guloseimas', active: true, product_count: 0 },
+]
+
 const products = [
   {
     id: 3,
@@ -29,8 +34,11 @@ const products = [
     cost: 2,
     barcode: '040141018496',
     secondary_code: 'SEC-1',
-    category: 'Doces',
+    category_id: 1,
+    category_name: 'Doces',
     suppliers: 'Fornecedor X',
+    supplier_id: 1,
+    supplier_name: 'Fornecedor X',
     stock_quantity: 9,
     min_stock: 2,
     obs: '',
@@ -56,7 +64,11 @@ describe('ProductsView', () => {
     apiMock.post.mockReset()
     apiMock.put.mockReset()
     apiMock.del.mockReset()
-    apiMock.get.mockResolvedValue({ products })
+    apiMock.get.mockImplementation((url) => {
+      if (String(url).includes('/categories')) return Promise.resolve({ categories })
+      if (String(url).includes('/products')) return Promise.resolve({ products, suppliers: [{ id: 1, name: 'Fornecedor X', active: true }] })
+      return Promise.resolve({ products })
+    })
   })
 
   it('mostra ações diretas com ícones na linha', async () => {
@@ -74,11 +86,12 @@ describe('ProductsView', () => {
     await flushPromises()
 
     await openEdit(wrapper)
+    await flushPromises()
 
     expect(wrapper.find('input[readonly]').element.value).toBe('#3')
-    expect(wrapper.find('#product_category').element.value).toBe('Doces')
+    expect(wrapper.find('#product_category').element.value).toBe('1')
     expect(wrapper.find('#product_secondary_code').element.value).toBe('SEC-1')
-    expect(wrapper.find('#product_suppliers').element.value).toBe('Fornecedor X')
+    expect(wrapper.find('#product_supplier').element.value).toBe('1')
   })
 
   it('aba Transações carrega as movimentações do produto', async () => {
@@ -109,6 +122,7 @@ describe('ProductsView', () => {
     await flushPromises()
 
     await openEdit(wrapper)
+    await flushPromises()
 
     await wrapper.find('.modal-clone').trigger('click')
     await flushPromises()
@@ -118,8 +132,8 @@ describe('ProductsView', () => {
     expect(wrapper.text()).toContain('Novo produto')
     expect(wrapper.text()).toContain('Clonando de "Doces arildo"')
     expect(wrapper.find('#product_name').element.value).toBe('Doces arildo')
-    expect(wrapper.find('#product_category').element.value).toBe('Doces')
-    expect(wrapper.find('#product_suppliers').element.value).toBe('Fornecedor X')
+    expect(wrapper.find('#product_category').element.value).toBe('1')
+    expect(wrapper.find('#product_supplier').element.value).toBe('1')
     expect(wrapper.find('#product_barcode').element.value).toBe('')
     expect(wrapper.find('#product_stock').element.value).toBe('0')
 
@@ -131,8 +145,8 @@ describe('ProductsView', () => {
       '/products',
       expect.objectContaining({
         name: 'Doces arildo Lata',
-        category: 'Doces',
-        suppliers: 'Fornecedor X',
+        category_id: 1,
+        supplier_id: 1,
       })
     )
   })
@@ -180,15 +194,16 @@ describe('ProductsView', () => {
     await flushPromises()
 
     await openEdit(wrapper)
+    await flushPromises()
 
-    await wrapper.find('#product_category').setValue('Guloseimas')
+    await wrapper.find('#product_category').setValue('2')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
     expect(apiMock.put).toHaveBeenCalledWith(
       '/products/3',
       expect.objectContaining({
-        category: 'Guloseimas',
+        category_id: 2,
         secondary_code: 'SEC-1',
         suppliers: 'Fornecedor X',
         name: 'Doces arildo',

@@ -15,6 +15,7 @@ from billflux.api import (
 from billflux.config import settings
 from billflux.infra.repository.account_repository import AccountRepository
 from billflux.infra.repository.bill_repository import BillRepository
+from billflux.infra.repository.supplier_repository import SupplierRepository
 from billflux.services.barcode import to_barcode
 
 
@@ -98,6 +99,7 @@ def _serialize_bill(bill, account_names, today):
         "status": _bill_status(bill, today),
         "reference": bill.reference,
         "suplyer": bill.suplyer,
+        "supplier_id": bill.supplier_id,
         "bill_type": bill.bill_type,
         "category": account_names.get(bill.account_id) if bill.account_id else None,
         "account_id": bill.account_id,
@@ -139,6 +141,10 @@ def _bills_payload():
             for group in account_groups
         ],
         "bills": [_serialize_bill(b, account_names, today) for b in list_bills],
+        "suppliers": [
+            {"id": s.id, "name": s.name}
+            for s in SupplierRepository().get_suppliers(active_only=True)
+        ],
     }
 
 
@@ -170,11 +176,21 @@ def _parse_bill_fields(data):
         account = AccountRepository().get_account(formated_account_id)
         formated_account_id = account.id if account else None
 
+    supplier_id_raw = data.get("supplier_id")
+    try:
+        formated_supplier_id = int(supplier_id_raw) if supplier_id_raw else None
+    except (TypeError, ValueError):
+        formated_supplier_id = None
+    if formated_supplier_id is not None:
+        supplier = SupplierRepository().get_supplier(formated_supplier_id)
+        formated_supplier_id = supplier.id if supplier else None
+
     fields = {
         "value": formated_value,
         "due_date": formated_vencimento,
         "reference": (data.get("reference") or "").strip() or None,
         "suplyer": (data.get("suplyer") or "").strip() or None,
+        "supplier_id": formated_supplier_id,
         "bill_type": (data.get("bill_type") or "").strip() or None,
         "account_id": formated_account_id,
         "pix_key": (data.get("pix_key") or "").strip() or None,

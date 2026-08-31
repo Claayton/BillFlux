@@ -3,7 +3,35 @@
 from flask import request
 
 from billflux.api import bp, api_error, api_login_required, api_response, br_to_decimal
+from billflux.infra.repository.category_repository import CategoryRepository
 from billflux.infra.repository.product_repository import ProductRepository
+from billflux.infra.repository.supplier_repository import SupplierRepository
+
+
+def _parse_category_id(data):
+    """Lê e valida o category_id (None quando ausente)."""
+    raw = data.get("category_id")
+    if raw is None or raw == "":
+        return None
+    try:
+        category_id = int(raw)
+    except (TypeError, ValueError):
+        return None
+    category = CategoryRepository().get_category(category_id)
+    return category.id if category else None
+
+
+def _parse_supplier_id(data):
+    """Lê e valida o supplier_id (None quando ausente)."""
+    raw = data.get("supplier_id")
+    if raw is None or raw == "":
+        return None
+    try:
+        supplier_id = int(raw)
+    except (TypeError, ValueError):
+        return None
+    supplier = SupplierRepository().get_supplier(supplier_id)
+    return supplier.id if supplier else None
 
 
 def _serialize_product(product):
@@ -14,8 +42,11 @@ def _serialize_product(product):
         "cost": float(product.cost),
         "barcode": product.barcode,
         "secondary_code": product.secondary_code,
-        "category": product.category,
+        "category_id": product.category_id,
+        "category_name": product.category_name,
         "suppliers": product.suppliers,
+        "supplier_id": product.supplier_id,
+        "supplier_name": product.supplier_name,
         "stock_quantity": product.stock_quantity,
         "min_stock": product.min_stock,
         "obs": product.obs,
@@ -35,8 +66,10 @@ def _serialize_movement(movement):
 
 def _products_payload():
     repository = ProductRepository()
+    suppliers = SupplierRepository().get_suppliers(active_only=True)
     return {
         "products": [_serialize_product(p) for p in repository.get_products()],
+        "suppliers": [{"id": s.id, "name": s.name} for s in suppliers],
     }
 
 
@@ -57,8 +90,9 @@ def products_create():
     cost = br_to_decimal(data.get("cost"))
     barcode = (data.get("barcode") or "").strip() or None
     secondary_code = (data.get("secondary_code") or "").strip() or None
-    category = (data.get("category") or "").strip() or None
+    category_id = _parse_category_id(data)
     suppliers = (data.get("suppliers") or "").strip() or None
+    supplier_id = _parse_supplier_id(data)
     obs = (data.get("obs") or "").strip() or None
 
     if not name:
@@ -88,8 +122,9 @@ def products_create():
         cost=cost,
         barcode=barcode,
         secondary_code=secondary_code,
-        category=category,
+        category_id=category_id,
         suppliers=suppliers,
+        supplier_id=supplier_id,
         stock_quantity=stock,
         min_stock=min_stock,
         obs=obs,
@@ -111,8 +146,9 @@ def products_edit(product_id):
     cost = br_to_decimal(data.get("cost"))
     barcode = (data.get("barcode") or "").strip() or None
     secondary_code = (data.get("secondary_code") or "").strip() or None
-    category = (data.get("category") or "").strip() or None
+    category_id = _parse_category_id(data)
     suppliers = (data.get("suppliers") or "").strip() or None
+    supplier_id = _parse_supplier_id(data)
     obs = (data.get("obs") or "").strip() or None
     active = bool(data.get("active"))
 
@@ -141,8 +177,9 @@ def products_edit(product_id):
         cost=cost,
         barcode=barcode,
         secondary_code=secondary_code,
-        category=category,
+        category_id=category_id,
         suppliers=suppliers,
+        supplier_id=supplier_id,
         min_stock=min_stock,
         obs=obs,
         active=active,
@@ -177,6 +214,31 @@ def products_adjust(product_id):
 
     repository.adjust_stock(product_id=product_id, delta=delta, obs=obs)
     return api_response(_products_payload())
+
+
+@bp.route("/products/barcode/<barcode>")
+@api_login_required
+def products_by_barcode(barcode):
+    """Busca um produto pelo código de barras."""
+    repository = ProductRepository()
+    product = repository.get_product_by_barcode(barcode)
+    if not product:
+        return api_error("Produto não encontrado.", 404)
+    return api_response({"product": _serialize_product(product)})
+
+
+@bp.route("/products/search")
+@api_login_required
+def products_search():
+    """Busca produtos por nome (parcial)."""
+    q = request.args.get("q", "").strip()
+    if not q:
+        return api_response({"products": []})
+    repository = ProductRepository()
+    all_products = repository.get_active_products()
+    like = q.lower()
+    matches = [p for p in all_products if like in p.name.lower()][:20]
+    return api_response({"products": [_serialize_product(p) for p in matches]})
 
 
 @bp.route("/products/<int:product_id>/movements", methods=["GET"])

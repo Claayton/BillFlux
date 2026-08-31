@@ -10,10 +10,15 @@ const sidebarOpen = ref(false)
 
 const navItems = [
   { name: 'sales', label: 'Vendas', icon: 'fas fa-cash-register', to: '/sales', primary: true },
+  { name: 'customers', label: 'Clientes', icon: 'fas fa-users', to: '/customers' },
+  { name: 'suppliers', label: 'Fornecedores', icon: 'fas fa-truck', to: '/suppliers' },
   { name: 'products', label: 'Produtos', icon: 'fas fa-box-open', to: '/products' },
+  { name: 'purchases', label: 'Compras', icon: 'fas fa-truck-loading', to: '/purchases' },
   { name: 'bills', label: 'Contas', icon: 'fas fa-file-invoice', to: '/bills' },
   { name: 'accounts', label: 'Plano de contas', icon: 'fas fa-list-ul', to: '/accounts' },
   { name: 'payments', label: 'Formas de pagamento', icon: 'fas fa-credit-card', to: '/payments' },
+  { name: 'categories', label: 'Categorias', icon: 'fas fa-tags', to: '/categories' },
+  { name: 'caixa', label: 'Caixa', icon: 'fas fa-cash-register', to: '/caixa' },
   { name: 'home', label: 'Visão geral', icon: 'fas fa-th-large', to: '/home' },
 ]
 

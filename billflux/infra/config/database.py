@@ -15,6 +15,16 @@ from billflux.infra.entities.payment_method import PaymentMethod  # noqa: F401
 from billflux.infra.entities.order import Order  # noqa: F401
 from billflux.infra.entities.order_item import OrderItem  # noqa: F401
 from billflux.infra.entities.order_payment import OrderPayment  # noqa: F401
+from billflux.infra.entities.category import Category  # noqa: F401
+from billflux.infra.entities.cash_register import CashRegister  # noqa: F401
+from billflux.infra.entities.customer import Customer  # noqa: F401
+from billflux.infra.entities.supplier import Supplier  # noqa: F401
+from billflux.infra.entities.purchase_order import (
+    PurchaseOrder as PurchaseOrderModel,
+)  # noqa: F401
+from billflux.infra.entities.purchase_item import (
+    PurchaseItem as PurchaseItemModel,
+)  # noqa: F401
 
 _database_url = settings.database.url
 _engine_kwargs = {"connect_args": {"check_same_thread": False}}
@@ -27,6 +37,8 @@ engine = create_engine(_database_url, **_engine_kwargs)
 
 def _add_column_if_missing(table: str, column: str, column_type: str = "VARCHAR"):
     """Adds a column to an existing table without dropping data."""
+    if not table.isidentifier() or not column.isidentifier():
+        return
     with engine.connect() as connection:
         existing = [col["name"] for col in inspect(connection).get_columns(table)]
         if column not in existing:
@@ -50,8 +62,48 @@ def create_db():
     _add_column_if_missing("product", "secondary_code", "VARCHAR")
     _add_column_if_missing("product", "category", "VARCHAR")
     _add_column_if_missing("product", "suppliers", "VARCHAR")
+    _add_column_if_missing("product", "category_id", "INTEGER")
+    _add_column_if_missing("cashregister", "opening_details", "VARCHAR")
+    _add_column_if_missing("cashregister", "system_totals", "VARCHAR")
+    _add_column_if_missing("cashregister", "closing_details", "VARCHAR")
+    _add_column_if_missing("orders", "customer_id", "INTEGER")
+    _add_column_if_missing("product", "supplier_id", "INTEGER")
+    _add_column_if_missing("bill", "supplier_id", "INTEGER")
+    _add_column_if_missing("purchase_item", "unit_com", "VARCHAR")
+
+    _migrate_category_text()
 
     return base
+
+
+def _migrate_category_text():
+    """Converte o texto de categoria dos produtos em registros de categoria."""
+    with engine.connect() as connection:
+        rows = connection.execute(
+            text(
+                "SELECT id, category FROM product "
+                "WHERE category_id IS NULL AND category IS NOT NULL AND category != ''"
+            )
+        ).fetchall()
+        if not rows:
+            return
+        for product_id, name in rows:
+            existing = connection.execute(
+                text("SELECT id FROM category WHERE name = :name"), {"name": name}
+            ).fetchone()
+            if existing:
+                category_id = existing[0]
+            else:
+                result = connection.execute(
+                    text("INSERT INTO category (name, active) VALUES (:name, 1)"),
+                    {"name": name},
+                )
+                category_id = result.lastrowid
+            connection.execute(
+                text("UPDATE product SET category_id = :cid WHERE id = :pid"),
+                {"cid": category_id, "pid": product_id},
+            )
+        connection.commit()
 
 
 def get_session():
