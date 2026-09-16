@@ -7,6 +7,7 @@ services:
       dockerfile: Dockerfile
     environment:
       BILLFLUX_DATABASE__URL: sqlite:///data/billflux.db
+      BILLFLUX_SECRET_KEY: ${BILLFLUX_SECRET_KEY:-change-me}
       BILLFLUX_AUTH__ALLOW_SIGNUP: ${BILLFLUX_AUTH__ALLOW_SIGNUP:-true}
       BILLFLUX_AUTH__USERNAME: ${BILLFLUX_AUTH__USERNAME:-admin}
       BILLFLUX_AUTH__PASSWORD_HASH: ${BILLFLUX_AUTH__PASSWORD_HASH:-}
