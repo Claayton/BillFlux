@@ -88,7 +88,8 @@ describe('BillsView', () => {
     const wrapper = mount(BillsView)
     await flushPromises()
 
-    await wrapper.find('.filter-select').setValue('Vencidas')
+    const filterSelects = wrapper.findAll('.filter-select')
+    await filterSelects[1].setValue('Vencidas')
     await flushPromises()
 
     const rows = wrapper.findAll('.account-row')
@@ -101,13 +102,10 @@ describe('BillsView', () => {
     await flushPromises()
 
     const unpaidRow = wrapper.findAll('.account-row')[1]
-    await unpaidRow.find('.row-menu-btn').trigger('click')
-    await flushPromises()
-
-    const payItem = unpaidRow
-      .findAll('.dropdown-item')
-      .find((el) => el.text().includes('Marcar como paga'))
-    await payItem.trigger('click')
+    const payBtn = unpaidRow
+      .findAll('.bills-actions .icon-btn')
+      .find((el) => el.attributes('title') === 'Marcar como paga')
+    await payBtn.trigger('click')
     await flushPromises()
 
     const payModal = wrapper.find('#pay-modal')
@@ -148,13 +146,10 @@ describe('BillsView', () => {
     await flushPromises()
 
     const row = wrapper.findAll('.account-row')[1]
-    await row.find('.row-menu-btn').trigger('click')
-    await flushPromises()
-
-    const editItem = row
-      .findAll('.dropdown-item')
-      .find((el) => el.text().includes('Editar'))
-    await editItem.trigger('click')
+    const editBtn = row
+      .findAll('.bills-actions .icon-btn')
+      .find((el) => el.attributes('title') === 'Editar')
+    await editBtn.trigger('click')
     await flushPromises()
 
     expect(wrapper.find('.modal.is-open').text()).toContain('Editar conta')

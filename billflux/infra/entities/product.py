@@ -17,7 +17,17 @@ class Product(SQLModel, table=True):
         default=Decimal("0"), sa_column=Column(Numeric(10, 2), nullable=False)
     )
     barcode: Optional[str] = Field(default=None, unique=True, nullable=True)
+    secondary_code: Optional[str] = Field(default=None, nullable=True)
+    category_id: Optional[int] = Field(
+        default=None, foreign_key="category.id", nullable=True
+    )
+    category: Optional[str] = Field(default=None, nullable=True)
+    suppliers: Optional[str] = Field(default=None, nullable=True)
+    supplier_id: Optional[int] = Field(
+        default=None, foreign_key="supplier.id", nullable=True
+    )
     stock_quantity: int = Field(default=0, nullable=False)
     min_stock: int = Field(default=0, nullable=False)
+    ideal_stock: int = Field(default=0, nullable=False)
     active: bool = Field(default=True)
     obs: Optional[str] = Field(nullable=True)

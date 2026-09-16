@@ -8,13 +8,35 @@ const router = useRouter()
 const auth = useAuthStore()
 const sidebarOpen = ref(false)
 
-const navItems = [
-  { name: 'sales', label: 'Vendas', icon: 'fas fa-cash-register', to: '/sales', primary: true },
-  { name: 'bills', label: 'Contas', icon: 'fas fa-file-invoice', to: '/bills' },
-  { name: 'products', label: 'Produtos', icon: 'fas fa-box-open', to: '/products' },
-  { name: 'accounts', label: 'Plano de contas', icon: 'fas fa-list-ul', to: '/accounts' },
-  { name: 'payments', label: 'Formas de pagamento', icon: 'fas fa-credit-card', to: '/payments' },
-  { name: 'home', label: 'Visão geral', icon: 'fas fa-th-large', to: '/home' },
+const navSections = [
+  {
+    items: [
+      { name: 'sales', label: 'Vendas', icon: 'fas fa-cash-register', to: '/sales' },
+      { name: 'caixa', label: 'Caixa', icon: 'fas fa-cash-register', to: '/caixa' },
+    ]
+  },
+  {
+    items: [
+      { name: 'products', label: 'Produtos', icon: 'fas fa-box-open', to: '/products' },
+      { name: 'suppliers', label: 'Fornecedores', icon: 'fas fa-truck', to: '/suppliers' },
+      { name: 'purchases', label: 'Compras', icon: 'fas fa-truck-loading', to: '/purchases' },
+      { name: 'schedule', label: 'Agenda de pedidos', icon: 'fas fa-calendar-alt', to: '/schedule' },
+    ]
+  },
+  {
+    items: [
+      { name: 'customers', label: 'Clientes', icon: 'fas fa-users', to: '/customers' },
+      { name: 'categories', label: 'Categorias', icon: 'fas fa-tags', to: '/categories' },
+      { name: 'payments', label: 'Formas de pagamento', icon: 'fas fa-credit-card', to: '/payments' },
+      { name: 'bills', label: 'Contas', icon: 'fas fa-file-invoice', to: '/bills' },
+      { name: 'accounts', label: 'Plano de contas', icon: 'fas fa-list-ul', to: '/accounts' },
+    ]
+  },
+  {
+    items: [
+      { name: 'home', label: 'Visão geral', icon: 'fas fa-th-large', to: '/home' },
+    ]
+  },
 ]
 
 function isActive(item) {
@@ -39,16 +61,19 @@ async function logout() {
         <span class="logo-text">BillFlux</span>
       </a>
       <nav class="sidebar-nav" aria-label="Navegação principal">
-        <ul>
-          <li v-for="item in navItems" :key="item.name">
-            <router-link
-              :to="item.to"
-              :class="[item.primary ? 'is-primary' : '', isActive(item) ? 'is-active' : '']"
-            >
-              <i :class="item.icon"></i> {{ item.label }}
-            </router-link>
-          </li>
-        </ul>
+        <template v-for="(section, sIdx) in navSections" :key="sIdx">
+          <ul>
+            <li v-for="item in section.items" :key="item.name">
+              <router-link
+                :to="item.to"
+                :class="{ 'is-active': isActive(item) }"
+              >
+                <i :class="item.icon"></i> {{ item.label }}
+              </router-link>
+            </li>
+          </ul>
+          <div v-if="sIdx < navSections.length - 1" class="sidebar-divider"></div>
+        </template>
       </nav>
       <div class="sidebar-user">
         <span class="avatar">{{ (auth.user || '?')[0].toUpperCase() }}</span>

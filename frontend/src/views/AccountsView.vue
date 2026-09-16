@@ -3,11 +3,13 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import AppShell from '@/components/AppShell.vue'
+import { useRowMenu } from '@/composables/useRowMenu'
+
+const { openMenu, menuPos, toggleMenu, closeMenus } = useRowMenu()
 
 const data = ref(null)
 const loading = ref(false)
 const saving = ref(false)
-const openMenu = ref(null)
 
 const showModal = ref(false)
 const editing = ref(null)
@@ -22,14 +24,6 @@ const COLORS = [
   { value: '#3B82F6', label: 'Azul' },
   { value: '#8B5CF6', label: 'Roxo' },
 ]
-
-function toggleMenu(id) {
-  openMenu.value = openMenu.value === id ? null : id
-}
-
-function closeMenus() {
-  openMenu.value = null
-}
 
 function parentOptions(currentType) {
   const sections = data.value?.sections || []
@@ -102,7 +96,6 @@ async function removeAccount(account) {
 
 onMounted(() => {
   load()
-  document.addEventListener('click', closeMenus)
 })
 </script>
 
@@ -135,10 +128,10 @@ onMounted(() => {
                   <span class="account-name">{{ group.account.name }}</span>
                 </div>
                 <div class="dropdown">
-                  <button type="button" class="icon-btn" aria-haspopup="true" aria-expanded="false" aria-label="Ações da categoria" @click.stop="toggleMenu(group.account.id)">
+                  <button type="button" class="icon-btn" aria-haspopup="true" aria-expanded="false" aria-label="Ações da categoria" :data-menu="group.account.id" @click.stop="toggleMenu(group.account.id)">
                     <i class="fas fa-ellipsis-h"></i>
                   </button>
-                  <div class="dropdown-panel" v-show="openMenu === group.account.id">
+                  <div class="dropdown-panel" v-show="openMenu === group.account.id" :style="{ top: menuPos.top + 'px', left: menuPos.left + 'px' }">
                     <button type="button" class="dropdown-item" @click="openEdit(group.account)">
                       <i class="fas fa-pen"></i> Editar
                     </button>
@@ -156,10 +149,10 @@ onMounted(() => {
                   <span class="account-tag">{{ child.type === 'receita' ? 'Receita' : 'Despesa' }}</span>
                 </div>
                 <div class="dropdown">
-                  <button type="button" class="icon-btn" aria-haspopup="true" aria-expanded="false" aria-label="Ações da categoria" @click.stop="toggleMenu(child.id)">
+                  <button type="button" class="icon-btn" aria-haspopup="true" aria-expanded="false" aria-label="Ações da categoria" :data-menu="child.id" @click.stop="toggleMenu(child.id)">
                     <i class="fas fa-ellipsis-h"></i>
                   </button>
-                  <div class="dropdown-panel" v-show="openMenu === child.id">
+                  <div class="dropdown-panel" v-show="openMenu === child.id" :style="{ top: menuPos.top + 'px', left: menuPos.left + 'px' }">
                     <button type="button" class="dropdown-item" @click="openEdit(child)">
                       <i class="fas fa-pen"></i> Editar
                     </button>

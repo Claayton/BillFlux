@@ -19,6 +19,9 @@ class Bill(SQLModel, table=True):
     )
     reference: Optional[str] = Field(nullable=True)
     suplyer: Optional[str] = Field(nullable=True)
+    supplier_id: Optional[int] = Field(
+        default=None, foreign_key="supplier.id", nullable=True
+    )
     bill_type: Optional[str] = Field(nullable=True)
     days: Optional[int] = Field(nullable=True)
     payday: Optional[datetime] = Field(nullable=True)

@@ -1,23 +1,47 @@
 """Endpoints do PDV (ponto de venda) da API JSON."""
 
+from decimal import Decimal
+
 from flask import request
 
-from billflux.api import bp, api_error, api_login_required, api_response
+from billflux.api import (
+    bp,
+    api_error,
+    api_login_required,
+    api_response,
+    br_to_decimal,
+)
 from billflux.infra.repository.order_repository import OrderRepository
 from billflux.infra.repository.payment_method_repository import (
     PaymentMethodRepository,
 )
 from billflux.infra.repository.product_repository import ProductRepository
+from billflux.infra.repository.customer_repository import CustomerRepository
+from billflux.infra.repository.product_unit_repository import ProductUnitRepository
 
 
-def _serialize_product(product):
-    return {
+def _serialize_product(product, units=None):
+    data = {
         "id": product.id,
         "name": product.name,
         "price": float(product.price),
+        "cost": float(product.cost),
         "stock": product.stock_quantity,
         "barcode": product.barcode or "",
     }
+    if units is not None:
+        data["units"] = [
+            {
+                "id": u.id,
+                "name": u.name,
+                "barcode": u.barcode or "",
+                "factor": u.factor,
+                "price": float(u.price),
+                "is_default": u.is_default,
+            }
+            for u in units
+        ]
+    return data
 
 
 def _serialize_method(method):
@@ -31,19 +55,50 @@ def _build_receipt(order_id):
     if not order:
         return None
 
-    method = PaymentMethodRepository().get_method(order.payment_method_id)
+    method_repository = PaymentMethodRepository()
+    method = method_repository.get_method(order.payment_method_id)
     items_detail = repository.get_order_items(order.id)
     products = {}
     for item in items_detail:
         product = ProductRepository().get_product(item.product_id)
         products[item.product_id] = product.name if product else "Item"
 
+    customer_name = None
+    if order.customer_id:
+        from billflux.infra.repository.customer_repository import (
+            CustomerRepository,
+        )
+
+        customer = CustomerRepository().get_customer(order.customer_id)
+        if customer:
+            customer_name = customer.name
+
+    payments_detail = []
+    received_total = Decimal("0")
+    for payment_method_id, amount in repository.get_order_payments(order.id):
+        received_total += amount
+        payment_method = method_repository.get_method(payment_method_id)
+        payments_detail.append(
+            {
+                "method_id": payment_method_id,
+                "name": payment_method.name if payment_method else "—",
+                "amount": float(amount),
+            }
+        )
+
+    troco = max(Decimal("0"), received_total - order.total)
+
     return {
         "order_id": order.id,
         "date": order.created_at.isoformat(),
         "total": float(order.total),
+        "discount": float(order.discount or 0),
         "obs": order.obs,
         "payment_method": method.name if method else "—",
+        "payments": payments_detail,
+        "troco": float(troco),
+        "customer_id": order.customer_id,
+        "customer_name": customer_name,
         "items": [
             {
                 "name": products[item.product_id],
@@ -60,14 +115,25 @@ def _build_receipt(order_id):
 @api_login_required
 def pdv():
     """Produtos ativos e formas de pagamento para o ponto de venda."""
+    unit_repo = ProductUnitRepository()
+    products = ProductRepository().get_active_products()
+    product_ids = [p.id for p in products]
+    all_units = unit_repo.get_units_for_products(product_ids)
+    units_by_product = {}
+    for u in all_units:
+        units_by_product.setdefault(u.product_id, []).append(u)
     return api_response(
         {
             "products": [
-                _serialize_product(p) for p in ProductRepository().get_active_products()
+                _serialize_product(p, units_by_product.get(p.id)) for p in products
             ],
             "methods": [
                 _serialize_method(m)
                 for m in PaymentMethodRepository().get_active_methods()
+            ],
+            "customers": [
+                {"id": c.id, "name": c.name, "cpf_cnpj": c.cpf_cnpj or ""}
+                for c in CustomerRepository().get_customers(active_only=True)
             ],
         }
     )
@@ -77,23 +143,51 @@ def pdv():
 @api_login_required
 def complete():
     """Finaliza uma venda e devolve o recibo do pedido criado."""
+
+    from billflux.infra.repository.cash_register_repository import (
+        CashRegisterRepository,
+    )
+
+    if not CashRegisterRepository().get_open():
+        return api_error(
+            "Nenhum caixa aberto. Abra o caixa antes de registrar vendas.", 400
+        )
+
     data = request.get_json(silent=True) or {}
 
-    method_id = data.get("method_id")
-    try:
-        method_id = int(method_id) if method_id else None
-    except (TypeError, ValueError):
-        method_id = None
-
-    method = PaymentMethodRepository().get_method(method_id) if method_id else None
-    if not method or not method.active:
-        return api_error("Selecione a forma de pagamento.", 400)
+    method_id = None
+    payments = None
+    raw_payments = data.get("payments")
+    method_repository = PaymentMethodRepository()
+    if isinstance(raw_payments, list) and raw_payments:
+        payments = []
+        for entry in raw_payments:
+            try:
+                entry_method_id = int(entry.get("method_id"))
+                amount = br_to_decimal(entry.get("amount"))
+            except (TypeError, ValueError):
+                return api_error("Forma de pagamento inválida.", 400)
+            if amount is None or amount <= 0:
+                return api_error("Valor de pagamento inválido.", 400)
+            payment_method = method_repository.get_method(entry_method_id)
+            if not payment_method or not payment_method.active:
+                return api_error("Selecione a forma de pagamento.", 400)
+            payments.append((entry_method_id, amount))
+    else:
+        try:
+            method_id = int(data.get("method_id")) if data.get("method_id") else None
+        except (TypeError, ValueError):
+            method_id = None
+        payment_method = method_repository.get_method(method_id) if method_id else None
+        if not payment_method or not payment_method.active:
+            return api_error("Selecione a forma de pagamento.", 400)
 
     items = data.get("items") or []
     if not isinstance(items, list) or not items:
         return api_error("Adicione ao menos um item ao carrinho.", 400)
 
     cart = []
+    unit_repo = ProductUnitRepository()
     for item in items:
         try:
             product_id = int(item.get("product_id"))
@@ -101,16 +195,45 @@ def complete():
         except (TypeError, ValueError):
             continue
         if quantity > 0:
-            cart.append((product_id, quantity))
+            raw_unit_id = item.get("unit_id")
+            factor = 1
+            if raw_unit_id:
+                try:
+                    unit = unit_repo.get_unit(int(raw_unit_id))
+                    if unit:
+                        factor = unit.factor
+                except (TypeError, ValueError):
+                    pass
+            cart.append((product_id, quantity * factor))
 
     if not cart:
         return api_error("Adicione ao menos um item ao carrinho.", 400)
 
     obs = (data.get("obs") or "").strip() or None
+    customer_id = None
+    raw_customer = data.get("customer_id")
+    if raw_customer:
+        try:
+            customer_id = int(raw_customer)
+        except (TypeError, ValueError):
+            customer_id = None
+
+    discount = br_to_decimal(data.get("discount"))
+    if discount is None:
+        discount = Decimal("0")
+    if discount < 0:
+        return api_error("Desconto inválido.", 400)
 
     repository = OrderRepository()
     try:
-        order = repository.create_order(cart, method.id, obs=obs)
+        order = repository.create_order(
+            cart,
+            method_id,
+            obs=obs,
+            discount=discount,
+            payments=payments,
+            customer_id=customer_id,
+        )
     except ValueError as error:
         return api_error(str(error), 400)
 

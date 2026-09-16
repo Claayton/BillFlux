@@ -101,6 +101,14 @@
   border-bottom: none;
 }
 
+.data-table tbody tr.is-active td:first-child {
+  box-shadow: inset 3px 0 0 #16a34a;
+}
+
+.data-table tbody tr.is-inactive td:first-child {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
 .data-table tbody tr.is-inactive td {
   opacity: 0.55;
 }
@@ -143,7 +151,7 @@
 
 .cell-actions {
   text-align: right;
-  width: 56px;
+  width: 140px;
 }
 
 /* ---------- Status ---------- */
@@ -290,6 +298,23 @@
   max-width: 440px;
 }
 
+.modal-content-wide {
+  max-width: 720px;
+}
+
+.clone-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 24px 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent);
+  border-radius: var(--radius-sm);
+}
+
 @keyframes modal-in {
   from {
     opacity: 0;
@@ -337,6 +362,7 @@
 
 .modal-body {
   padding: 24px;
+  overflow-x: auto;
 }
 
 .modal-footer {
@@ -346,6 +372,49 @@
   margin-top: 24px;
   padding-top: 20px;
   border-top: 1px solid var(--border);
+}
+
+/* ---------- Abas do modal de produto ---------- */
+.modal-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 14px 24px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.modal-tabs button:hover {
+  color: var(--text);
+}
+
+.modal-tabs button.is-active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.product-movements {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.modal-footer .modal-clone {
+  margin-right: auto;
 }
 
 /* ---------- Ajuste de estoque ---------- */

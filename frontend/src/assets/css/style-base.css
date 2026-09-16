@@ -278,9 +278,7 @@ a:hover {
 }
 
 .dropdown-panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
+  position: fixed;
   z-index: 300;
   min-width: 200px;
   padding: 6px;
@@ -394,6 +392,16 @@ a:hover {
   background: transparent;
   color: var(--primary);
   border-color: var(--primary);
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+  color: #fff;
 }
 
 .btn-outline:hover {
@@ -598,6 +606,12 @@ a:hover {
   list-style: none;
 }
 
+.sidebar-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 12px;
+}
+
 .sidebar-nav a {
   display: flex;
   align-items: center;
@@ -792,4 +806,8 @@ a:hover {
   .user-menu-trigger i {
     display: none;
   }
+}
+
+body:has(.modal.is-open) {
+  overflow: hidden;
 }

@@ -5,7 +5,9 @@ import JsBarcode from 'jsbarcode'
 import qrcode from 'qrcode-generator'
 import { api } from '@/api/client'
 import { brl, brdate, brdateShort, maskMoney, moneyToDecimal } from '@/utils/format'
+import { normalizeForSearch } from '@/utils/normalize'
 import AppShell from '@/components/AppShell.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const data = ref(null)
 const loading = ref(false)
@@ -15,18 +17,11 @@ const editing = ref(null)
 
 const search = ref('')
 const filterStatus = ref('Todas')
-const openMenu = ref(null)
-
-function toggleMenu(id) {
-  openMenu.value = openMenu.value === id ? null : id
-}
-
-function closeMenus() {
-  openMenu.value = null
-}
+const sortBy = ref('due_asc')
 
 const detailsModal = ref(false)
 const detailsBill = ref(null)
+const deleteTarget = ref(null)
 
 function openDetails(bill) {
   detailsBill.value = bill
@@ -106,6 +101,7 @@ const form = ref({
   due_date: '',
   reference: '',
   suplyer: '',
+  supplier_id: null,
   account_id: '',
   pix_key: '',
   obs: '',
@@ -125,7 +121,7 @@ const STATUS_LABELS = {
 const filteredBills = computed(() => {
   if (!data.value) return []
   const term = search.value.trim().toLowerCase()
-  return data.value.bills.filter((bill) => {
+  const result = data.value.bills.filter((bill) => {
     if (filterStatus.value !== 'Todas') {
       const paid = bill.status === 'paga'
       if (filterStatus.value === 'Pagas' && !paid) return false
@@ -135,7 +131,7 @@ const filteredBills = computed(() => {
       if (filterStatus.value === 'AVencer' && ['paga', 'vencida'].includes(bill.status)) return false
     }
     if (!term) return true
-    const haystack = [
+    const haystack = normalizeForSearch([
       bill.reference,
       bill.suplyer,
       bill.category,
@@ -144,10 +140,28 @@ const filteredBills = computed(() => {
       bill.bar_code,
     ]
       .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-    return haystack.includes(term)
+      .join(' '))
+    return haystack.includes(normalizeForSearch(term))
   })
+
+  const sorted = [...result]
+  const dir = sortBy.value.endsWith('_desc') ? -1 : 1
+  const key = sortBy.value.replace(/_desc$|_asc$/, '')
+  sorted.sort((a, b) => {
+    if (key === 'due') {
+      const va = a.due_date || '9999-99-99'
+      const vb = b.due_date || '9999-99-99'
+      return va.localeCompare(vb) * dir
+    }
+    if (key === 'value') {
+      return ((a.value || 0) - (b.value || 0)) * dir
+    }
+    if (key === 'reference') {
+      return (a.reference || '').localeCompare(b.reference || '') * dir
+    }
+    return 0
+  })
+  return sorted
 })
 
 function openNew() {
@@ -157,6 +171,7 @@ function openNew() {
     due_date: '',
     reference: '',
     suplyer: '',
+    supplier_id: null,
     account_id: '',
     pix_key: '',
     obs: '',
@@ -173,6 +188,7 @@ function openEdit(bill) {
     due_date: bill.due_date || '',
     reference: bill.reference || '',
     suplyer: bill.suplyer || '',
+    supplier_id: bill.supplier_id || null,
     account_id: bill.account_id ? String(bill.account_id) : '',
     pix_key: bill.pix_key || '',
     obs: bill.obs || '',
@@ -208,6 +224,7 @@ async function submit() {
       due_date: form.value.due_date,
       reference: form.value.reference,
       suplyer: form.value.suplyer,
+      supplier_id: form.value.supplier_id,
       account_id: form.value.account_id || null,
       pix_key: form.value.pix_key,
       obs: form.value.obs,
@@ -232,8 +249,10 @@ async function payBill(bill) {
   openPay(bill)
 }
 
-async function removeBill(bill) {
-  if (!window.confirm('Excluir esta conta?')) return
+async function confirmDelete() {
+  const bill = deleteTarget.value
+  deleteTarget.value = null
+  if (!bill) return
   try {
     data.value = await api.del(`/bills/${bill.id}`)
     ElMessage.success('Conta excluída.')
@@ -450,7 +469,6 @@ async function confirmPay() {
 
 onMounted(() => {
   load()
-  document.addEventListener('click', closeMenus)
 })
 </script>
 
@@ -502,6 +520,16 @@ onMounted(() => {
           </div>
           <div class="filter-group">
             <div class="filter-wrap">
+              <i class="fas fa-sort"></i>
+              <select v-model="sortBy" class="filter-select" aria-label="Ordenar por">
+                <option value="due_asc">Vencimento (mais próximo)</option>
+                <option value="due_desc">Vencimento (mais distante)</option>
+                <option value="value_desc">Maior valor</option>
+                <option value="value_asc">Menor valor</option>
+                <option value="reference_asc">Descrição (A-Z)</option>
+              </select>
+            </div>
+            <div class="filter-wrap">
               <i class="fas fa-filter"></i>
               <select v-model="filterStatus" class="filter-select" aria-label="Filtrar por status">
                 <option value="Todas">Todos os status</option>
@@ -520,9 +548,9 @@ onMounted(() => {
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Status</th>
+                  <th class="th-status">Status</th>
                   <th>Descrição</th>
-                  <th>Fornecedor</th>
+                  <th class="th-supplier">Fornecedor</th>
                   <th>Vencimento</th>
                   <th class="th-amount">Valor</th>
                   <th class="th-actions"></th>
@@ -557,31 +585,19 @@ onMounted(() => {
                   </td>
                   <td class="cell-amount">{{ brl(bill.value) }}</td>
                   <td class="cell-actions">
-                    <div class="dropdown">
-                      <button
-                        type="button"
-                        class="icon-btn row-menu-btn"
-                        aria-haspopup="true"
-                        aria-expanded="false"
-                        aria-label="Ações da conta"
-                        @click.stop="toggleMenu(bill.id)"
-                      >
-                        <i class="fas fa-ellipsis-h"></i>
+                    <div class="bills-actions">
+                      <button type="button" class="icon-btn" title="Ver detalhes" aria-label="Ver detalhes" @click.stop="openDetails(bill)">
+                        <i class="fas fa-eye"></i>
                       </button>
-                      <div class="dropdown-panel" v-show="openMenu === bill.id">
-                        <button type="button" class="dropdown-item" @click="openDetails(bill)">
-                          <i class="fas fa-eye"></i> Ver detalhes
-                        </button>
-                        <button type="button" class="dropdown-item" @click="openEdit(bill)">
-                          <i class="fas fa-pen"></i> Editar
-                        </button>
-                        <button v-if="bill.status !== 'paga'" type="button" class="dropdown-item" @click="payBill(bill)">
-                          <i class="fas fa-check-circle"></i> Marcar como paga
-                        </button>
-                        <button type="button" class="dropdown-item is-danger" @click="removeBill(bill)">
-                          <i class="fas fa-trash"></i> Excluir
-                        </button>
-                      </div>
+                      <button type="button" class="icon-btn" title="Editar" aria-label="Editar conta" @click.stop="openEdit(bill)">
+                        <i class="fas fa-pen"></i>
+                      </button>
+                      <button v-if="bill.status !== 'paga'" type="button" class="icon-btn" title="Marcar como paga" aria-label="Marcar como paga" @click.stop="payBill(bill)">
+                        <i class="fas fa-check-circle"></i>
+                      </button>
+                      <button type="button" class="icon-btn is-danger" title="Excluir" aria-label="Excluir conta" @click.stop="deleteTarget = bill">
+                        <i class="fas fa-trash"></i>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -644,8 +660,15 @@ onMounted(() => {
 
           <div class="form-grid">
             <div class="form-field">
-              <label for="bill_suplyer">Fornecedor</label>
-              <input id="bill_suplyer" v-model="form.suplyer" type="text" placeholder="Ex: CEMIG" />
+              <label for="bill_supplier">Fornecedor</label>
+              <select id="bill_supplier" v-model="form.supplier_id">
+                <option :value="null">Sem fornecedor</option>
+                <option
+                  v-for="sup in (data?.suppliers || []).filter(s => s.active !== false)"
+                  :key="sup.id"
+                  :value="sup.id"
+                >{{ sup.name }}</option>
+              </select>
             </div>
             <div class="form-field">
               <label for="bill_category">Categoria</label>
@@ -832,6 +855,16 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <ConfirmDialog
+      v-if="deleteTarget"
+      title="Excluir conta"
+      :message="`Excluir a conta \u201C${deleteTarget.reference || deleteTarget.suplyer || 'Sem descrição'}\u201D?`"
+      confirm-label="Excluir"
+      danger
+      @confirm="confirmDelete"
+      @cancel="deleteTarget = null"
+    />
   </AppShell>
 </template>
 
@@ -839,6 +872,35 @@ onMounted(() => {
 .muted {
   color: var(--text-muted);
   padding: 24px 4px;
+}
+.th-status {
+  width: 100px;
+}
+.th-supplier {
+  max-width: 140px;
+}
+.cell-supplier {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bills-actions {
+  display: flex;
+  gap: 2px;
+  justify-content: flex-end;
+}
+.bills-actions .icon-btn {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+}
+.bills-actions .icon-btn.is-danger {
+  color: var(--danger, #dc2626);
+}
+.bills-actions .icon-btn.is-danger:hover {
+  background: color-mix(in srgb, var(--danger, #dc2626) 10%, transparent);
+  color: var(--danger, #dc2626);
 }
 /* O products.css redefine .modal-content (520px) após o bills.css; força a
    largura original do modal de pagamento (880px) com especificidade maior. */

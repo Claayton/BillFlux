@@ -33,6 +33,10 @@ async function load() {
   }
 }
 
+function printReceipt() {
+  window.print()
+}
+
 onMounted(load)
 </script>
 
@@ -40,7 +44,7 @@ onMounted(load)
   <div class="pdv-screen">
     <div class="receipt-wrap">
       <div class="receipt-actions no-print">
-        <button type="button" class="btn btn-primary" @click="window.print()">
+        <button type="button" class="btn btn-primary" @click="printReceipt">
           <i class="fas fa-print"></i> Imprimir recibo
         </button>
         <router-link class="btn btn-ghost" to="/pdv"><i class="fas fa-plus"></i> Nova venda</router-link>
@@ -78,12 +82,27 @@ onMounted(load)
           </tbody>
         </table>
 
+        <div v-if="order.discount > 0" class="receipt-discount">
+          <span>Desconto</span>
+          <strong>&minus;{{ brl(order.discount) }}</strong>
+        </div>
+
         <div class="receipt-total">
           <span>TOTAL</span>
           <strong>{{ brl(order.total) }}</strong>
         </div>
 
-        <div class="receipt-payment">
+        <template v-if="order.payments && order.payments.length">
+          <div v-for="(payment, i) in order.payments" :key="'pay' + i" class="receipt-payment">
+            <span>Pago ({{ payment.name }})</span>
+            <strong>{{ brl(payment.amount) }}</strong>
+          </div>
+          <div v-if="order.troco > 0" class="receipt-payment receipt-troco">
+            <span>Troco</span>
+            <strong>{{ brl(order.troco) }}</strong>
+          </div>
+        </template>
+        <div v-else class="receipt-payment">
           <span>Forma de pagamento</span>
           <strong>{{ order.payment_method }}</strong>
         </div>

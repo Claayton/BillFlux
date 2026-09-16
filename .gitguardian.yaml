@@ -1,0 +1,7 @@
+# Arquivos de template: os valores são placeholders ("change-me") ou
+# referências a variáveis de ambiente — nunca segredos reais.
+secret:
+  ignored-paths:
+    - ".env.example"
+    - "docker-compose.yml"
+    - "docker-compose-prod.yml"

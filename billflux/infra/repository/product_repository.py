@@ -9,8 +9,67 @@ from billflux.infra.entities.product import Product as ProductModel
 from billflux.infra.entities.product_movement import (
     ProductMovement as ProductMovementModel,
 )
+from billflux.infra.entities.category import Category as CategoryModel
+from billflux.infra.entities.supplier import Supplier as SupplierModel
 from billflux.domain.models.products import Product
 from billflux.domain.models.product_movements import ProductMovement
+
+
+def _to_domain(product: ProductModel) -> Product:
+    """Mapeia a entidade para o domínio, anexando o nome da categoria e fornecedor."""
+
+    data = dict(product)
+    data.pop("category", None)  # texto legado
+    data["category_name"] = None
+    if data.get("category_id"):
+        session = get_session()
+        try:
+            category = session.get(CategoryModel, data["category_id"])
+            data["category_name"] = category.name if category else None
+        finally:
+            session.close()
+    data["supplier_name"] = None
+    if data.get("supplier_id"):
+        session = get_session()
+        try:
+            supplier = session.get(SupplierModel, data["supplier_id"])
+            data["supplier_name"] = supplier.name if supplier else None
+        finally:
+            session.close()
+    return Product(**data)
+
+
+def _to_domains(products: List[ProductModel]) -> List[Product]:
+    """Mapeia várias entidades, buscando os nomes das categorias e fornecedores em lote."""
+
+    if not products:
+        return []
+    cat_ids = {p.category_id for p in products if p.category_id}
+    cat_names = {}
+    if cat_ids:
+        session = get_session()
+        try:
+            sql = select(CategoryModel).where(CategoryModel.id.in_(cat_ids))
+            cat_names = {c.id: c.name for c in session.exec(sql).all()}
+        finally:
+            session.close()
+    sup_ids = {p.supplier_id for p in products if p.supplier_id}
+    sup_names = {}
+    if sup_ids:
+        session = get_session()
+        try:
+            sql = select(SupplierModel).where(SupplierModel.id.in_(sup_ids))
+            sup_names = {s.id: s.name for s in session.exec(sql).all()}
+        finally:
+            session.close()
+    result = []
+    for product in products:
+        data = dict(product)
+        data.pop("category", None)
+        data["category_name"] = cat_names.get(data.get("category_id"))
+        data["supplier_name"] = sup_names.get(data.get("supplier_id"))
+        result.append(Product(**data))
+    return result
 
 
 class ProductRepository:
@@ -23,9 +82,14 @@ class ProductRepository:
         barcode: Optional[str] = None,
         stock_quantity: int = 0,
         min_stock: int = 0,
+        ideal_stock: int = 0,
         active: bool = True,
         obs: Optional[str] = None,
         cost: Decimal = Decimal("0"),
+        secondary_code: Optional[str] = None,
+        category_id: Optional[int] = None,
+        suppliers: Optional[str] = None,
+        supplier_id: Optional[int] = None,
     ) -> Product:
         """Inserts a new product into the Product table."""
 
@@ -37,8 +101,13 @@ class ProductRepository:
                     price=price,
                     cost=cost,
                     barcode=barcode,
+                    secondary_code=secondary_code,
+                    category_id=category_id,
+                    suppliers=suppliers,
+                    supplier_id=supplier_id,
                     stock_quantity=stock_quantity,
                     min_stock=min_stock,
+                    ideal_stock=ideal_stock,
                     active=active,
                     obs=obs,
                 )
@@ -55,7 +124,7 @@ class ProductRepository:
                     )
                 session.commit()
                 session.refresh(product)
-                return Product(**dict(product))
+                return _to_domain(product)
         finally:
             session.close()
 
@@ -69,7 +138,7 @@ class ProductRepository:
                     ProductModel.active.desc(), ProductModel.name
                 )
                 products = session.exec(sql).all()
-                return [Product(**dict(product)) for product in products]
+                return _to_domains(products)
         finally:
             session.close()
 
@@ -85,7 +154,7 @@ class ProductRepository:
                     .order_by(ProductModel.name)
                 )
                 products = session.exec(sql).all()
-                return [Product(**dict(product)) for product in products]
+                return _to_domains(products)
         finally:
             session.close()
 
@@ -96,7 +165,7 @@ class ProductRepository:
         try:
             with session:
                 product = session.get(ProductModel, product_id)
-                return Product(**dict(product)) if product else None
+                return _to_domain(product) if product else None
         finally:
             session.close()
 
@@ -109,7 +178,7 @@ class ProductRepository:
                 product = session.exec(
                     select(ProductModel).where(ProductModel.barcode == barcode)
                 ).first()
-                return Product(**dict(product)) if product else None
+                return _to_domain(product) if product else None
         finally:
             session.close()
 
@@ -127,7 +196,7 @@ class ProductRepository:
                 session.add(product)
                 session.commit()
                 session.refresh(product)
-                return Product(**dict(product))
+                return _to_domain(product)
         finally:
             session.close()
 
@@ -180,7 +249,7 @@ class ProductRepository:
                 )
                 session.commit()
                 session.refresh(product)
-                return Product(**dict(product))
+                return _to_domain(product)
         finally:
             session.close()
 

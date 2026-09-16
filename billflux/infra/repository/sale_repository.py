@@ -92,3 +92,21 @@ class SaleRepository:
                 return True
         finally:
             session.close()
+
+    def cancel_sale(self, sale_id: int) -> bool:
+        """Cancela uma venda avulsa mantendo-a na lista (marca como cancelada).
+
+        Devolve False se a venda não existe ou já está cancelada."""
+
+        session = get_session()
+        try:
+            with session:
+                sale = session.get(SaleModel, sale_id)
+                if not sale or sale.cancelled:
+                    return False
+                sale.cancelled = True
+                session.add(sale)
+                session.commit()
+                return True
+        finally:
+            session.close()

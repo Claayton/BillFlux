@@ -20,3 +20,10 @@ class Order(SQLModel, table=True):
         default=None, foreign_key="paymentmethod.id", nullable=False
     )
     obs: Optional[str] = Field(nullable=True)
+    cancelled: bool = Field(default=False, nullable=False)
+    discount: Optional[Decimal] = Field(
+        default=None, sa_column=Column(Numeric(10, 2), nullable=True)
+    )
+    customer_id: Optional[int] = Field(
+        default=None, foreign_key="customer.id", nullable=True
+    )

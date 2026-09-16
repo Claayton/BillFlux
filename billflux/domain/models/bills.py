@@ -11,6 +11,7 @@ Bill = namedtuple(
         "value",
         "reference",
         "suplyer",
+        "supplier_id",
         "bill_type",
         "days",
         "payday",

@@ -118,7 +118,9 @@ cd frontend && npm test          # executa uma vez
 cd frontend && npm run test:watch
 ```
 
-## 🐳 Produção (Docker)
+## 🐳 Docker
+
+### Desenvolvimento (SQLite)
 
 ```bash
 docker compose up -d --build
@@ -131,11 +133,30 @@ Sobe dois serviços:
 
 O banco é um volume (`billflux-data`) montado em `/app/data`.
 
+### Produção (PostgreSQL + Traefik)
+
+```bash
+docker compose -f docker-compose-prod.yml up -d --build
+```
+
+Sobe `postgres` (16) + `api` + `web`, com o `web` exposto via Traefik
+(rede `proxy`, entrypoint `websecure`, certresolver `letsencrypt`).
+
+A migração dos dados do SQLite para o PostgreSQL é feita com:
+
+```bash
+docker compose -f docker-compose-prod.yml run --rm \
+  -v $PWD/billflux.db:/app/billflux.db \
+  api python scripts/migrate_sqlite_to_postgres.py
+```
+
 ### Variáveis de ambiente
+
+Veja `.env.example` — copie para `.env` e preencha os valores reais.
 
 | Variável | Descrição | Padrão |
 |---|---|---|
-| `BILLFLUX_DATABASE__URL` | Caminho do SQLite | `sqlite:///data/billflux.db` |
+| `BILLFLUX_DATABASE__URL` | URL do banco (SQLite ou PostgreSQL) | `sqlite:///data/billflux.db` |
 | `BILLFLUX_SECRET_KEY` | Chave de sessão/CSRF (**obrigatória em produção**) | `change-me` |
 | `BILLFLUX_AUTH__ALLOW_SIGNUP` | Permite criar conta | `false` |
 | `BILLFLUX_AUTH__USERNAME` | Usuário padrão criado no boot | `coqueiral` |

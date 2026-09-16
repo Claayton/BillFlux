@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements-prod.txt gunicorn
 
 COPY billflux/ ./billflux/
 COPY run.py settings.toml ./
+COPY scripts/ ./scripts/
 
 RUN useradd -m appuser && mkdir -p /app/data && chown -R appuser:appuser /app
 

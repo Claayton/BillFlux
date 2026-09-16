@@ -3,7 +3,11 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl, brdateShort, maskMoney, moneyToDecimal } from '@/utils/format'
+import { paymentIcon, paymentColor } from '@/utils/payment'
 import AppShell from '@/components/AppShell.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import SaleEditModal from '@/views/SaleEditModal.vue'
+import SaleReceiptModal from '@/views/SaleReceiptModal.vue'
 
 const periods = [
   { key: 'hoje', label: 'Hoje', icon: 'fas fa-calendar-day' },
@@ -14,9 +18,16 @@ const periods = [
 
 const active = ref('hoje')
 const showValues = ref(true)
+const saleFilter = ref('todas')
 const data = ref(null)
 const loading = ref(false)
 const saving = ref(false)
+
+const filterOptions = [
+  { key: 'todas', label: 'Todas' },
+  { key: 'ativas', label: 'Ativas' },
+  { key: 'canceladas', label: 'Canceladas' },
+]
 
 const form = ref({
   date: new Date().toISOString().slice(0, 10),
@@ -24,10 +35,46 @@ const form = ref({
   obs: '',
 })
 
+const expandedIds = ref(new Set())
+const editManual = ref({ open: false, sale: null })
+const editPdvId = ref(null)
+const receiptSale = ref(null)
+const cancelTarget = ref(null)
+
+const editForm = ref({ date: '', total: '', obs: '' })
+
 const currentPeriod = computed(() => (data.value?.periods || {})[active.value])
+
+const filteredSales = computed(() => {
+  if (!data.value) return []
+  if (saleFilter.value === 'todas') return data.value.sales
+  const wantCancelled = saleFilter.value === 'canceladas'
+  return data.value.sales.filter((sale) => Boolean(sale.cancelled) === wantCancelled)
+})
 
 function mask(event) {
   form.value.total = maskMoney(event.target.value)
+}
+
+function maskEdit(event) {
+  editForm.value.total = maskMoney(event.target.value)
+}
+
+function visibleItems(sale) {
+  return sale.items.slice(0, 3)
+}
+
+function isExpanded(sale) {
+  return expandedIds.value.has(sale.id)
+}
+
+function toggleExpand(sale) {
+  if (expandedIds.value.has(sale.id)) {
+    expandedIds.value.delete(sale.id)
+  } else {
+    expandedIds.value.add(sale.id)
+  }
+  expandedIds.value = new Set(expandedIds.value)
 }
 
 async function load() {
@@ -65,11 +112,67 @@ async function submit() {
   }
 }
 
-async function removeSale(id) {
-  if (!window.confirm('Excluir esta venda?')) return
+function printSale(sale) {
+  receiptSale.value = sale
+}
+
+function openEditManual(sale) {
+  editForm.value = {
+    date: sale.date,
+    total: maskMoney(String(Math.round(sale.total * 100))),
+    obs: sale.obs || '',
+  }
+  editManual.value = { open: true, sale }
+}
+
+async function saveEditManual() {
+  const sale = editManual.value.sale
+  const total = moneyToDecimal(editForm.value.total)
+  if (!editForm.value.date || total === null || total <= 0) {
+    ElMessage.warning('Informe data e um total válido.')
+    return
+  }
+  saving.value = true
   try {
-    data.value = await api.del(`/sales/${id}`)
-    ElMessage.success('Venda excluída.')
+    data.value = await api.put(`/sales/${sale.id}`, {
+      date: editForm.value.date,
+      total: String(total),
+      obs: editForm.value.obs,
+    })
+    editManual.value = { open: false, sale: null }
+    ElMessage.success('Venda editada!')
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    saving.value = false
+  }
+}
+
+function openEditPdv(sale) {
+  editPdvId.value = sale.id
+}
+
+function onPdvEdited() {
+  editPdvId.value = null
+  load()
+}
+
+function askCancel(sale) {
+  cancelTarget.value = sale
+}
+
+async function confirmCancel() {
+  const sale = cancelTarget.value
+  cancelTarget.value = null
+  if (!sale) return
+  try {
+    if (sale.kind === 'pdv') {
+      data.value = await api.post(`/sales/orders/${sale.id}/cancel`, {})
+      ElMessage.success('Venda cancelada e estoque restaurado.')
+    } else {
+      data.value = await api.post(`/sales/${sale.id}/cancel`, {})
+      ElMessage.success('Venda cancelada.')
+    }
   } catch (error) {
     ElMessage.error(error.message)
   }
@@ -176,60 +279,179 @@ onMounted(load)
         <div class="table-card">
           <div class="table-card-head">
             <h2>Vendas</h2>
+            <div class="filter-segmented sales-filter" role="group" aria-label="Filtrar vendas">
+              <button
+                v-for="opt in filterOptions"
+                :key="opt.key"
+                type="button"
+                :class="{ 'is-active': saleFilter === opt.key }"
+                @click="saleFilter = opt.key"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
           </div>
-          <div class="table-container">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Data</th>
-                  <th>Origem</th>
-                  <th>Observações</th>
-                  <th class="th-amount">Total</th>
-                  <th class="th-actions"></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="sale in data.sales" :key="sale.kind + '-' + sale.id" class="sale-row">
-                  <td>
-                    <span class="cell-title">{{ brdateShort(sale.date) }}</span>
-                    <span v-if="sale.date === data.today" class="cell-sub cell-today">hoje</span>
-                  </td>
-                  <td>
-                    <span :class="sale.kind === 'pdv' ? 'source-badge source-badge-pdv' : 'source-badge source-badge-manual'">
-                      <i :class="sale.kind === 'pdv' ? 'fas fa-cash-register' : 'fas fa-hand-holding-usd'"></i>
-                      {{ sale.kind === 'pdv' ? 'PDV' : 'Manual' }}
+          <div v-if="!filteredSales.length" class="empty-state">
+            <i class="fas fa-cash-register"></i>
+            <h3>Nenhuma venda {{ saleFilter === 'canceladas' ? 'cancelada' : 'encontrada' }}</h3>
+            <p>Lance uma venda avulsa ou feche uma venda no PDV.</p>
+          </div>
+          <div v-else class="sales-list">
+            <div class="sales-list-header">
+              <span>ID</span>
+              <span>Valor</span>
+              <span>Origem</span>
+              <span>Data / hora</span>
+              <span>Itens</span>
+              <span>Ações</span>
+            </div>
+            <div
+              v-for="sale in filteredSales"
+              :key="sale.kind + '-' + sale.id"
+              class="sale-row"
+              :class="{ 'is-cancelled': sale.cancelled }"
+            >
+              <div class="sale-row-main">
+                <span class="sale-id">#{{ sale.id }}</span>
+
+                <span class="sale-value">
+                  <i
+                    class="sale-payment-icon"
+                    :class="[paymentIcon(sale.payment), paymentColor(sale.payment)]"
+                    :title="sale.payment || ''"
+                  ></i>
+                  {{ brl(sale.total) }}
+                </span>
+
+                <span class="sale-origin-cell">
+                  <span v-if="sale.cancelled" class="sale-cancelled-badge">Cancelada</span>
+                  <span :class="sale.kind === 'pdv' ? 'source-badge source-badge-pdv' : 'source-badge source-badge-manual'">
+                    <i :class="sale.kind === 'pdv' ? 'fas fa-cash-register' : 'fas fa-hand-holding-usd'"></i>
+                    {{ sale.kind === 'pdv' ? 'PDV' : 'Manual' }}
+                  </span>
+                </span>
+
+                <span class="sale-date">
+                  <span class="sale-date-line">
+                    {{ brdateShort(sale.date) }}
+                    <span v-if="sale.date === data.today" class="sale-today">hoje</span>
+                  </span>
+                  <span v-if="sale.time" class="sale-time">{{ sale.time }}</span>
+                </span>
+
+                <div class="sale-items">
+                  <template v-if="sale.items.length">
+                    <span v-for="item in visibleItems(sale)" :key="item.name" class="sale-item-chip">
+                      {{ item.quantity }}x {{ item.name }}
                     </span>
-                  </td>
-                  <td class="cell-obs">{{ sale.obs || '—' }}</td>
-                  <td class="cell-amount">{{ fmt(sale.total) }}</td>
-                  <td class="cell-actions">
-                    <a v-if="sale.kind === 'pdv'" class="icon-btn" :href="'/pdv/recibo/' + sale.id" title="Ver recibo">
-                      <i class="fas fa-receipt"></i>
-                    </a>
                     <button
-                      v-else
+                      v-if="sale.items.length > 3"
                       type="button"
-                      class="icon-btn is-danger"
-                      title="Excluir"
-                      @click="removeSale(sale.id)"
+                      class="sale-items-more"
+                      @click="toggleExpand(sale)"
                     >
-                      <i class="fas fa-trash"></i>
+                      <i :class="isExpanded(sale) ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+                      {{ isExpanded(sale) ? 'ver menos' : 'ver todos (' + sale.items.length + ')' }}
                     </button>
-                  </td>
-                </tr>
-                <tr v-if="!data.sales.length" class="empty-row">
-                  <td colspan="5" class="empty-state">
-                    <i class="fas fa-cash-register"></i>
-                    <h3>Nenhuma venda ainda</h3>
-                    <p>Lance uma venda avulsa ou feche uma venda no PDV.</p>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                  </template>
+                  <span v-else class="sale-no-items">Sem itens</span>
+                </div>
+
+                <div class="sale-actions">
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    title="Imprimir recibo"
+                    @click="printSale(sale)"
+                  >
+                    <i class="fas fa-print"></i>
+                  </button>
+                  <button
+                    v-if="!sale.cancelled"
+                    type="button"
+                    class="icon-btn"
+                    title="Editar venda"
+                    @click="sale.kind === 'pdv' ? openEditPdv(sale) : openEditManual(sale)"
+                  >
+                    <i class="fas fa-pen"></i>
+                  </button>
+                  <button
+                    v-if="!sale.cancelled"
+                    type="button"
+                    class="icon-btn is-danger"
+                    title="Cancelar venda"
+                    @click="askCancel(sale)"
+                  >
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="isExpanded(sale) && sale.items.length > 3" class="sale-items-expanded">
+                <div v-for="item in sale.items" :key="item.name" class="sale-item-expanded">
+                  <span>{{ item.name }}</span>
+                  <strong>{{ item.quantity }}x</strong>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </template>
     </div>
+
+    <div class="modal" :class="{ 'is-open': editManual.open }">
+      <div class="modal-content modal-content-sm">
+        <div class="modal-header">
+          <h2>Editar venda #{{ editManual.sale?.id }}</h2>
+          <button type="button" class="modal-close" aria-label="Fechar" @click="editManual = { open: false, sale: null }">&times;</button>
+        </div>
+        <form class="modal-form" @submit.prevent="saveEditManual">
+          <div class="form-field">
+            <label for="edit_date">Data</label>
+            <input id="edit_date" v-model="editForm.date" type="date" required />
+          </div>
+          <div class="form-field">
+            <label for="edit_total">Total bruto</label>
+            <input id="edit_total" :value="editForm.total" type="text" placeholder="R$ 0,00" inputmode="decimal" required @input="maskEdit" />
+          </div>
+          <div class="form-field">
+            <label for="edit_obs">Observações</label>
+            <input id="edit_obs" v-model="editForm.obs" type="text" placeholder="Opcional..." />
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-ghost modal-cancel" @click="editManual = { open: false, sale: null }">Cancelar</button>
+            <button type="submit" class="btn btn-primary" :disabled="saving">
+              <i class="fas fa-check"></i> {{ saving ? 'Salvando…' : 'Salvar' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <SaleEditModal
+      v-if="editPdvId"
+      :order-id="editPdvId"
+      @saved="onPdvEdited"
+      @close="editPdvId = null"
+    />
+
+    <SaleReceiptModal
+      v-if="receiptSale"
+      :sale="receiptSale"
+      @close="receiptSale = null"
+    />
+
+    <ConfirmDialog
+      v-if="cancelTarget"
+      title="Cancelar venda"
+      :message="cancelTarget.kind === 'pdv'
+        ? `Cancelar a venda #${cancelTarget.id}? O estoque dos itens será restaurado.`
+        : `Excluir a venda #${cancelTarget.id}?`"
+      confirm-label="Cancelar venda"
+      danger
+      @confirm="confirmCancel"
+      @cancel="cancelTarget = null"
+    />
   </AppShell>
 </template>
 
@@ -237,8 +459,5 @@ onMounted(load)
 .muted {
   color: var(--text-muted);
   padding: 24px 4px;
-}
-.icon-btn.is-danger {
-  color: #e05d5d;
 }
 </style>

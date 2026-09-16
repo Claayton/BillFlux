@@ -57,6 +57,42 @@ const routes = [
     meta: { auth: true },
   },
   {
+    path: '/categories',
+    name: 'categories',
+    component: () => import('@/views/CategoriesView.vue'),
+    meta: { auth: true },
+  },
+  {
+    path: '/customers',
+    name: 'customers',
+    component: () => import('@/views/CustomersView.vue'),
+    meta: { auth: true },
+  },
+  {
+    path: '/suppliers',
+    name: 'suppliers',
+    component: () => import('@/views/SuppliersView.vue'),
+    meta: { auth: true },
+  },
+  {
+    path: '/caixa',
+    name: 'caixa',
+    component: () => import('@/views/CaixaView.vue'),
+    meta: { auth: true },
+  },
+  {
+    path: '/purchases',
+    name: 'purchases',
+    component: () => import('@/views/PurchasesView.vue'),
+    meta: { auth: true },
+  },
+  {
+    path: '/schedule',
+    name: 'schedule',
+    component: () => import('@/views/ScheduleView.vue'),
+    meta: { auth: true },
+  },
+  {
     path: '/pdv',
     name: 'pdv',
     component: () => import('@/views/PdvView.vue'),

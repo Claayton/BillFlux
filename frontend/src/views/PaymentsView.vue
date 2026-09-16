@@ -3,22 +3,16 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import AppShell from '@/components/AppShell.vue'
+import { useRowMenu } from '@/composables/useRowMenu'
+
+const { openMenu, menuPos, toggleMenu, closeMenus } = useRowMenu()
 
 const data = ref(null)
 const loading = ref(false)
 const saving = ref(false)
-const openMenu = ref(null)
 
 const showModal = ref(false)
 const methodName = ref('')
-
-function toggleMenu(id) {
-  openMenu.value = openMenu.value === id ? null : id
-}
-
-function closeMenus() {
-  openMenu.value = null
-}
 
 async function load() {
   loading.value = true
@@ -68,7 +62,6 @@ async function removeMethod(method) {
 
 onMounted(() => {
   load()
-  document.addEventListener('click', closeMenus)
 })
 </script>
 
@@ -116,11 +109,16 @@ onMounted(() => {
                         aria-haspopup="true"
                         aria-expanded="false"
                         aria-label="Ações da forma de pagamento"
+                        :data-menu="method.id"
                         @click.stop="toggleMenu(method.id)"
                       >
                         <i class="fas fa-ellipsis-h"></i>
                       </button>
-                      <div class="dropdown-panel" v-show="openMenu === method.id">
+                      <div
+                        class="dropdown-panel"
+                        v-show="openMenu === method.id"
+                        :style="{ top: menuPos.top + 'px', left: menuPos.left + 'px' }"
+                      >
                         <button type="button" class="dropdown-item" @click="toggleMethod(method)">
                           <i class="fas fa-power-off"></i> {{ method.active ? 'Desativar' : 'Ativar' }}
                         </button>
