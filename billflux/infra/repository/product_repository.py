@@ -82,6 +82,7 @@ class ProductRepository:
         barcode: Optional[str] = None,
         stock_quantity: int = 0,
         min_stock: int = 0,
+        ideal_stock: int = 0,
         active: bool = True,
         obs: Optional[str] = None,
         cost: Decimal = Decimal("0"),
@@ -106,6 +107,7 @@ class ProductRepository:
                     supplier_id=supplier_id,
                     stock_quantity=stock_quantity,
                     min_stock=min_stock,
+                    ideal_stock=ideal_stock,
                     active=active,
                     obs=obs,
                 )

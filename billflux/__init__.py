@@ -19,6 +19,8 @@ from billflux.api import customers as api_customers
 from billflux.api import suppliers as api_suppliers
 from billflux.api import pdv as api_pdv
 from billflux.api import purchases as api_purchases
+from billflux.api import schedule as api_schedule
+from billflux.api import product_units as api_product_units
 
 csrf = CSRFProtect()
 

@@ -6,6 +6,7 @@ from sqlmodel import select
 from billflux.infra.config.database import get_session
 from billflux.infra.entities.supplier import Supplier as SupplierModel
 from billflux.domain.models.suppliers import Supplier
+from billflux.services.text_normalize import strip_accents
 
 
 def _to_domain(s: SupplierModel) -> Supplier:
@@ -42,17 +43,21 @@ class SupplierRepository:
                 sql = select(SupplierModel)
                 if active_only:
                     sql = sql.where(SupplierModel.active == True)  # noqa: E712
-                if search:
-                    like = f"%{search}%"
-                    sql = sql.where(
-                        SupplierModel.name.ilike(like)
-                        | SupplierModel.cnpj.ilike(like)
-                        | SupplierModel.phone.ilike(like)
-                    )
                 sql = sql.order_by(SupplierModel.name)
-                return _to_domains(session.exec(sql).all())
+                all_suppliers = [_to_domain(s) for s in session.exec(sql).all()]
         finally:
             session.close()
+
+        if search:
+            term = strip_accents(search).lower()
+            all_suppliers = [
+                s
+                for s in all_suppliers
+                if term in strip_accents(s.name or "").lower()
+                or term in strip_accents(s.cnpj or "").lower()
+                or term in strip_accents(s.phone or "").lower()
+            ]
+        return all_suppliers
 
     def get_supplier(self, supplier_id: int) -> Optional[Supplier]:
         session = get_session()

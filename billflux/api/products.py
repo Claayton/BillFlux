@@ -6,6 +6,7 @@ from billflux.api import bp, api_error, api_login_required, api_response, br_to_
 from billflux.infra.repository.category_repository import CategoryRepository
 from billflux.infra.repository.product_repository import ProductRepository
 from billflux.infra.repository.supplier_repository import SupplierRepository
+from billflux.infra.repository.product_unit_repository import ProductUnitRepository
 
 
 def _parse_category_id(data):
@@ -34,8 +35,8 @@ def _parse_supplier_id(data):
     return supplier.id if supplier else None
 
 
-def _serialize_product(product):
-    return {
+def _serialize_product(product, units=None):
+    data = {
         "id": product.id,
         "name": product.name,
         "price": float(product.price),
@@ -49,9 +50,24 @@ def _serialize_product(product):
         "supplier_name": product.supplier_name,
         "stock_quantity": product.stock_quantity,
         "min_stock": product.min_stock,
+        "ideal_stock": getattr(product, "ideal_stock", 0) or 0,
         "obs": product.obs,
         "active": product.active,
     }
+    if units is not None:
+        data["units"] = [
+            {
+                "id": u.id,
+                "product_id": u.product_id,
+                "name": u.name,
+                "barcode": u.barcode,
+                "factor": u.factor,
+                "price": float(u.price),
+                "is_default": u.is_default,
+            }
+            for u in units
+        ]
+    return data
 
 
 def _serialize_movement(movement):
@@ -66,9 +82,18 @@ def _serialize_movement(movement):
 
 def _products_payload():
     repository = ProductRepository()
+    unit_repo = ProductUnitRepository()
     suppliers = SupplierRepository().get_suppliers(active_only=True)
+    products = repository.get_products()
+    product_ids = [p.id for p in products]
+    all_units = unit_repo.get_units_for_products(product_ids)
+    units_by_product = {}
+    for u in all_units:
+        units_by_product.setdefault(u.product_id, []).append(u)
     return {
-        "products": [_serialize_product(p) for p in repository.get_products()],
+        "products": [
+            _serialize_product(p, units_by_product.get(p.id)) for p in products
+        ],
         "suppliers": [{"id": s.id, "name": s.name} for s in suppliers],
     }
 
@@ -107,10 +132,11 @@ def products_create():
     try:
         stock = int(data.get("stock_quantity") or 0)
         min_stock = int(data.get("min_stock") or 0)
+        ideal_stock = int(data.get("ideal_stock") or 0)
     except (TypeError, ValueError):
-        return api_error("Quantidades inválidas.", 400)
-    if stock < 0 or min_stock < 0:
-        return api_error("Quantidades inválidas.", 400)
+        return api_error("Quantidades invalidas.", 400)
+    if stock < 0 or min_stock < 0 or ideal_stock < 0:
+        return api_error("Quantidades invalidas.", 400)
 
     repository = ProductRepository()
     if barcode and repository.get_product_by_barcode(barcode):
@@ -127,6 +153,7 @@ def products_create():
         supplier_id=supplier_id,
         stock_quantity=stock,
         min_stock=min_stock,
+        ideal_stock=ideal_stock,
         obs=obs,
     )
     return api_response(_products_payload(), status=201)
@@ -161,10 +188,11 @@ def products_edit(product_id):
 
     try:
         min_stock = int(data.get("min_stock") or 0)
+        ideal_stock = int(data.get("ideal_stock") or 0)
     except (TypeError, ValueError):
-        return api_error("Estoque mínimo inválido.", 400)
-    if min_stock < 0:
-        return api_error("Estoque mínimo inválido.", 400)
+        return api_error("Estoque invalido.", 400)
+    if min_stock < 0 or ideal_stock < 0:
+        return api_error("Estoque invalido.", 400)
 
     existing = repository.get_product_by_barcode(barcode) if barcode else None
     if existing and existing.id != product_id:
@@ -181,6 +209,7 @@ def products_edit(product_id):
         suppliers=suppliers,
         supplier_id=supplier_id,
         min_stock=min_stock,
+        ideal_stock=ideal_stock,
         obs=obs,
         active=active,
     )
@@ -219,26 +248,67 @@ def products_adjust(product_id):
 @bp.route("/products/barcode/<barcode>")
 @api_login_required
 def products_by_barcode(barcode):
-    """Busca um produto pelo código de barras."""
+    """Busca um produto pelo código de barras (produto ou apresentação)."""
     repository = ProductRepository()
+    unit_repo = ProductUnitRepository()
+
     product = repository.get_product_by_barcode(barcode)
-    if not product:
-        return api_error("Produto não encontrado.", 404)
-    return api_response({"product": _serialize_product(product)})
+    if product:
+        units = unit_repo.get_units_for_product(product.id)
+        return api_response({"product": _serialize_product(product, units)})
+
+    unit = unit_repo.get_unit_by_barcode(barcode)
+    if unit:
+        product = repository.get_product(unit.product_id)
+        if product:
+            units = unit_repo.get_units_for_product(product.id)
+            return api_response({"product": _serialize_product(product, units)})
+
+    return api_error("Produto não encontrado.", 404)
 
 
 @bp.route("/products/search")
 @api_login_required
 def products_search():
-    """Busca produtos por nome (parcial)."""
+    """Busca produtos por nome (parcial), sem considerar acentos.
+    Também busca por código de barras de apresentação."""
+    from billflux.services.text_normalize import strip_accents
+
     q = request.args.get("q", "").strip()
     if not q:
         return api_response({"products": []})
     repository = ProductRepository()
+    unit_repo = ProductUnitRepository()
     all_products = repository.get_active_products()
-    like = q.lower()
-    matches = [p for p in all_products if like in p.name.lower()][:20]
-    return api_response({"products": [_serialize_product(p) for p in matches]})
+    like = strip_accents(q).lower()
+
+    matches = [
+        p
+        for p in all_products
+        if like in strip_accents(p.name or "").lower()
+        or like == (p.barcode or "").lower()
+    ]
+
+    if not matches:
+        unit = unit_repo.get_unit_by_barcode(q)
+        if unit:
+            p = repository.get_product(unit.product_id)
+            if p and p.active:
+                matches = [p]
+
+    matches = matches[:20]
+    product_ids = [p.id for p in matches]
+    all_units = unit_repo.get_units_for_products(product_ids)
+    units_by_product = {}
+    for u in all_units:
+        units_by_product.setdefault(u.product_id, []).append(u)
+    return api_response(
+        {
+            "products": [
+                _serialize_product(p, units_by_product.get(p.id)) for p in matches
+            ]
+        }
+    )
 
 
 @bp.route("/products/<int:product_id>/movements", methods=["GET"])

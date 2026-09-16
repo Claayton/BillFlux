@@ -17,16 +17,31 @@ from billflux.infra.repository.payment_method_repository import (
 )
 from billflux.infra.repository.product_repository import ProductRepository
 from billflux.infra.repository.customer_repository import CustomerRepository
+from billflux.infra.repository.product_unit_repository import ProductUnitRepository
 
 
-def _serialize_product(product):
-    return {
+def _serialize_product(product, units=None):
+    data = {
         "id": product.id,
         "name": product.name,
         "price": float(product.price),
+        "cost": float(product.cost),
         "stock": product.stock_quantity,
         "barcode": product.barcode or "",
     }
+    if units is not None:
+        data["units"] = [
+            {
+                "id": u.id,
+                "name": u.name,
+                "barcode": u.barcode or "",
+                "factor": u.factor,
+                "price": float(u.price),
+                "is_default": u.is_default,
+            }
+            for u in units
+        ]
+    return data
 
 
 def _serialize_method(method):
@@ -53,6 +68,7 @@ def _build_receipt(order_id):
         from billflux.infra.repository.customer_repository import (
             CustomerRepository,
         )
+
         customer = CustomerRepository().get_customer(order.customer_id)
         if customer:
             customer_name = customer.name
@@ -99,10 +115,17 @@ def _build_receipt(order_id):
 @api_login_required
 def pdv():
     """Produtos ativos e formas de pagamento para o ponto de venda."""
+    unit_repo = ProductUnitRepository()
+    products = ProductRepository().get_active_products()
+    product_ids = [p.id for p in products]
+    all_units = unit_repo.get_units_for_products(product_ids)
+    units_by_product = {}
+    for u in all_units:
+        units_by_product.setdefault(u.product_id, []).append(u)
     return api_response(
         {
             "products": [
-                _serialize_product(p) for p in ProductRepository().get_active_products()
+                _serialize_product(p, units_by_product.get(p.id)) for p in products
             ],
             "methods": [
                 _serialize_method(m)
@@ -126,7 +149,9 @@ def complete():
     )
 
     if not CashRegisterRepository().get_open():
-        return api_error("Nenhum caixa aberto. Abra o caixa antes de registrar vendas.", 400)
+        return api_error(
+            "Nenhum caixa aberto. Abra o caixa antes de registrar vendas.", 400
+        )
 
     data = request.get_json(silent=True) or {}
 
@@ -162,6 +187,7 @@ def complete():
         return api_error("Adicione ao menos um item ao carrinho.", 400)
 
     cart = []
+    unit_repo = ProductUnitRepository()
     for item in items:
         try:
             product_id = int(item.get("product_id"))
@@ -169,7 +195,16 @@ def complete():
         except (TypeError, ValueError):
             continue
         if quantity > 0:
-            cart.append((product_id, quantity))
+            raw_unit_id = item.get("unit_id")
+            factor = 1
+            if raw_unit_id:
+                try:
+                    unit = unit_repo.get_unit(int(raw_unit_id))
+                    if unit:
+                        factor = unit.factor
+                except (TypeError, ValueError):
+                    pass
+            cart.append((product_id, quantity * factor))
 
     if not cart:
         return api_error("Adicione ao menos um item ao carrinho.", 400)

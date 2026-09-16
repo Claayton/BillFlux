@@ -28,5 +28,6 @@ class Product(SQLModel, table=True):
     )
     stock_quantity: int = Field(default=0, nullable=False)
     min_stock: int = Field(default=0, nullable=False)
+    ideal_stock: int = Field(default=0, nullable=False)
     active: bool = Field(default=True)
     obs: Optional[str] = Field(nullable=True)

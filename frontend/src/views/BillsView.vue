@@ -5,6 +5,7 @@ import JsBarcode from 'jsbarcode'
 import qrcode from 'qrcode-generator'
 import { api } from '@/api/client'
 import { brl, brdate, brdateShort, maskMoney, moneyToDecimal } from '@/utils/format'
+import { normalizeForSearch } from '@/utils/normalize'
 import AppShell from '@/components/AppShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
@@ -130,7 +131,7 @@ const filteredBills = computed(() => {
       if (filterStatus.value === 'AVencer' && ['paga', 'vencida'].includes(bill.status)) return false
     }
     if (!term) return true
-    const haystack = [
+    const haystack = normalizeForSearch([
       bill.reference,
       bill.suplyer,
       bill.category,
@@ -139,9 +140,8 @@ const filteredBills = computed(() => {
       bill.bar_code,
     ]
       .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-    return haystack.includes(term)
+      .join(' '))
+    return haystack.includes(normalizeForSearch(term))
   })
 
   const sorted = [...result]

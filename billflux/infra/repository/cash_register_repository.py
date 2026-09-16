@@ -1,12 +1,15 @@
 """Module for repository to CashRegister (controle de caixa)"""
 
 import json
+from datetime import datetime
 from typing import Dict, List, Optional
 
-from sqlalchemy import text
+from sqlalchemy import func
 from sqlmodel import select
 from billflux.infra.config.database import get_session
 from billflux.infra.entities.cash_register import CashRegister as CashRegisterModel
+from billflux.infra.entities.order import Order as OrderModel
+from billflux.infra.entities.order_payment import OrderPayment as OrderPaymentModel
 from billflux.domain.models.cash_registers import CashRegister
 
 
@@ -126,25 +129,32 @@ class CashRegisterRepository:
         finally:
             session.close()
 
-    def compute_system_totals(
-        self, opened_at: str, closed_at: str
-    ) -> Dict[str, float]:
+    def compute_system_totals(self, opened_at: str, closed_at: str) -> Dict[str, float]:
         """Soma os valores por forma de pagamento entre opened_at e closed_at."""
+
+        def _parse(value):
+            if isinstance(value, datetime):
+                return value
+            return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+
+        opened = _parse(opened_at)
+        closed = _parse(closed_at)
 
         session = get_session()
         try:
             with session:
                 rows = session.execute(
-                    text(
-                        "SELECT op.payment_method_id, SUM(op.amount) "
-                        "FROM order_payments op "
-                        "JOIN orders o ON o.id = op.order_id "
-                        "WHERE o.created_at >= :opened "
-                        "AND o.created_at <= :closed "
-                        "AND o.cancelled = 0 "
-                        "GROUP BY op.payment_method_id"
-                    ),
-                    {"opened": opened_at, "closed": closed_at},
+                    select(
+                        OrderPaymentModel.payment_method_id,
+                        func.sum(OrderPaymentModel.amount),
+                    )
+                    .join(OrderModel, OrderModel.id == OrderPaymentModel.order_id)
+                    .where(
+                        OrderModel.created_at >= opened,
+                        OrderModel.created_at <= closed,
+                        OrderModel.cancelled == False,  # noqa: E712
+                    )
+                    .group_by(OrderPaymentModel.payment_method_id)
                 ).fetchall()
                 return {str(row[0]): float(row[1]) for row in rows}
         finally:

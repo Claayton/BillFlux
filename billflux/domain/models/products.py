@@ -18,6 +18,7 @@ Product = namedtuple(
         "supplier_name",
         "stock_quantity",
         "min_stock",
+        "ideal_stock",
         "active",
         "obs",
     ],

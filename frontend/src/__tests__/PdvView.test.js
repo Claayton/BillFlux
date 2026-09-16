@@ -22,8 +22,8 @@ import { ElMessage } from 'element-plus'
 import PdvView from '@/views/PdvView.vue'
 
 const products = [
-  { id: 1, name: 'Doces arildo', price: 5, stock: 9, barcode: '040141018496' },
-  { id: 2, name: 'Bolo de fubá', price: 3, stock: 4, barcode: null },
+  { id: 1, name: 'Doces arildo', price: 5, stock: 9, barcode: '040141018496', units: [{ id: 1, name: 'Unidade', barcode: '', factor: 1, price: 5, is_default: true }] },
+  { id: 2, name: 'Bolo de fubá', price: 3, stock: 4, barcode: null, units: [{ id: 2, name: 'Unidade', barcode: '', factor: 1, price: 3, is_default: true }] },
 ]
 const methods = [{ id: 1, name: 'Dinheiro' }, { id: 2, name: 'PIX' }]
 
@@ -120,7 +120,7 @@ describe('PdvView', () => {
       '/pdv/complete',
       expect.objectContaining({
         payments: [{ method_id: 1, amount: '5.00' }],
-        items: [{ product_id: 1, quantity: 1 }],
+        items: [{ product_id: 1, quantity: 1, unit_id: 1 }],
         discount: 0,
       })
     )
@@ -316,7 +316,7 @@ describe('PdvView', () => {
 
   it('permite vender produto sem estoque (estoque pode ficar negativo)', async () => {
     apiMock.get.mockResolvedValue({
-      products: [{ id: 9, name: 'Esgotado', price: 1, stock: 0, barcode: '999999999' }],
+      products: [{ id: 9, name: 'Esgotado', price: 1, stock: 0, barcode: '999999999', units: [{ id: 90, name: 'Unidade', barcode: '', factor: 1, price: 1, is_default: true }] }],
       methods,
     })
     const wrapper = mountView()

@@ -25,14 +25,24 @@ from billflux.infra.entities.purchase_order import (
 from billflux.infra.entities.purchase_item import (
     PurchaseItem as PurchaseItemModel,
 )  # noqa: F401
+from billflux.infra.entities.product_supplier import (
+    ProductSupplier as ProductSupplierModel,
+)  # noqa: F401
+from billflux.infra.entities.product_unit import (
+    ProductUnit as ProductUnitModel,
+)  # noqa: F401
 
 _database_url = settings.database.url
-_engine_kwargs = {"connect_args": {"check_same_thread": False}}
 
-if ":memory:" in _database_url or _database_url == "sqlite://":
-    _engine_kwargs["poolclass"] = StaticPool
+_engine_kwargs = {}
+if _database_url.startswith("sqlite"):
+    _engine_kwargs["connect_args"] = {"check_same_thread": False}
+    if ":memory:" in _database_url or _database_url == "sqlite://":
+        _engine_kwargs["poolclass"] = StaticPool
 
 engine = create_engine(_database_url, **_engine_kwargs)
+
+_is_sqlite = engine.dialect.name == "sqlite"
 
 
 def _add_column_if_missing(table: str, column: str, column_type: str = "VARCHAR"):
@@ -52,26 +62,33 @@ def create_db():
     """Criando bancos de dados"""
 
     base = SQLModel.metadata.create_all(engine)
-    _add_column_if_missing("bill", "pix_key")
-    _add_column_if_missing("bill", "pix_payload")
-    _add_column_if_missing("bill", "pix_image")
-    _add_column_if_missing("bill", "account_id", "INTEGER")
-    _add_column_if_missing("orders", "cancelled", "BOOLEAN DEFAULT 0")
-    _add_column_if_missing("orders", "discount", "NUMERIC(10,2)")
-    _add_column_if_missing("sale", "cancelled", "BOOLEAN DEFAULT 0")
-    _add_column_if_missing("product", "secondary_code", "VARCHAR")
-    _add_column_if_missing("product", "category", "VARCHAR")
-    _add_column_if_missing("product", "suppliers", "VARCHAR")
-    _add_column_if_missing("product", "category_id", "INTEGER")
-    _add_column_if_missing("cashregister", "opening_details", "VARCHAR")
-    _add_column_if_missing("cashregister", "system_totals", "VARCHAR")
-    _add_column_if_missing("cashregister", "closing_details", "VARCHAR")
-    _add_column_if_missing("orders", "customer_id", "INTEGER")
-    _add_column_if_missing("product", "supplier_id", "INTEGER")
-    _add_column_if_missing("bill", "supplier_id", "INTEGER")
-    _add_column_if_missing("purchase_item", "unit_com", "VARCHAR")
+    if _is_sqlite:
+        _add_column_if_missing("bill", "pix_key")
+        _add_column_if_missing("bill", "pix_payload")
+        _add_column_if_missing("bill", "pix_image")
+        _add_column_if_missing("bill", "account_id", "INTEGER")
+        _add_column_if_missing("orders", "cancelled", "BOOLEAN DEFAULT 0")
+        _add_column_if_missing("orders", "discount", "NUMERIC(10,2)")
+        _add_column_if_missing("sale", "cancelled", "BOOLEAN DEFAULT 0")
+        _add_column_if_missing("product", "secondary_code", "VARCHAR")
+        _add_column_if_missing("product", "category", "VARCHAR")
+        _add_column_if_missing("product", "suppliers", "VARCHAR")
+        _add_column_if_missing("product", "category_id", "INTEGER")
+        _add_column_if_missing("cashregister", "opening_details", "VARCHAR")
+        _add_column_if_missing("cashregister", "system_totals", "VARCHAR")
+        _add_column_if_missing("cashregister", "closing_details", "VARCHAR")
+        _add_column_if_missing("orders", "customer_id", "INTEGER")
+        _add_column_if_missing("product", "supplier_id", "INTEGER")
+        _add_column_if_missing("bill", "supplier_id", "INTEGER")
+        _add_column_if_missing("purchase_item", "unit_com", "VARCHAR")
+        _add_column_if_missing("product", "ideal_stock", "INTEGER DEFAULT 0")
+        _add_column_if_missing(
+            "productsupplier", "frequency", "VARCHAR DEFAULT 'semanal'"
+        )
+        _add_column_if_missing("productsupplier", "week_parity", "INTEGER DEFAULT 0")
 
-    _migrate_category_text()
+        _migrate_category_text()
+        _migrate_product_units()
 
     return base
 
@@ -102,6 +119,30 @@ def _migrate_category_text():
             connection.execute(
                 text("UPDATE product SET category_id = :cid WHERE id = :pid"),
                 {"cid": category_id, "pid": product_id},
+            )
+        connection.commit()
+
+
+def _migrate_product_units():
+    """Cria apresentação padrão 'Unidade' para produtos que não possuem nenhuma."""
+    with engine.connect() as connection:
+        existing = connection.execute(
+            text("SELECT COUNT(*) FROM product_unit")
+        ).fetchone()[0]
+        if existing > 0:
+            return
+        rows = connection.execute(
+            text("SELECT id, price FROM product WHERE active = 1")
+        ).fetchall()
+        if not rows:
+            return
+        for product_id, price in rows:
+            connection.execute(
+                text(
+                    "INSERT INTO product_unit (product_id, name, barcode, factor, price, is_default) "
+                    "VALUES (:pid, 'Unidade', NULL, 1, :price, 1)"
+                ),
+                {"pid": product_id, "price": float(price or 0)},
             )
         connection.commit()
 

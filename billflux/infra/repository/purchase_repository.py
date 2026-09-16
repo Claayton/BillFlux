@@ -16,6 +16,7 @@ from billflux.infra.entities.supplier import Supplier as SupplierModel
 from billflux.infra.entities.bill import Bill as BillModel
 from billflux.domain.models.purchase_orders import PurchaseOrder
 from billflux.domain.models.purchase_items import PurchaseItem
+from billflux.services.text_normalize import strip_accents
 
 
 def _to_domain(po, supplier_name=None):
@@ -130,23 +131,27 @@ class PurchaseRepository:
                 sql = select(PurchaseOrderModel).order_by(
                     PurchaseOrderModel.created_at.desc()
                 )
-                if search:
-                    like = f"%{search}%"
-                    sql = sql.where(
-                        PurchaseOrderModel.nf_chave.ilike(like)
-                        | PurchaseOrderModel.nf_number.ilike(like)
-                        | PurchaseOrderModel.obs.ilike(like)
-                    )
                 if supplier_id:
                     sql = sql.where(PurchaseOrderModel.supplier_id == supplier_id)
                 if status:
                     sql = sql.where(PurchaseOrderModel.status == status)
-                return [
+                results = [
                     _to_domain(po, _resolve_supplier_name(po.supplier_id))
                     for po in session.exec(sql).all()
                 ]
         finally:
             session.close()
+
+        if search:
+            term = strip_accents(search).lower()
+            results = [
+                p
+                for p in results
+                if term in strip_accents(p.nf_chave or "").lower()
+                or term in strip_accents(p.nf_number or "").lower()
+                or term in strip_accents(p.obs or "").lower()
+            ]
+        return results
 
     def get_purchase(self, purchase_id):
         session = get_session()

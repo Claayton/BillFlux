@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl, maskMoney, moneyToDecimal } from '@/utils/format'
+import { normalizeForSearch } from '@/utils/normalize'
 import AppShell from '@/components/AppShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
@@ -33,6 +34,13 @@ const creatingCategory = ref(false)
 const deleteTarget = ref(null)
 const searchQuery = ref('')
 const activeCategoryId = ref(null)
+const productSuppliers = ref([])
+const productSuppliersLoading = ref(false)
+const newSupplierLink = ref({ supplier_id: null, delivery_day: 1, lead_time: 1, is_primary: false, frequency: 'semanal', week_parity: 0 })
+
+const productUnits = ref([])
+const productUnitsLoading = ref(false)
+const newUnit = ref({ name: '', barcode: '', factor: 1, price: '' })
 
 const filteredProducts = computed(() => {
   if (!data.value) return []
@@ -40,13 +48,13 @@ const filteredProducts = computed(() => {
   if (activeCategoryId.value !== null) {
     list = list.filter(p => p.category_id === activeCategoryId.value)
   }
-  const q = searchQuery.value.trim().toLowerCase()
+  const q = normalizeForSearch(searchQuery.value.trim())
   if (q) {
     list = list.filter(p =>
-      p.name.toLowerCase().includes(q) ||
-      (p.barcode || '').toLowerCase().includes(q) ||
-      (p.secondary_code || '').toLowerCase().includes(q) ||
-      (p.category_name || '').toLowerCase().includes(q)
+      normalizeForSearch(p.name).includes(q) ||
+      normalizeForSearch(p.barcode || '').includes(q) ||
+      normalizeForSearch(p.secondary_code || '').includes(q) ||
+      normalizeForSearch(p.category_name || '').includes(q)
     )
   }
   return list
@@ -64,6 +72,7 @@ function blankProduct() {
     supplier_id: null,
     stock_quantity: 0,
     min_stock: 0,
+    ideal_stock: 0,
     obs: '',
     active: true,
   }
@@ -94,6 +103,7 @@ function openEditProduct(product) {
     suppliers: product.suppliers || '',
     supplier_id: product.supplier_id || null,
     min_stock: product.min_stock,
+    ideal_stock: product.ideal_stock || 0,
     obs: product.obs || '',
     active: product.active,
   }
@@ -114,6 +124,132 @@ async function openDetailsTab(tab) {
     } finally {
       movementsLoading.value = false
     }
+  }
+  if (tab === 'fornecedores' && editingProduct.value) {
+    await loadProductSuppliers()
+  }
+  if (tab === 'apresentacoes' && editingProduct.value) {
+    await loadProductUnits()
+  }
+}
+
+async function loadProductSuppliers() {
+  if (!editingProduct.value) return
+  productSuppliersLoading.value = true
+  try {
+    const data = await api.get(`/products/${editingProduct.value.id}/suppliers`)
+    productSuppliers.value = data.links || []
+  } catch { productSuppliers.value = [] }
+  finally { productSuppliersLoading.value = false }
+}
+
+async function loadProductUnits() {
+  if (!editingProduct.value) return
+  productUnitsLoading.value = true
+  try {
+    const data = await api.get(`/products/${editingProduct.value.id}/units`)
+    productUnits.value = data.units || []
+  } catch { productUnits.value = [] }
+  finally { productUnitsLoading.value = false }
+}
+
+async function addProductUnit() {
+  const nu = newUnit.value
+  if (!nu.name.trim()) {
+    ElMessage.warning('Informe o nome da apresentação.')
+    return
+  }
+  try {
+    await api.post(`/products/${editingProduct.value.id}/units`, {
+      name: nu.name,
+      barcode: nu.barcode || null,
+      factor: parseInt(nu.factor) || 1,
+      price: nu.price || '0',
+    })
+    ElMessage.success('Apresentação adicionada!')
+    newUnit.value = { name: '', barcode: '', factor: 1, price: '' }
+    await loadProductUnits()
+  } catch (error) {
+    ElMessage.error(error.message)
+  }
+}
+
+async function deleteProductUnit(unitId) {
+  try {
+    await api.del(`/product-units/${unitId}`)
+    await loadProductUnits()
+  } catch (error) {
+    ElMessage.error(error.message)
+  }
+}
+
+async function toggleDefaultUnit(unit) {
+  try {
+    await api.put(`/product-units/${unit.id}`, {
+      name: unit.name,
+      barcode: unit.barcode,
+      factor: unit.factor,
+      price: unit.price,
+      is_default: true,
+      product_id: editingProduct.value.id,
+    })
+    await loadProductUnits()
+  } catch (error) {
+    ElMessage.error(error.message)
+  }
+}
+
+async function onUnitPriceBlur(event, unit) {
+  const raw = event.target.value.replace(/[^\d.,]/g, '').replace(',', '.')
+  const parsed = parseFloat(raw) || 0
+  if (parsed !== parseFloat(unit.price)) {
+    unit.price = parsed
+    await saveUnitPrice(unit)
+  }
+}
+
+async function saveUnitPrice(unit) {
+  try {
+    await api.put(`/product-units/${unit.id}`, {
+      name: unit.name,
+      barcode: unit.barcode,
+      factor: unit.factor,
+      price: unit.price,
+      is_default: unit.is_default,
+      product_id: editingProduct.value.id,
+    })
+    await loadProductUnits()
+  } catch (error) {
+    ElMessage.error(error.message)
+  }
+}
+
+async function addProductSupplier() {
+  const ns = newSupplierLink.value
+  if (!ns.supplier_id) { ElMessage.warning('Selecione um fornecedor.'); return }
+  try {
+    await api.post(`/products/${editingProduct.value.id}/suppliers`, {
+      supplier_id: ns.supplier_id,
+      delivery_day: ns.delivery_day,
+      lead_time: ns.lead_time,
+      is_primary: ns.is_primary,
+      frequency: ns.frequency,
+      week_parity: ns.week_parity,
+    })
+    ElMessage.success('Fornecedor vinculado!')
+    await loadProductSuppliers()
+    newSupplierLink.value = { supplier_id: null, delivery_day: 1, lead_time: 1, is_primary: false, frequency: 'semanal', week_parity: 0 }
+  } catch (error) {
+    ElMessage.error(error.message)
+  }
+}
+
+async function removeProductSupplier(linkId) {
+  try {
+    await api.del(`/product-suppliers/${linkId}`)
+    await loadProductSuppliers()
+  } catch (error) {
+    ElMessage.error(error.message)
   }
 }
 
@@ -139,6 +275,9 @@ async function openMovements(product) {
     ElMessage.error(error.message)
   }
 }
+
+const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+function dayName(idx) { return dayNames[idx] || '' }
 
 async function load() {
   loading.value = true
@@ -224,6 +363,7 @@ function cloneProduct() {
     supplier_id: product.supplier_id || null,
     stock_quantity: 0,
     min_stock: product.min_stock,
+    ideal_stock: product.ideal_stock || 0,
     obs: product.obs || '',
     active: product.active,
   }
@@ -481,6 +621,24 @@ function onModalKeydown(event) {
           >
             <i class="fas fa-history"></i> Transações
           </button>
+          <button
+            v-if="editingProduct"
+            type="button"
+            role="tab"
+            :class="{ 'is-active': detailsTab === 'fornecedores' }"
+            @click="openDetailsTab('fornecedores')"
+          >
+            <i class="fas fa-truck"></i> Fornecedores
+          </button>
+          <button
+            v-if="editingProduct"
+            type="button"
+            role="tab"
+            :class="{ 'is-active': detailsTab === 'apresentacoes' }"
+            @click="openDetailsTab('apresentacoes')"
+          >
+            <i class="fas fa-layer-group"></i> Apresentações
+          </button>
         </div>
 
         <form
@@ -597,6 +755,10 @@ function onModalKeydown(event) {
               <label for="product_min_stock">Estoque mínimo</label>
               <input id="product_min_stock" v-model="productForm.min_stock" type="number" min="0" />
             </div>
+            <div class="form-field">
+              <label for="product_ideal_stock">Estoque ideal</label>
+              <input id="product_ideal_stock" v-model="productForm.ideal_stock" type="number" min="0" />
+            </div>
           </div>
 
           <div class="form-field">
@@ -654,6 +816,150 @@ function onModalKeydown(event) {
             </tbody>
           </table>
           <p v-else class="adjust-current-stock">Nenhuma movimentação registrada.</p>
+        </div>
+
+        <div v-show="detailsTab === 'fornecedores'" class="modal-body">
+          <p v-if="productSuppliersLoading" class="muted">Carregando...</p>
+          <div v-else>
+            <table v-if="productSuppliers.length" class="data-table" style="margin-bottom:16px">
+              <thead>
+                <tr><th>Fornecedor</th><th>Dia entrega</th><th>Frequência</th><th>Lead time</th><th>Principal</th><th></th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="ps in productSuppliers" :key="ps.id">
+                  <td>{{ ps.supplier_name }}</td>
+                  <td>{{ dayName(ps.delivery_day) }}</td>
+                  <td>{{ ps.frequency === 'quinzenal' ? 'Quinzenal (' + (ps.week_parity === 0 ? '1ª/3ª' : '2ª/4ª') + ')' : ps.frequency === 'mensal' ? 'Mensal (semana ' + (ps.week_parity + 1) + ')' : 'Semanal' }}</td>
+                  <td>{{ ps.lead_time }} dia(s)</td>
+                  <td>{{ ps.is_primary ? 'Sim' : '' }}</td>
+                  <td>
+                    <button type="button" class="icon-btn" title="Remover" @click="removeProductSupplier(ps.id)">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-else class="muted" style="margin-bottom:12px">Nenhum fornecedor vinculado.</p>
+
+            <div class="supplier-link-form" v-if="editingProduct">
+              <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr 1fr auto">
+                <div class="form-field">
+                  <label>Fornecedor</label>
+                  <select v-model="newSupplierLink.supplier_id">
+                    <option :value="null">Selecione...</option>
+                    <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.name }}</option>
+                  </select>
+                </div>
+                <div class="form-field">
+                  <label>Dia entrega</label>
+                  <select v-model.number="newSupplierLink.delivery_day">
+                    <option v-for="(name, idx) in dayNames" :key="idx" :value="idx">{{ name }}</option>
+                  </select>
+                </div>
+                <div class="form-field">
+                  <label>Frequência</label>
+                  <select v-model="newSupplierLink.frequency">
+                    <option value="semanal">Semanal</option>
+                    <option value="quinzenal">Quinzenal</option>
+                    <option value="mensal">Mensal</option>
+                  </select>
+                </div>
+                <div class="form-field">
+                  <label v-if="newSupplierLink.frequency === 'quinzenal'">Semana</label>
+                  <label v-else-if="newSupplierLink.frequency === 'mensal'">Período</label>
+                  <label v-else>Lead time</label>
+                  <select v-if="newSupplierLink.frequency === 'quinzenal'" v-model.number="newSupplierLink.week_parity">
+                    <option :value="0">1ª / 3ª semana</option>
+                    <option :value="1">2ª / 4ª semana</option>
+                  </select>
+                  <select v-else-if="newSupplierLink.frequency === 'mensal'" v-model.number="newSupplierLink.week_parity">
+                    <option :value="0">Dia 1-7</option>
+                    <option :value="1">Dia 8-14</option>
+                    <option :value="2">Dia 15-21</option>
+                    <option :value="3">Dia 22-31</option>
+                  </select>
+                  <input v-else v-model.number="newSupplierLink.lead_time" type="number" min="1" max="30" />
+                </div>
+                <div class="form-field" style="align-self:end">
+                  <div style="display:flex;gap:8px;align-items:center">
+                    <label class="form-check" style="margin:0">
+                      <input v-model="newSupplierLink.is_primary" type="checkbox" />
+                      <span>Principal</span>
+                    </label>
+                    <button type="button" class="btn btn-primary btn-sm" @click="addProductSupplier">
+                      <i class="fas fa-plus"></i> Vincular
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-show="detailsTab === 'apresentacoes'" class="modal-body">
+          <p v-if="productUnitsLoading" class="muted">Carregando...</p>
+          <div v-else>
+            <table v-if="productUnits.length" class="data-table" style="margin-bottom:16px">
+              <thead>
+                <tr><th>Nome</th><th>Código barras</th><th>Fator</th><th>Preço</th><th>Padrão</th><th></th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="u in productUnits" :key="u.id">
+                  <td>{{ u.name }}</td>
+                  <td>{{ u.barcode || '—' }}</td>
+                  <td>{{ u.factor }}x</td>
+                  <td>
+                    <input
+                      :value="brl(u.price)"
+                      type="text"
+                      class="inline-price-input"
+                      @blur="onUnitPriceBlur($event, u)"
+                      @keydown.enter="$event.target.blur()"
+                    />
+                  </td>
+                  <td>
+                    <button v-if="!u.is_default" type="button" class="btn btn-ghost btn-xs" @click="toggleDefaultUnit(u)">
+                      <i class="fas fa-star"></i> Definir
+                    </button>
+                    <span v-else class="match-badge is-matched"><i class="fas fa-star"></i> Padrão</span>
+                  </td>
+                  <td>
+                    <button v-if="!u.is_default" type="button" class="icon-btn" title="Remover" @click="deleteProductUnit(u.id)">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-else class="muted" style="margin-bottom:12px">Nenhuma apresentação cadastrada.</p>
+
+            <div class="unit-add-form" v-if="editingProduct">
+              <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr 1fr auto">
+                <div class="form-field">
+                  <label>Nome</label>
+                  <input v-model="newUnit.name" type="text" placeholder="Ex: Caixa 12" />
+                </div>
+                <div class="form-field">
+                  <label>Código barras</label>
+                  <input v-model="newUnit.barcode" type="text" placeholder="Opcional" />
+                </div>
+                <div class="form-field">
+                  <label>Fator (unidades)</label>
+                  <input v-model.number="newUnit.factor" type="number" min="1" />
+                </div>
+                <div class="form-field">
+                  <label>Preço</label>
+                  <input v-model="newUnit.price" type="text" placeholder="0,00" />
+                </div>
+                <div class="form-field" style="align-self:end">
+                  <button type="button" class="btn btn-primary btn-sm" @click="addProductUnit">
+                    <i class="fas fa-plus"></i> Adicionar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -922,5 +1228,18 @@ function onModalKeydown(event) {
 }
 .search-clear:hover {
   color: var(--text, #333);
+}
+.inline-price-input {
+  width: 90px;
+  padding: 4px 8px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.inline-price-input:focus {
+  border-color: var(--primary, #2563eb);
+  outline: none;
 }
 </style>

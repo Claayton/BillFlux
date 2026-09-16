@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
+import { normalizeForSearch } from '@/utils/normalize'
 import AppShell from '@/components/AppShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
@@ -33,12 +34,12 @@ function emptyForm() {
 
 const filtered = computed(() => {
   if (!data.value) return []
-  const q = search.value.toLowerCase()
+  const q = normalizeForSearch(search.value)
   if (!q) return data.value.suppliers
   return data.value.suppliers.filter((s) =>
-    s.name.toLowerCase().includes(q) ||
-    s.cnpj.includes(q) ||
-    s.phone.includes(q)
+    normalizeForSearch(s.name).includes(q) ||
+    normalizeForSearch(s.cnpj || '').includes(q) ||
+    normalizeForSearch(s.phone || '').includes(q)
   )
 })
 

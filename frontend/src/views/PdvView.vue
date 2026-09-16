@@ -3,6 +3,7 @@ import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { maskMoney, moneyToDecimal } from '@/utils/format'
+import { normalizeForSearch } from '@/utils/normalize'
 import { paymentIcon, paymentColor } from '@/utils/payment'
 import SaleReceiptModal from '@/views/SaleReceiptModal.vue'
 
@@ -96,64 +97,114 @@ function byId(productId) {
   return products.value.find((p) => p.id === productId)
 }
 
+function findUnit(product, unitId) {
+  if (!product || !product.units) return null
+  return product.units.find((u) => u.id === unitId) || null
+}
+
+function defaultUnit(product) {
+  if (!product || !product.units || !product.units.length) {
+    return { id: 0, name: 'Unidade', factor: 1, price: product?.price || 0, is_default: true }
+  }
+  return product.units.find((u) => u.is_default) || product.units[0]
+}
+
+function cartKey(productId, unitId) {
+  return productId + '_' + (unitId || 0)
+}
+
 // Estoque pode ficar negativo: sem bloqueio por estoque.
-function incQty(productId) {
-  const product = byId(productId)
-  if (!product) return
-  const item = cart.value.get(productId)
-  if (item) {
-    item.qty += 1
+function addToCart(product, unit) {
+  if (!product || !unit) return
+  const key = cartKey(product.id, unit.id)
+  const existing = cart.value.get(key)
+  if (existing) {
+    existing.qty += 1
   } else {
-    cart.value.set(productId, {
+    cart.value.set(key, {
       id: product.id,
+      key,
       name: product.name,
-      price: product.price,
+      unitName: unit.name,
+      price: unit.price || product.price,
       stock: product.stock,
       qty: 1,
+      factor: unit.factor,
+      unitId: unit.id,
+      hasMultipleUnits: (product.units || []).length > 1,
     })
   }
 }
 
-function setQty(productId, quantity) {
-  const product = byId(productId)
-  if (!product) return
-  const target = Math.max(1, quantity)
-  cart.value.set(productId, {
-    id: product.id,
-    name: product.name,
-    price: product.price,
-    stock: product.stock,
-    qty: target,
-  })
+function setQty(key, quantity) {
+  const item = cart.value.get(key)
+  if (!item) return
+  item.qty = Math.max(1, quantity)
 }
 
-function changeQty(productId, delta) {
-  const item = cart.value.get(productId)
+function changeQty(key, delta) {
+  const item = cart.value.get(key)
   if (!item) return
   const next = item.qty + delta
   if (next < 1) return
   item.qty = next
 }
 
-function removeItem(productId) {
-  cart.value.delete(productId)
+function removeItem(key) {
+  cart.value.delete(key)
   if (cart.value.size === 0) discount.value = null
 }
 
 // ---------- Busca / sugestões ----------
 function buildSuggestions(term) {
-  const lower = term.toLowerCase()
-  return products.value.filter(
-    (p) =>
-      p.name.toLowerCase().includes(lower) ||
-      (p.barcode || '').toLowerCase().includes(lower)
-  )
+  const lower = normalizeForSearch(term)
+  const results = []
+  for (const p of products.value) {
+    if (normalizeForSearch(p.name).includes(lower) || normalizeForSearch(p.barcode || '').includes(lower)) {
+      if (p.units && p.units.length > 1) {
+        for (const u of p.units) {
+          results.push({ ...p, _unit: u, _suggestionKey: p.id + '_' + u.id })
+        }
+      } else {
+        const u = defaultUnit(p)
+        results.push({ ...p, _unit: u, _suggestionKey: p.id + '_' + u.id })
+      }
+    }
+  }
+  return results
+}
+
+function matchBarcode(raw) {
+  const term = raw.trim().toLowerCase()
+  for (const p of products.value) {
+    if (p.barcode && p.barcode.toLowerCase() === term) {
+      return { product: p, unit: defaultUnit(p) }
+    }
+    if (p.units) {
+      for (const u of p.units) {
+        if (u.barcode && u.barcode.toLowerCase() === term) {
+          return { product: p, unit: u }
+        }
+      }
+    }
+  }
+  return null
+}
+
+function matchName(raw) {
+  const term = normalizeForSearch(raw)
+  for (const p of products.value) {
+    if (normalizeForSearch(p.name) === term) {
+      return { product: p, unit: defaultUnit(p) }
+    }
+  }
+  return null
 }
 
 // Adiciona um produto ao carrinho (estoque pode ficar negativo, sem bloqueio).
-function tryAdd(product) {
+function tryAdd(product, unit) {
   if (!product) return false
-  incQty(product.id)
+  addToCart(product, unit || defaultUnit(product))
   return true
 }
 
@@ -173,8 +224,8 @@ function clearSearch() {
   searchInput.value?.focus()
 }
 
-function addFromSuggestion(product) {
-  if (tryAdd(product)) clearSearch()
+function addFromSuggestion(item) {
+  if (tryAdd(item, item._unit)) clearSearch()
 }
 
 function handleEnter() {
@@ -184,31 +235,39 @@ function handleEnter() {
   const multiply = raw.match(/^(\d+)\s*\*\s*(.+)$/)
   if (multiply) {
     const n = parseInt(multiply[1], 10)
-    const term = multiply[2].trim().toLowerCase()
-    const product =
-      products.value.find((p) => p.barcode === term) ||
-      products.value.find((p) => p.name.toLowerCase() === term)
-    if (product) {
-      setQty(product.id, n)
+    const match = matchBarcode(multiply[2].trim()) || matchName(multiply[2].trim())
+    if (match) {
+      for (let i = 0; i < n; i++) {
+        addToCart(match.product, match.unit)
+      }
       clearSearch()
       return
     }
   }
 
-  const lower = raw.toLowerCase()
-  const byBarcode = products.value.find((p) => p.barcode === lower)
-  if (byBarcode) {
-    if (tryAdd(byBarcode)) clearSearch()
+  const match = matchBarcode(raw)
+  if (match) {
+    addToCart(match.product, match.unit)
+    clearSearch()
     return
   }
 
   if (highlighted.value >= 0 && suggestions.value[highlighted.value]) {
-    if (tryAdd(suggestions.value[highlighted.value])) clearSearch()
+    const item = suggestions.value[highlighted.value]
+    if (tryAdd(item, item._unit)) clearSearch()
+    return
+  }
+
+  const exactMatch = matchName(raw)
+  if (exactMatch) {
+    addToCart(exactMatch.product, exactMatch.unit)
+    clearSearch()
     return
   }
 
   if (suggestions.value.length === 1) {
-    if (tryAdd(suggestions.value[0])) clearSearch()
+    const item = suggestions.value[0]
+    if (tryAdd(item, item._unit)) clearSearch()
     return
   }
 
@@ -246,11 +305,11 @@ function hideSuggestions() {
 
 // ---------- Cliente ----------
 const filteredCustomers = computed(() => {
-  const q = customerSearch.value.toLowerCase()
+  const q = normalizeForSearch(customerSearch.value)
   if (!q) return customers.value
   return customers.value.filter((c) =>
-    c.name.toLowerCase().includes(q) ||
-    (c.cpf_cnpj && c.cpf_cnpj.includes(q))
+    normalizeForSearch(c.name).includes(q) ||
+    normalizeForSearch(c.cpf_cnpj || '').includes(q)
   )
 })
 
@@ -367,6 +426,7 @@ async function confirmCheckout() {
   const items = cartItems.value.map((item) => ({
     product_id: item.id,
     quantity: item.qty,
+    unit_id: item.unitId || null,
   }))
   const payload = {
     items,
@@ -482,20 +542,20 @@ onBeforeUnmount(() => {
           />
           <div id="pdv-suggestions" class="pdv-suggestions" :hidden="!suggestions.length">
             <button
-              v-for="(p, i) in suggestions"
-              :key="p.id"
+              v-for="(item, i) in suggestions"
+              :key="item._suggestionKey"
               type="button"
               class="pdv-suggestion"
               :class="{ 'is-highlighted': i === highlighted }"
-              @mousedown.prevent="addFromSuggestion(p)"
+              @mousedown.prevent="addFromSuggestion(item)"
             >
               <span class="pdv-suggestion-info">
-                <span class="pdv-suggestion-name">{{ p.name }}</span>
-                <span class="pdv-suggestion-sub">{{ p.barcode ? 'Cód.: ' + p.barcode : 'Sem código de barras' }}</span>
+                <span class="pdv-suggestion-name">{{ item.name }} <small v-if="(item.units || []).length > 1" class="pdv-unit-tag">{{ item._unit.name }}</small></span>
+                <span class="pdv-suggestion-sub">{{ item.barcode ? 'Cód.: ' + item.barcode : (item._unit?.barcode ? 'Cód.: ' + item._unit.barcode : 'Sem código de barras') }}</span>
               </span>
-              <span class="pdv-suggestion-price">{{ formatBRL(p.price) }}</span>
-              <span class="pdv-suggestion-stock" :class="{ 'is-out': p.stock <= 0 }">
-                {{ p.stock <= 0 ? 'Esgotado' : p.stock + ' un' }}
+              <span class="pdv-suggestion-price">{{ formatBRL(item._unit?.price || item.price) }}</span>
+              <span class="pdv-suggestion-stock" :class="{ 'is-out': item.stock <= 0 }">
+                {{ item.stock <= 0 ? 'Esgotado' : item.stock + ' un' }}
               </span>
             </button>
           </div>
@@ -513,12 +573,12 @@ onBeforeUnmount(() => {
             <p>Digite o código de barras ou o nome do produto para começar.</p>
           </div>
 
-          <div v-for="item in cartItems" :key="item.id" class="pdv-row">
+          <div v-for="item in cartItems" :key="item.key" class="pdv-row">
             <span class="pdv-row-num">#{{ item.id }}</span>
             <span class="pdv-row-qty">{{ item.qty }}</span>
             <span class="pdv-row-info">
-              <span class="pdv-row-name">{{ item.name }}</span>
-              <span class="pdv-row-sub">{{ formatBRL(item.price) }} / un</span>
+              <span class="pdv-row-name">{{ item.name }} <small v-if="item.hasMultipleUnits" class="pdv-unit-tag">{{ item.unitName }}</small></span>
+              <span class="pdv-row-sub">{{ formatBRL(item.price) }} / {{ item.unitName === 'Unidade' ? 'un' : item.unitName.toLowerCase() }}</span>
             </span>
             <span class="pdv-row-price">{{ formatBRL(item.price * item.qty) }}</span>
             <span class="pdv-row-qty-ctrl">
@@ -526,20 +586,20 @@ onBeforeUnmount(() => {
                 type="button"
                 :aria-label="'Diminuir quantidade de ' + item.name"
                 :disabled="item.qty <= 1"
-                @click="changeQty(item.id, -1)"
+                @click="changeQty(item.key, -1)"
               >
                 &minus;
               </button>
               <button
                 type="button"
                 :aria-label="'Aumentar quantidade de ' + item.name"
-                @click="changeQty(item.id, 1)"
+                @click="changeQty(item.key, 1)"
               >
                 +
               </button>
             </span>
             <span class="pdv-row-remove">
-              <button type="button" class="pdv-row-remove-btn" :aria-label="'Remover ' + item.name" @click="removeItem(item.id)">
+              <button type="button" class="pdv-row-remove-btn" :aria-label="'Remover ' + item.name" @click="removeItem(item.key)">
                 <i class="fas fa-times"></i>
               </button>
             </span>
@@ -1013,5 +1073,16 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--primary, #2563eb) 10%, transparent);
   padding: 3px 8px;
   border-radius: 4px;
+}
+.pdv-unit-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary, #4f46e5);
+  background: color-mix(in srgb, var(--primary, #4f46e5) 10%, transparent);
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 4px;
+  vertical-align: middle;
 }
 </style>

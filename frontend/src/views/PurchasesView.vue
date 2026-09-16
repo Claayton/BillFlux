@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
+import { normalizeForSearch } from '@/utils/normalize'
 import AppShell from '@/components/AppShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
@@ -44,7 +45,7 @@ function emptyForm() {
 }
 
 function emptyItem() {
-  return { product_id: null, product_name: '', barcode: '', quantity: 1, unit_cost: '' }
+  return { product_id: null, product_name: '', barcode: '', quantity: 1, unit_cost: '', units: [], selected_unit_id: null }
 }
 
 const statusLabel = { rascunho: 'Rascunho', confirmada: 'Confirmada', cancelada: 'Cancelada' }
@@ -52,13 +53,13 @@ const statusClass = { rascunho: 'is-draft', confirmada: 'is-active', cancelada: 
 
 const filtered = computed(() => {
   let list = purchases.value
-  const q = search.value.toLowerCase()
+  const q = normalizeForSearch(search.value)
   if (q) {
     list = list.filter(p =>
-      (p.nf_number || '').toLowerCase().includes(q) ||
-      (p.nf_chave || '').includes(q) ||
-      (p.supplier_name || '').toLowerCase().includes(q) ||
-      (p.obs || '').toLowerCase().includes(q)
+      normalizeForSearch(p.nf_number || '').includes(q) ||
+      normalizeForSearch(p.nf_chave || '').includes(q) ||
+      normalizeForSearch(p.supplier_name || '').includes(q) ||
+      normalizeForSearch(p.obs || '').includes(q)
     )
   }
   if (statusFilter.value) {
@@ -221,6 +222,8 @@ async function openLaunchModal(purchase) {
     matched: !!item.product_id,
     editing: false,
     units_per_case: 1,
+    units: [],
+    selected_unit_id: null,
   }))
 
   for (const li of launchItems.value) {
@@ -233,6 +236,12 @@ async function openLaunchModal(purchase) {
           li.existing_stock = res.product.stock_quantity
           li.existing_cost = res.product.cost
           li.matched = true
+          li.units = res.product.units || []
+          if (li.units.length && !li.unit_com) {
+            const def = li.units.find(u => u.is_default) || li.units[0]
+            li.selected_unit_id = def.id
+            li.units_per_case = def.factor
+          }
         }
       } catch { /* no match */ }
     } else if (li.matched && li.product_id) {
@@ -242,6 +251,12 @@ async function openLaunchModal(purchase) {
           li.product_name_existing = res.product.name
           li.existing_stock = res.product.stock_quantity
           li.existing_cost = res.product.cost
+          li.units = res.product.units || []
+          if (li.units.length && !li.unit_com && !li.selected_unit_id) {
+            const def = li.units.find(u => u.is_default) || li.units[0]
+            li.selected_unit_id = def.id
+            li.units_per_case = def.factor
+          }
         }
       } catch { /* ignore */ }
     }
@@ -289,6 +304,12 @@ function matchProduct(idx, product) {
   li.existing_cost = product.cost
   li.matched = true
   li.editing = false
+  li.units = product.units || []
+  if (li.units.length && !li.unit_com) {
+    const def = li.units.find(u => u.is_default) || li.units[0]
+    li.selected_unit_id = def.id
+    li.units_per_case = def.factor
+  }
   launchSearchIdx.value = null
 }
 
@@ -299,7 +320,18 @@ function unmatchProduct(idx) {
   li.existing_stock = null
   li.existing_cost = null
   li.matched = false
+  li.units = []
+  li.selected_unit_id = null
   launchSearchIdx.value = null
+}
+
+function onLaunchUnitChange(idx) {
+  const li = launchItems.value[idx]
+  if (!li.selected_unit_id || !li.units.length) return
+  const unit = li.units.find(u => u.id === li.selected_unit_id)
+  if (unit) {
+    li.units_per_case = unit.factor
+  }
 }
 
 function launchItemEdit(idx) {
@@ -724,7 +756,17 @@ onMounted(() => { load(); loadProducts(); loadSuppliers() })
                 <span class="launch-item-qty">{{ li.quantity }}x {{ fmtBrl(li.unit_cost) }}</span>
               </div>
 
-              <div class="launch-conversion" v-if="li.unit_com && li.unit_com !== 'UN' && li.unit_com !== 'PC' && li.unit_com !== 'PÇ'">
+              <div class="launch-conversion" v-if="li.units && li.units.length > 1 && !li.unit_com">
+                <label>Apresentação:</label>
+                <select v-model.number="li.selected_unit_id" @change="onLaunchUnitChange(idx)" class="inline-input">
+                  <option v-for="u in li.units" :key="u.id" :value="u.id">{{ u.name }} ({{ u.factor }}x)</option>
+                </select>
+                <span class="conversion-info" v-if="li.units_per_case > 1">
+                  → {{ (parseInt(li.quantity) || 0) * (parseInt(li.units_per_case) || 1) }} un.
+                  × {{ fmtBrl((parseFloat(li.unit_cost) || 0) / (parseInt(li.units_per_case) || 1)) }}/un.
+                </span>
+              </div>
+              <div class="launch-conversion" v-else-if="li.unit_com && li.unit_com !== 'UN' && li.unit_com !== 'PC' && li.unit_com !== 'PÇ'">
                 <label>Qtd. unidades por {{ li.unit_com.toLowerCase() }}:</label>
                 <input v-model.number="li.units_per_case" type="number" min="1" class="inline-input" />
                 <span class="conversion-info" v-if="li.units_per_case > 1">

@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl, maskMoney, moneyToDecimal } from '@/utils/format'
+import { normalizeForSearch } from '@/utils/normalize'
 
 const props = defineProps({
   orderId: { type: Number, required: true },
@@ -67,9 +68,9 @@ function addProduct(product) {
 }
 
 function buildSuggestions(term) {
-  const lower = term.toLowerCase()
+  const lower = normalizeForSearch(term)
   return products.value.filter(
-    (p) => p.name.toLowerCase().includes(lower) || p.barcode.toLowerCase().includes(lower)
+    (p) => normalizeForSearch(p.name).includes(lower) || normalizeForSearch(p.barcode || '').includes(lower)
   )
 }
 
@@ -81,10 +82,10 @@ function onSearchInput() {
 function onSearchKeydown(event) {
   if (event.key === 'Enter') {
     event.preventDefault()
-    const raw = search.value.trim()
-    const product =
-      products.value.find((p) => p.name.toLowerCase() === raw.toLowerCase()) ||
-      suggestions.value[highlighted.value]
+const raw = search.value.trim()
+const product =
+  products.value.find((p) => normalizeForSearch(p.name) === normalizeForSearch(raw)) ||
+  suggestions.value[highlighted.value]
     if (product) addProduct(product)
   } else if (event.key === 'ArrowDown' && suggestions.value.length) {
     event.preventDefault()

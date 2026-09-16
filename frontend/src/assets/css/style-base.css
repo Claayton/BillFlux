@@ -606,6 +606,12 @@ a:hover {
   list-style: none;
 }
 
+.sidebar-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 12px;
+}
+
 .sidebar-nav a {
   display: flex;
   align-items: center;
@@ -800,4 +806,8 @@ a:hover {
   .user-menu-trigger i {
     display: none;
   }
+}
+
+body:has(.modal.is-open) {
+  overflow: hidden;
 }
