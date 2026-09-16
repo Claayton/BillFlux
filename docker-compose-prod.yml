@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-billflux}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      POSTGRES_DB: ${POSTGRES_DB:-billflux}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-billflux} -d ${POSTGRES_DB:-billflux}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - billflux
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      BILLFLUX_DATABASE__URL: postgresql+psycopg2://${POSTGRES_USER:-billflux}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-billflux}
+      BILLFLUX_SECRET_KEY: ${BILLFLUX_SECRET_KEY:?defina BILLFLUX_SECRET_KEY no .env}
+      BILLFLUX_AUTH__ALLOW_SIGNUP: ${BILLFLUX_AUTH__ALLOW_SIGNUP:-false}
+      BILLFLUX_AUTH__USERNAME: ${BILLFLUX_AUTH__USERNAME:-coqueiral}
+      BILLFLUX_AUTH__PASSWORD_HASH: ${BILLFLUX_AUTH__PASSWORD_HASH:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - billflux
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - billflux
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.billflux.rule=Host(`pdv.beeplay.site`)"
+      - "traefik.http.routers.billflux.entrypoints=websecure"
+      - "traefik.http.routers.billflux.tls.certresolver=letsencrypt"
+      - "traefik.http.services.billflux.loadbalancer.server.port=80"
+
+networks:
+  billflux:
+  proxy:
+    external: true
+
+volumes:
+  pgdata:
