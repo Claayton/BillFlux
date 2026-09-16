@@ -21,7 +21,7 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      BILLFLUX_DATABASE__URL: postgresql+psycopg2://${POSTGRES_USER:-billflux}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-billflux}
+      BILLFLUX_DATABASE__URL: postgresql+psycopg2://${POSTGRES_USER:-billflux}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-billflux}  # ggignore
       BILLFLUX_SECRET_KEY: ${BILLFLUX_SECRET_KEY:?defina BILLFLUX_SECRET_KEY no .env}
       BILLFLUX_AUTH__ALLOW_SIGNUP: ${BILLFLUX_AUTH__ALLOW_SIGNUP:-false}
       BILLFLUX_AUTH__USERNAME: ${BILLFLUX_AUTH__USERNAME:-coqueiral}
