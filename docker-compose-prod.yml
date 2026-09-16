@@ -45,6 +45,7 @@ services:
       - proxy
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
       - "traefik.http.routers.billflux.rule=Host(`pdv.beeplay.site`)"
       - "traefik.http.routers.billflux.entrypoints=websecure"
       - "traefik.http.routers.billflux.tls.certresolver=letsencrypt"
