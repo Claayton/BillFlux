@@ -24,7 +24,9 @@ def csrf_token():
 
 @bp.route("/auth/me")
 def me():
-    """Identidade do usuário logado (ou null)."""
+    """Identidade do usuário logado; 401 se a sessão expirou."""
+    if not session.get("user"):
+        return api_error("Não autenticado.", 401)
     return api_response(_auth_payload())
 
 
@@ -38,6 +40,9 @@ def login():
     repository = UserRepository()
     user = repository.get_user_by_username(username)
     if user and check_password_hash(user.password_hash, password):
+        # Descarta qualquer sessão anônima prévia (anti fixation).
+        session.clear()
+        session.permanent = True
         session["user"] = user.username
         return api_response(_auth_payload())
 
@@ -47,7 +52,7 @@ def login():
 @bp.route("/auth/logout", methods=["POST"])
 def logout():
     """Encerra a sessão."""
-    session.pop("user", None)
+    session.clear()
     return api_response({"ok": True})
 
 
