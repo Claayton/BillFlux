@@ -135,7 +135,7 @@ a:hover {
 .logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   color: var(--text);
   font-weight: 700;
   flex-shrink: 0;
@@ -149,18 +149,14 @@ a:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 60px;
+  height: 60px;
   border-radius: var(--radius);
-  background: var(--primary);
-  color: #fff;
-  font-weight: 800;
-  font-size: 14px;
-  letter-spacing: -0.5px;
+  object-fit: contain;
 }
 
 .logo-text {
-  font-size: 18px;
+  font-size: 22px;
   letter-spacing: -0.4px;
   font-weight: 700;
 }

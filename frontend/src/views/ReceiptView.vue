@@ -54,7 +54,7 @@ onMounted(load)
 
       <div v-else-if="order" class="receipt" id="receipt">
         <div class="receipt-head">
-          <strong>BillFlux</strong>
+          <strong>BeeFlux</strong>
           <span>Recibo de venda</span>
         </div>
 
@@ -114,7 +114,7 @@ onMounted(load)
 
         <div class="receipt-foot">
           <span>Obrigado pela preferência!</span>
-          <span>BillFlux — Clayton Garcia da Silva, Br.</span>
+          <span>BeeFlux — Clayton Garcia da Silva, Br.</span>
         </div>
       </div>
 

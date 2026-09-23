@@ -6,6 +6,7 @@ import { maskMoney, moneyToDecimal } from '@/utils/format'
 import { normalizeForSearch } from '@/utils/normalize'
 import { paymentIcon, paymentColor } from '@/utils/payment'
 import SaleReceiptModal from '@/views/SaleReceiptModal.vue'
+import logoUrl from '@/assets/logo.png'
 
 const products = ref([])
 const methods = ref([])
@@ -506,8 +507,8 @@ onBeforeUnmount(() => {
   <div class="pdv-screen">
     <header class="pdv-topbar">
       <router-link class="pdv-brand" to="/pdv" aria-label="Ponto de venda">
-        <span class="pdv-brand-mark">BF</span>
-        <span class="pdv-brand-text">BillFlux</span>
+        <img class="pdv-brand-mark" :src="logoUrl" alt="BeeFlux" />
+        <span class="pdv-brand-text">eeFlux</span>
       </router-link>
 
       <span class="pdv-topbar-spacer"></span>

@@ -28,7 +28,7 @@ body.pdv-screen {
 .pdv-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   text-decoration: none;
   color: #111827;
   flex-shrink: 0;
@@ -38,18 +38,14 @@ body.pdv-screen {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: var(--primary);
-  color: #fff;
-  font-weight: 800;
-  font-size: 14px;
-  letter-spacing: -0.5px;
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  object-fit: contain;
 }
 
 .pdv-brand-text {
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.4px;
 }

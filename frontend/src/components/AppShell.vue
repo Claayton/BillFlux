@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import logoUrl from '@/assets/logo.png'
 
 const route = useRoute()
 const router = useRouter()
@@ -57,8 +58,8 @@ async function logout() {
   <div class="app-mode">
     <aside class="sidebar" :class="{ 'is-open': sidebarOpen }">
       <a class="logo" href="/">
-        <span class="logo-mark">BF</span>
-        <span class="logo-text">BillFlux</span>
+        <img class="logo-mark" :src="logoUrl" alt="BeeFlux" />
+        <span class="logo-text">eeFlux</span>
       </a>
       <nav class="sidebar-nav" aria-label="Navegação principal">
         <template v-for="(section, sIdx) in navSections" :key="sIdx">

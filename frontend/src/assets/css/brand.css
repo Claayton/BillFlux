@@ -1,0 +1,30 @@
+@charset 'UTF8';
+
+/* ---------- BeeFlux — linguagem visual (tokens reutilizáveis) ----------
+   Importado primeiro no main.js. Telas futuras (dashboard, PDV etc.)
+   devem consumir estas variáveis em vez de valores hardcoded. */
+
+:root {
+  /* Gradiente da identidade */
+  --brand-gradient: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  --brand-gradient-hover: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
+
+  /* Raio */
+  --brand-radius-sm: 10px;
+  --brand-radius-md: 14px;
+  --brand-radius-lg: 16px;
+
+  /* Sombras */
+  --brand-shadow-btn: 0 8px 20px -6px rgba(99, 102, 241, 0.55);
+  --brand-shadow-btn-hover: 0 12px 26px -6px rgba(99, 102, 241, 0.65);
+  --brand-shadow-card: 0 12px 32px rgba(16, 24, 40, 0.1);
+
+  /* Inputs */
+  --brand-input-h: 48px;
+  --brand-input-bg: #ffffff;
+  --brand-input-bg-filled: #fbfbff;
+  --brand-input-ring: 0 0 0 3px rgba(99, 102, 241, 0.18);
+
+  /* Transições padrão */
+  --brand-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}

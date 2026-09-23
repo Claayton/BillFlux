@@ -1,4 +1,4 @@
-"""API JSON do BillFlux (usada pelo frontend SPA)."""
+"""API JSON do BeeFlux (usada pelo frontend SPA)."""
 
 import json
 from datetime import date, datetime

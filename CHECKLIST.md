@@ -1,4 +1,4 @@
-# BillFlux — Checklist de funcionalidades
+# BeeFlux — Checklist de funcionalidades
 
 ## Alto impacto
 - [x] 1. Cadastro de clientes (nome, CPF/CNPJ, telefone, email, endereço)
