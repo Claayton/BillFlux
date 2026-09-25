@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl, brdateShort, maskMoney, moneyToDecimal } from '@/utils/format'
+import { normalizeForSearch } from '@/utils/normalize'
 import { paymentIcon, paymentColor } from '@/utils/payment'
 import AppShell from '@/components/AppShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -19,6 +20,8 @@ const periods = [
 const active = ref('hoje')
 const showValues = ref(true)
 const saleFilter = ref('todas')
+const search = ref('')
+const showAvulsa = ref(false)
 const data = ref(null)
 const loading = ref(false)
 const saving = ref(false)
@@ -45,11 +48,88 @@ const editForm = ref({ date: '', total: '', obs: '' })
 
 const currentPeriod = computed(() => (data.value?.periods || {})[active.value])
 
+/** Dias cobertos por cada período (para "X de Y dias"). */
+const periodDays = computed(() => {
+  const now = new Date()
+  if (active.value === 'hoje') return 1
+  if (active.value === '7d') return 7
+  if (active.value === 'mes') return now.getDate()
+  const prev = new Date(now.getFullYear(), now.getMonth(), 0)
+  return prev.getDate()
+})
+
+function brNum(value, digits = 1) {
+  return Number(value).toFixed(digits).replace('.', ',')
+}
+
+/** Cards de indicadores (valor + dica secundária derivada dos dados). */
+const kpis = computed(() => {
+  const p = currentPeriod.value || {}
+  const total = Number(p.total || 0)
+  const count = Number(p.count || 0)
+  const days = Number(p.days || 0)
+  return [
+    {
+      key: 'total',
+      label: 'Total vendido',
+      icon: 'fas fa-wallet',
+      value: fmt(total),
+      hint: count > 0 ? `ticket médio ${brl(total / count)}` : null,
+    },
+    {
+      key: 'count',
+      label: 'Nº de vendas',
+      icon: 'fas fa-receipt',
+      value: showValues.value ? String(count) : '•••',
+      hint: days > 0 ? `${brNum(count / days)} por dia` : null,
+    },
+    {
+      key: 'days',
+      label: 'Dias com venda',
+      icon: 'fas fa-calendar-check',
+      value: showValues.value ? String(days) : '•••',
+      hint: `${days} de ${periodDays.value} dia${periodDays.value === 1 ? '' : 's'}`,
+    },
+    {
+      key: 'avg',
+      label: 'Média por dia',
+      icon: 'fas fa-chart-line',
+      value: fmt(p.avg),
+      hint: null,
+    },
+  ]
+})
+
+const statusCounts = computed(() => {
+  const sales = data.value?.sales || []
+  return {
+    todas: sales.length,
+    ativas: sales.filter((s) => !s.cancelled).length,
+    canceladas: sales.filter((s) => Boolean(s.cancelled)).length,
+  }
+})
+
 const filteredSales = computed(() => {
   if (!data.value) return []
   if (saleFilter.value === 'todas') return data.value.sales
   const wantCancelled = saleFilter.value === 'canceladas'
   return data.value.sales.filter((sale) => Boolean(sale.cancelled) === wantCancelled)
+})
+
+const searchedSales = computed(() => {
+  const q = normalizeForSearch(search.value.trim())
+  if (!q) return filteredSales.value
+  return filteredSales.value.filter((sale) => {
+    const hay = [
+      String(sale.id),
+      sale.obs || '',
+      sale.payment || '',
+      ...(sale.items || []).map((item) => `${item.quantity} ${item.name}`),
+    ]
+      .map((part) => normalizeForSearch(part))
+      .join(' ')
+    return hay.includes(q)
+  })
 })
 
 function mask(event) {
@@ -60,19 +140,33 @@ function maskEdit(event) {
   editForm.value.total = maskMoney(event.target.value)
 }
 
-function visibleItems(sale) {
-  return sale.items.slice(0, 3)
+/** Resumo compacto da coluna de itens: "6 itens" + primeiro + restante. */
+function itemsTitle(sale) {
+  return (sale.items || []).map((item) => `${item.quantity}x ${item.name}`).join('\n')
+}
+
+function firstItemLabel(sale) {
+  const items = sale.items || []
+  const [first] = items
+  if (!first) return ''
+  const rest = items.length - 1
+  return `${first.quantity}x ${first.name}${rest > 0 ? ` +${rest}` : ''}`
+}
+
+function expandKey(sale) {
+  return `${sale.kind}-${sale.id}`
 }
 
 function isExpanded(sale) {
-  return expandedIds.value.has(sale.id)
+  return expandedIds.value.has(expandKey(sale))
 }
 
 function toggleExpand(sale) {
-  if (expandedIds.value.has(sale.id)) {
-    expandedIds.value.delete(sale.id)
+  const key = expandKey(sale)
+  if (expandedIds.value.has(key)) {
+    expandedIds.value.delete(key)
   } else {
-    expandedIds.value.add(sale.id)
+    expandedIds.value.add(key)
   }
   expandedIds.value = new Set(expandedIds.value)
 }
@@ -191,8 +285,11 @@ onMounted(load)
       <div class="page-header">
         <div>
           <h1 class="page-title">Vendas</h1>
-          <p class="page-subtitle">Lançamentos avulsos e vendas do PDV.</p>
+          <p class="page-subtitle">Acompanhe suas vendas e registre lançamentos avulsos.</p>
         </div>
+        <router-link class="btn-brand" to="/pdv">
+          <i class="fas fa-cash-register"></i> Abrir PDV
+        </router-link>
       </div>
 
       <div class="stats-toolbar">
@@ -209,94 +306,110 @@ onMounted(load)
         </div>
         <button
           type="button"
-          class="icon-btn eye-btn"
+          class="btn btn-ghost btn-sm eye-toggle"
           :title="showValues ? 'Ocultar valores' : 'Mostrar valores'"
           :aria-pressed="showValues ? 'true' : 'false'"
           @click="showValues = !showValues"
         >
           <i :class="showValues ? 'fas fa-eye' : 'fas fa-eye-slash'"></i>
+          {{ showValues ? 'Ocultar valores' : 'Mostrar valores' }}
         </button>
       </div>
 
       <div v-if="loading" class="muted">Carregando…</div>
       <template v-else-if="data">
         <div class="stats-row">
-          <div class="stat-card">
-            <span class="stat-label">Total vendido</span>
-            <span class="stat-value stat-value-success">{{ fmt(currentPeriod?.total) }}</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Nº de vendas</span>
-            <span class="stat-value">{{ showValues ? currentPeriod?.count : '•••' }}</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Dias com venda</span>
-            <span class="stat-value">{{ showValues ? currentPeriod?.days : '•••' }}</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Média por dia</span>
-            <span class="stat-value">{{ fmt(currentPeriod?.avg) }}</span>
+          <div v-for="kpi in kpis" :key="kpi.key" class="stat-card">
+            <div class="stat-top">
+              <span class="icon-tile"><i :class="kpi.icon"></i></span>
+              <span class="stat-label">{{ kpi.label }}</span>
+            </div>
+            <span class="stat-value">{{ kpi.value }}</span>
+            <span v-if="kpi.hint" class="stat-hint">
+              {{ showValues ? kpi.hint : '•••' }}
+            </span>
           </div>
         </div>
 
-        <div class="sales-form-card">
-          <div class="sales-form-head">
-            <i class="fas fa-hand-holding-usd"></i>
-            <div>
-              <span>Lançar venda avulsa</span>
-              <small>Apenas valor, sem produtos.</small>
-            </div>
+        <div class="sales-form-card sales-collapse">
+          <button
+            type="button"
+            class="sales-collapse-head"
+            :aria-expanded="showAvulsa ? 'true' : 'false'"
+            @click="showAvulsa = !showAvulsa"
+          >
+            <span class="collapse-icon"><i class="fas fa-plus"></i></span>
+            <span class="collapse-text">
+              <strong>Lançar venda avulsa</strong>
+              <small>Registre uma venda sem produtos</small>
+            </span>
+            <i class="fas fa-chevron-down collapse-chevron" :class="{ open: showAvulsa }"></i>
+          </button>
+          <div class="sales-collapse-body" :class="{ open: showAvulsa }">
+            <form class="sales-form" @submit.prevent="submit">
+              <div class="form-field">
+                <label for="sale_date">Data</label>
+                <input id="sale_date" v-model="form.date" type="date" required />
+              </div>
+              <div class="form-field">
+                <label for="sale_total">Total bruto</label>
+                <input
+                  id="sale_total"
+                  :value="form.total"
+                  type="text"
+                  placeholder="R$ 0,00"
+                  inputmode="decimal"
+                  required
+                  @input="mask"
+                />
+              </div>
+              <div class="form-field">
+                <label for="sale_obs">Observações (opcional)</label>
+                <input id="sale_obs" v-model="form.obs" type="text" placeholder="Ex: feira, balcão..." />
+              </div>
+              <div class="sales-form-actions">
+                <button type="submit" class="btn btn-primary" :disabled="saving">
+                  <i class="fas fa-check"></i> {{ saving ? 'Lançando…' : 'Lançar' }}
+                </button>
+              </div>
+            </form>
           </div>
-          <form class="sales-form" @submit.prevent="submit">
-            <div class="form-field">
-              <label for="sale_date">Data</label>
-              <input id="sale_date" v-model="form.date" type="date" required />
-            </div>
-            <div class="form-field">
-              <label for="sale_total">Total bruto</label>
-              <input
-                id="sale_total"
-                :value="form.total"
-                type="text"
-                placeholder="R$ 0,00"
-                inputmode="decimal"
-                required
-                @input="mask"
-              />
-            </div>
-            <div class="form-field">
-              <label for="sale_obs">Observações (opcional)</label>
-              <input id="sale_obs" v-model="form.obs" type="text" placeholder="Ex: feira, balcão..." />
-            </div>
-            <div class="sales-form-actions">
-              <button type="submit" class="btn btn-primary" :disabled="saving">
-                <i class="fas fa-check"></i> {{ saving ? 'Lançando…' : 'Lançar' }}
-              </button>
-            </div>
-          </form>
         </div>
 
         <div class="table-card">
           <div class="table-card-head">
-            <h2>Vendas</h2>
-            <div class="filter-segmented sales-filter" role="group" aria-label="Filtrar vendas">
-              <button
-                v-for="opt in filterOptions"
-                :key="opt.key"
-                type="button"
-                :class="{ 'is-active': saleFilter === opt.key }"
-                @click="saleFilter = opt.key"
-              >
-                {{ opt.label }}
-              </button>
+            <h2>Histórico de vendas</h2>
+            <div class="table-head-tools">
+              <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input
+                  v-model="search"
+                  type="search"
+                  placeholder="Buscar venda…"
+                  aria-label="Buscar vendas por ID, observação, itens ou pagamento"
+                />
+              </div>
+              <div class="filter-segmented sales-filter" role="group" aria-label="Filtrar vendas">
+                <button
+                  v-for="opt in filterOptions"
+                  :key="opt.key"
+                  type="button"
+                  :class="{ 'is-active': saleFilter === opt.key }"
+                  @click="saleFilter = opt.key"
+                >
+                  {{ opt.label }}
+                  <span class="filter-count">{{ statusCounts[opt.key] }}</span>
+                </button>
+              </div>
             </div>
           </div>
-          <div v-if="!filteredSales.length" class="empty-state">
+          <div v-if="!searchedSales.length" class="empty-state">
             <i class="fas fa-cash-register"></i>
             <h3>Nenhuma venda {{ saleFilter === 'canceladas' ? 'cancelada' : 'encontrada' }}</h3>
             <p>Lance uma venda avulsa ou feche uma venda no PDV.</p>
           </div>
-          <div v-else class="sales-list">
+          <div v-else class="sales-list-scroll">
+            <div class="sales-list">
             <div class="sales-list-header">
               <span>ID</span>
               <span>Valor</span>
@@ -306,7 +419,7 @@ onMounted(load)
               <span>Ações</span>
             </div>
             <div
-              v-for="sale in filteredSales"
+              v-for="sale in searchedSales"
               :key="sale.kind + '-' + sale.id"
               class="sale-row"
               :class="{ 'is-cancelled': sale.cancelled }"
@@ -341,8 +454,12 @@ onMounted(load)
 
                 <div class="sale-items">
                   <template v-if="sale.items.length">
-                    <span v-for="item in visibleItems(sale)" :key="item.name" class="sale-item-chip">
-                      {{ item.quantity }}x {{ item.name }}
+                    <span
+                      class="sale-items-summary"
+                      :title="itemsTitle(sale)"
+                    >
+                      <strong>{{ sale.items.length }} {{ sale.items.length === 1 ? 'item' : 'itens' }}</strong>
+                      <span class="sale-items-first">{{ firstItemLabel(sale) }}</span>
                     </span>
                     <button
                       v-if="sale.items.length > 3"
@@ -394,6 +511,7 @@ onMounted(load)
                 </div>
               </div>
             </div>
+          </div>
           </div>
         </div>
       </template>

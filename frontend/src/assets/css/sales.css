@@ -4,12 +4,6 @@
    BillFlux — Página de Vendas Diárias
    ============================================================ */
 
-.dashboard {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 32px 24px 64px;
-}
-
 /* ---------- Page header ---------- */
 .page-header {
   display: flex;
@@ -38,20 +32,27 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  flex-wrap: nowrap;
+  gap: 16px;
   margin-bottom: 16px;
 }
 
 .filter-segmented {
   display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
   padding: 4px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: var(--shadow-xs);
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.filter-segmented button {
+  flex-shrink: 0;
 }
 
 .filter-segmented button {
@@ -82,23 +83,31 @@
 }
 
 .filter-segmented button.is-active {
-  background: var(--primary);
+  background: var(--brand-gradient);
   color: #fff;
-  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.32);
+  box-shadow: var(--brand-shadow-btn);
 }
 
 .filter-segmented button.is-active i {
   opacity: 1;
 }
 
-.eye-btn {
-  flex-shrink: 0;
-  border-color: var(--border);
-  background: var(--surface);
+.filter-count {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+  font-variant-numeric: tabular-nums;
 }
 
-.eye-btn:hover {
-  border-color: var(--border);
+.filter-segmented button.is-active .filter-count {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.eye-toggle {
+  flex-shrink: 0;
+  min-height: 38px;
 }
 
 /* ---------- KPIs ---------- */
@@ -112,32 +121,47 @@
 .stat-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 16px 20px;
+  gap: 5px;
+  padding: 12px 18px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xs);
+}
+
+.stat-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stat-top .icon-tile {
+  width: 34px;
+  height: 34px;
+  font-size: 14px;
 }
 
 .stat-label {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-secondary);
   letter-spacing: 0.2px;
 }
 
 .stat-value {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.4px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
   color: var(--text);
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
 
-.stat-value-success {
-  color: var(--success);
+.stat-hint {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- Badges de origem (PDV / Manual) ---------- */
@@ -167,31 +191,59 @@
   color: #0e7490;
 }
 
-/* ---------- Formulário de lançamento ---------- */
+/* ---------- Lançamento avulso (collapse) ---------- */
 .sales-form-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xs);
-  padding: 20px 24px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
+  overflow: hidden;
 }
 
-.sales-form-head {
+.sales-collapse-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 16px;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 20px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
 }
 
-.sales-form-head i {
+.sales-collapse-head:hover {
+  background: var(--surface-hover);
+}
+
+.collapse-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: var(--primary-soft);
   color: var(--primary);
+  font-size: 13px;
 }
 
-.sales-form-head small {
+.collapse-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.collapse-text strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.collapse-text small {
   display: block;
   font-size: 12px;
   font-weight: 400;
@@ -199,11 +251,44 @@
   margin-top: 2px;
 }
 
+.collapse-chevron {
+  color: var(--text-muted);
+  font-size: 13px;
+  transition: transform 200ms ease;
+}
+
+.collapse-chevron.open {
+  transform: rotate(180deg);
+}
+
+.sales-collapse-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition: grid-template-rows 250ms ease, visibility 0s 250ms;
+}
+
+.sales-collapse-body.open {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  border-top: 1px solid var(--border);
+  transition: grid-template-rows 250ms ease;
+}
+
+.sales-collapse-body > .sales-form {
+  overflow: hidden;
+  min-height: 0;
+}
+
 .sales-form {
   display: grid;
   grid-template-columns: minmax(160px, 220px) minmax(180px, 260px) 1fr auto;
   gap: 14px;
   align-items: end;
+}
+
+.sales-collapse-body .sales-form {
+  padding: 20px 24px;
 }
 
 /* Alinha o botão com os inputs (o margin-bottom dos .form-field empurrava o
@@ -220,8 +305,13 @@
 }
 
 /* ---------- Lista de vendas (colunas alinhadas) ---------- */
+.sales-list-scroll {
+  overflow-x: auto;
+}
+
 .sales-list {
   --sales-cols: 56px 150px 90px 170px minmax(160px, 1fr) 120px;
+  min-width: 760px;
 }
 
 .sales-list-header {
@@ -354,14 +444,30 @@
   flex-wrap: wrap;
 }
 
-.sale-item-chip {
+.sale-items-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sale-items-summary strong {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.sale-items-first {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   color: var(--text-secondary);
-  background: var(--surface-hover);
-  border: 1px solid var(--border);
-  padding: 3px 9px;
-  border-radius: 999px;
-  white-space: nowrap;
 }
 
 .sale-items-more {
@@ -391,12 +497,25 @@
   gap: 4px;
 }
 
+.sale-actions .icon-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
 .sale-actions .icon-btn.is-danger {
-  color: #e05d5d;
+  color: var(--text-secondary);
 }
 
 .sale-actions .icon-btn.is-danger:hover {
-  background: rgba(224, 93, 93, 0.12);
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.sale-actions .icon-btn:focus-visible,
+.filter-segmented button:focus-visible,
+.sales-collapse-head:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 /* ---------- Vendas canceladas ---------- */
@@ -497,13 +616,64 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
 }
 
 .table-card-head h2 {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  margin-right: auto;
+}
+
+.table-head-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.search-box {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.search-box > i {
+  position: absolute;
+  left: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.search-box input {
+  width: 220px;
+  max-width: 100%;
+  padding: 9px 12px 9px 34px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.search-box input::placeholder {
+  color: var(--text-muted);
+}
+
+.search-box input:hover {
+  border-color: var(--border-strong);
+}
+
+.search-box input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: var(--focus-ring);
 }
 
 .data-table {
@@ -719,8 +889,17 @@
   }
 
   .stats-toolbar {
-    align-items: flex-start;
+    align-items: stretch;
     flex-direction: column;
+  }
+
+  .table-head-tools {
+    width: 100%;
+  }
+
+  .search-box,
+  .search-box input {
+    width: 100%;
   }
 
   .filter-segmented {
@@ -730,7 +909,7 @@
   }
 
   .filter-segmented button {
-    flex: 1;
+    flex: 1 1 0;
     text-align: center;
     padding: 8px 10px;
   }
