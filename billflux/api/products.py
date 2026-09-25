@@ -164,7 +164,8 @@ def products_create():
 def products_edit(product_id):
     """Atualiza os dados do produto."""
     repository = ProductRepository()
-    if not repository.get_product(product_id):
+    current = repository.get_product(product_id)
+    if not current:
         return api_error("Produto não encontrado.", 404)
 
     data = request.get_json(silent=True) or {}
@@ -213,6 +214,8 @@ def products_edit(product_id):
         obs=obs,
         active=active,
     )
+    if current.price != price:
+        ProductUnitRepository().sync_default_price(product_id, price)
     return api_response(_products_payload())
 
 
