@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import AppShell from '@/components/AppShell.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { useRowMenu } from '@/composables/useRowMenu'
 
 const { openMenu, menuPos, toggleMenu, closeMenus } = useRowMenu()
@@ -14,6 +15,7 @@ const saving = ref(false)
 const showModal = ref(false)
 const editing = ref(null)
 const form = ref({})
+const deleteTarget = ref(null)
 
 const COLORS = [
   { value: '', label: 'Sem cor' },
@@ -84,8 +86,14 @@ async function submit() {
   }
 }
 
-async function removeAccount(account) {
-  if (!window.confirm(`Excluir a categoria "${account.name}"?`)) return
+function removeAccount(account) {
+  deleteTarget.value = account
+}
+
+async function confirmRemove() {
+  const account = deleteTarget.value
+  deleteTarget.value = null
+  if (!account) return
   try {
     data.value = await api.del(`/accounts/${account.id}`)
     ElMessage.success('Categoria excluída.')
@@ -101,13 +109,13 @@ onMounted(() => {
 
 <template>
   <AppShell>
-    <div class="dashboard">
+    <div class="dashboard accounts-page">
       <div class="page-header">
         <div>
           <h1 class="page-title">Plano de contas</h1>
           <p class="page-subtitle">Organize receitas e despesas em categorias para enxergar seu resultado.</p>
         </div>
-        <button type="button" class="btn btn-primary" @click="openNew">
+        <button type="button" class="btn-brand" @click="openNew">
           <i class="fas fa-plus"></i> Nova categoria
         </button>
       </div>
@@ -128,14 +136,14 @@ onMounted(() => {
                   <span class="account-name">{{ group.account.name }}</span>
                 </div>
                 <div class="dropdown">
-                  <button type="button" class="icon-btn" aria-haspopup="true" aria-expanded="false" aria-label="Ações da categoria" :data-menu="group.account.id" @click.stop="toggleMenu(group.account.id)">
+                  <button type="button" class="icon-btn" :aria-expanded="openMenu === group.account.id ? 'true' : 'false'" aria-haspopup="true" aria-label="Ações da categoria" :data-menu="group.account.id" @click.stop="toggleMenu(group.account.id)">
                     <i class="fas fa-ellipsis-h"></i>
                   </button>
                   <div class="dropdown-panel" v-show="openMenu === group.account.id" :style="{ top: menuPos.top + 'px', left: menuPos.left + 'px' }">
-                    <button type="button" class="dropdown-item" @click="openEdit(group.account)">
+                    <button type="button" class="dropdown-item" @click="closeMenus(); openEdit(group.account)">
                       <i class="fas fa-pen"></i> Editar
                     </button>
-                    <button type="button" class="dropdown-item is-danger" @click="removeAccount(group.account)">
+                    <button type="button" class="dropdown-item is-danger" @click="closeMenus(); removeAccount(group.account)">
                       <i class="fas fa-trash"></i> Excluir
                     </button>
                   </div>
@@ -149,14 +157,14 @@ onMounted(() => {
                   <span class="account-tag">{{ child.type === 'receita' ? 'Receita' : 'Despesa' }}</span>
                 </div>
                 <div class="dropdown">
-                  <button type="button" class="icon-btn" aria-haspopup="true" aria-expanded="false" aria-label="Ações da categoria" :data-menu="child.id" @click.stop="toggleMenu(child.id)">
+                  <button type="button" class="icon-btn" :aria-expanded="openMenu === child.id ? 'true' : 'false'" aria-haspopup="true" aria-label="Ações da categoria" :data-menu="child.id" @click.stop="toggleMenu(child.id)">
                     <i class="fas fa-ellipsis-h"></i>
                   </button>
                   <div class="dropdown-panel" v-show="openMenu === child.id" :style="{ top: menuPos.top + 'px', left: menuPos.left + 'px' }">
-                    <button type="button" class="dropdown-item" @click="openEdit(child)">
+                    <button type="button" class="dropdown-item" @click="closeMenus(); openEdit(child)">
                       <i class="fas fa-pen"></i> Editar
                     </button>
-                    <button type="button" class="dropdown-item is-danger" @click="removeAccount(child)">
+                    <button type="button" class="dropdown-item is-danger" @click="closeMenus(); removeAccount(child)">
                       <i class="fas fa-trash"></i> Excluir
                     </button>
                   </div>
@@ -226,6 +234,16 @@ onMounted(() => {
         </form>
       </div>
     </div>
+
+    <ConfirmDialog
+      v-if="deleteTarget"
+      title="Excluir categoria"
+      :message="`Excluir a categoria \u201C${deleteTarget.name}\u201D?`"
+      confirm-label="Excluir"
+      danger
+      @confirm="confirmRemove"
+      @cancel="deleteTarget = null"
+    />
   </AppShell>
 </template>
 

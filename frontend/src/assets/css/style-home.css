@@ -546,9 +546,10 @@
 
 /* ---------- Dashboard (home logada) ---------- */
 .home-dashboard {
-  max-width: 1280px;
+  width: 100%;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 32px 24px 64px;
+  padding: 32px clamp(24px, 3vw, 48px) 64px;
 }
 
 .page-header {
@@ -669,12 +670,16 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 20px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--border);
 }
 
 .home-list li:last-child {
   border-bottom: none;
+}
+
+.home-list li:not(.home-list-empty):hover {
+  background: var(--surface-hover);
 }
 
 .home-list-main {
