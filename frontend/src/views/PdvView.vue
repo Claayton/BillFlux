@@ -19,7 +19,7 @@ const suggestions = ref([])
 const highlighted = ref(-1)
 const finishing = ref(false)
 const receiptOrder = ref(null)
-const caixaOpen = ref(false)
+const caixaOpen = ref(null)
 
 const checkoutOpen = ref(false)
 const payAmounts = ref({})
@@ -518,7 +518,7 @@ onBeforeUnmount(() => {
       </router-link>
     </header>
 
-    <div v-if="!caixaOpen" class="pdv-caixa-warning">
+    <div v-if="caixaOpen === false" class="pdv-caixa-warning">
       <i class="fas fa-exclamation-triangle"></i>
       <span>Caixa fechado — abra o caixa para iniciar as vendas.</span>
       <router-link to="/caixa" class="btn btn-sm btn-warning">Abrir caixa</router-link>
@@ -677,6 +677,31 @@ onBeforeUnmount(() => {
       </section>
 
       <aside class="pdv-panel">
+        <div v-if="cartItems.length" class="pdv-panel-block pdv-summary">
+          <h3>Resumo</h3>
+          <div class="pdv-summary-rows">
+            <div class="pdv-summary-row">
+              <span>Itens</span>
+              <strong>{{ cartCount }}</strong>
+            </div>
+            <div class="pdv-summary-row">
+              <span>Subtotal</span>
+              <strong>{{ formatBRL(cartTotal) }}</strong>
+            </div>
+            <div v-if="discount" class="pdv-summary-row">
+              <span>Desconto</span>
+              <strong>&minus;{{ formatBRL(discount) }}</strong>
+            </div>
+            <div v-if="selectedCustomer" class="pdv-summary-row is-customer">
+              <span>Cliente</span>
+              <strong>{{ selectedCustomer.name }}</strong>
+            </div>
+          </div>
+          <div class="pdv-summary-total">
+            <span>Total</span>
+            <strong>{{ formatBRL(cartTotalAfter) }}</strong>
+          </div>
+        </div>
         <div class="pdv-panel-block">
           <h3>Atalhos</h3>
           <ul class="pdv-shortcuts">
@@ -810,7 +835,7 @@ onBeforeUnmount(() => {
             :disabled="finishing || !canConfirm"
             @click="confirmCheckout"
           >
-            <i class="fas fa-check-circle"></i> {{ finishing ? 'Concluindo…' : 'Confirmar venda' }}
+            <i class="fas fa-check-circle"></i> {{ finishing ? 'Finalizando…' : 'Finalizar venda' }}
             <kbd>F2</kbd>
           </button>
         </div>
@@ -887,6 +912,23 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
 }
+
+.pdv-checkout-footer .btn-primary {
+  background: var(--brand-gradient);
+  border: none;
+  border-radius: var(--brand-radius-sm);
+  box-shadow: var(--brand-shadow-btn);
+}
+
+.pdv-checkout-footer .btn-primary:hover:not(:disabled) {
+  background: var(--brand-gradient-hover);
+  box-shadow: var(--brand-shadow-btn-hover);
+}
+
+.pdv-checkout-footer .btn-primary:disabled {
+  filter: saturate(0.6);
+  box-shadow: none;
+}
 .pdv-checkout-total {
   display: flex;
   flex-direction: column;
@@ -917,9 +959,9 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 7px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--border, #e5e7eb);
-  border-radius: var(--radius-sm, 8px);
+  border-radius: var(--brand-radius-sm);
   background: var(--surface, #ffffff);
 }
 .pdv-payicon {
@@ -942,9 +984,9 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   border: 1px solid var(--border, #e5e7eb);
-  border-radius: var(--radius-sm, 8px);
-  padding: 0 10px;
-  height: 36px;
+  border-radius: var(--brand-radius-sm);
+  padding: 0 12px;
+  height: 40px;
   background: #ffffff;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -964,7 +1006,7 @@ onBeforeUnmount(() => {
 }
 .pdv-payfield:focus-within {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent);
+  box-shadow: var(--brand-input-ring);
 }
 .pdv-payfield input:focus {
   box-shadow: none;
@@ -972,10 +1014,11 @@ onBeforeUnmount(() => {
 }
 .pdv-paystatus {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   font-size: 13px;
   font-weight: 600;
-  padding: 2px 24px 0;
+  padding: 10px 2px 0;
+  border-top: 1px solid var(--border, #e5e7eb);
 }
 .pdv-paystatus .is-troco {
   color: var(--primary, #4f46e5);
@@ -995,7 +1038,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--text-muted, #9ca3af);
+  color: var(--text-secondary, #6b7280);
 }
 
 /* Customer selector */
