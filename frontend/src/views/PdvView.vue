@@ -216,6 +216,12 @@ function showSuggestions() {
 
 function setHighlight(index) {
   highlighted.value = index
+  nextTick(() => {
+    const el = document.querySelector('#pdv-suggestions .pdv-suggestion.is-highlighted')
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'nearest' })
+    }
+  })
 }
 
 function clearSearch() {
@@ -227,6 +233,48 @@ function clearSearch() {
 
 function addFromSuggestion(item) {
   if (tryAdd(item, item._unit)) clearSearch()
+}
+
+let audioCtx = null
+
+/** Bipe de erro via Web Audio (o bip do leitor é hardware e não é
+ *  controlável por software; o navegador emite este som quando o
+ *  código não existe no sistema). */
+async function playErrorBeep() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext
+    if (!AC) return
+    audioCtx = audioCtx || new AC()
+    if (audioCtx.state === 'suspended') {
+      await audioCtx.resume()
+    }
+    const t = audioCtx.currentTime
+    for (const offset of [0, 0.22]) {
+      const osc = audioCtx.createOscillator()
+      const gain = audioCtx.createGain()
+      osc.type = 'square'
+      osc.frequency.value = 180
+      gain.gain.setValueAtTime(0.0001, t + offset)
+      gain.gain.exponentialRampToValueAtTime(0.25, t + offset + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + offset + 0.18)
+      osc.connect(gain)
+      gain.connect(audioCtx.destination)
+      osc.start(t + offset)
+      osc.stop(t + offset + 0.2)
+    }
+  } catch {
+    /* ambiente sem áudio: só a mensagem visual */
+  }
+}
+
+function closeAudio() {
+  try {
+    const ctx = audioCtx
+    audioCtx = null
+    if (ctx && typeof ctx.close === 'function') ctx.close().catch(() => {})
+  } catch {
+    /* ignora */
+  }
 }
 
 function handleEnter() {
@@ -244,6 +292,9 @@ function handleEnter() {
       clearSearch()
       return
     }
+    playErrorBeep()
+    ElMessage.warning('Produto não encontrado.')
+    return
   }
 
   const match = matchBarcode(raw)
@@ -272,6 +323,7 @@ function handleEnter() {
     return
   }
 
+  playErrorBeep()
   ElMessage.warning('Produto não encontrado.')
 }
 
@@ -500,6 +552,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onGlobalKeydown)
+  closeAudio()
 })
 </script>
 
@@ -513,7 +566,7 @@ onBeforeUnmount(() => {
 
       <span class="pdv-topbar-spacer"></span>
 
-      <router-link class="pdv-exit" to="/home" title="Sair do PDV" aria-label="Sair do PDV">
+      <router-link class="pdv-exit" to="/sales" title="Sair do PDV" aria-label="Sair do PDV">
         <i class="fas fa-arrow-left"></i>
       </router-link>
     </header>
