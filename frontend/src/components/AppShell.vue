@@ -96,9 +96,6 @@ async function logout() {
         >
           <i class="fas fa-bars"></i>
         </button>
-        <router-link class="btn btn-primary btn-sm" to="/pdv">
-          <i class="fas fa-cash-register"></i> Abrir PDV
-        </router-link>
         <div class="topbar-spacer"></div>
         <button type="button" class="icon-btn" title="Notificações" aria-label="Notificações">
           <i class="fas fa-bell"></i>
