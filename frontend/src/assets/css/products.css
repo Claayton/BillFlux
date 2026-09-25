@@ -2,12 +2,14 @@
 
 /* ============================================================
    BillFlux — Produtos e Formas de Pagamento
+   (usa .dashboard canônico de style-base.css)
    ============================================================ */
 
-.dashboard {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 32px 24px 64px;
+/* Respiro lateral idêntico ao de Vendas e Caixa (garantia explícita
+   junto ao .dashboard compartilhado; sem max-width restritivo). */
+.products-page {
+  padding-left: clamp(24px, 3vw, 48px);
+  padding-right: clamp(24px, 3vw, 48px);
 }
 
 /* ---------- Page header ---------- */
@@ -101,16 +103,314 @@
   border-bottom: none;
 }
 
-.data-table tbody tr.is-active td:first-child {
-  box-shadow: inset 3px 0 0 #16a34a;
-}
-
-.data-table tbody tr.is-inactive td:first-child {
-  box-shadow: inset 3px 0 0 #f59e0b;
-}
-
 .data-table tbody tr.is-inactive td {
-  opacity: 0.55;
+  opacity: 0.6;
+}
+
+/* ---------- Página de produtos: busca, filtros, tabela densa ---------- */
+/* Toolbar única: busca flexível + selects compactos + CTA */
+.products-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.products-toolbar .search-box {
+  flex: 1;
+  min-width: 200px;
+}
+
+.products-toolbar .search-box input {
+  width: 100%;
+  padding: 11px 40px 11px 36px;
+  font-size: 14px;
+  border-radius: var(--brand-radius-md);
+  box-shadow: var(--shadow-xs);
+}
+
+.products-toolbar .search-clear {
+  position: absolute;
+  right: 6px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.products-toolbar .search-clear:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.products-toolbar .btn-brand {
+  flex-shrink: 0;
+  min-height: 46px;
+  border-radius: var(--brand-radius-md);
+}
+
+/* Selects da toolbar: controle único, mesma altura/radius da busca e do CTA */
+.products-toolbar .toolbar-select {
+  flex-shrink: 0;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--brand-radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-xs);
+}
+
+.products-toolbar .toolbar-select-cat {
+  width: 220px;
+}
+
+.products-toolbar .toolbar-select-stock {
+  width: 170px;
+}
+
+.products-toolbar .toolbar-select:hover {
+  border-color: var(--border-strong);
+}
+
+.products-toolbar .toolbar-select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: var(--brand-input-ring);
+}
+
+.products-toolbar .search-box input {
+  min-height: 46px;
+}
+
+.popover-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: transparent;
+}
+
+/* Tabela densa: layout fixo com colunas distribuídas.
+   Produto é flexível (trunca com ellipsis); demais têm largura
+   compacta para caber sem scroll quando há espaço físico. */
+.products-page .products-table {
+  table-layout: fixed;
+}
+
+.products-page .products-table .col-cat {
+  width: 150px;
+}
+
+.products-page .products-table .col-price {
+  width: 110px;
+}
+
+.products-page .products-table .col-stock {
+  width: 120px;
+}
+
+.products-page .products-table .col-status {
+  width: 140px;
+}
+
+.products-page .products-table tbody td {
+  min-width: 0;
+}
+
+.products-page .cell-title,
+.products-page .cell-sub {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* thead SEM sticky (diagnóstico: sticky causava sobreposição da
+   primeira linha; header normal até confirmação visual) */
+.products-page .data-table thead th {
+  background: var(--surface-hover);
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+.products-page .data-table tbody td {
+  padding: 10px 16px;
+}
+
+.products-page .data-table tbody tr:hover td {
+  background: var(--surface-hover);
+}
+
+.products-page .cell-stock {
+  text-align: right;
+}
+
+.cell-cat {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.status-badge.is-ok {
+  background: rgba(22, 163, 74, 0.12);
+  color: var(--success);
+}
+
+.status-badge.is-low {
+  background: rgba(217, 119, 6, 0.12);
+  color: var(--warning);
+}
+
+.status-badge.is-out {
+  background: rgba(220, 38, 38, 0.12);
+  color: var(--danger);
+}
+
+.status-badge.is-off {
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+}
+
+/* Menu ⋮ da linha */
+.row-menu {
+  position: relative;
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+.row-menu-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 50;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--brand-radius-md);
+  box-shadow: var(--shadow-lg);
+}
+
+.row-menu-panel button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.row-menu-panel button i {
+  width: 16px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.row-menu-panel button:hover {
+  background: var(--surface-hover);
+}
+
+.row-menu-panel button.is-danger {
+  color: var(--danger);
+}
+
+.row-menu-panel button.is-danger i {
+  color: var(--danger);
+}
+
+.row-menu-panel button.is-danger:hover {
+  background: var(--danger-soft);
+}
+
+/* últimas linhas: menu abre para cima (table-card tem overflow hidden) */
+.menu-up .row-menu-panel {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+/* Rodapé com paginação */
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.table-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.page-btn {
+  min-width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.page-btn.is-active {
+  background: var(--brand-gradient);
+  color: #fff;
+  box-shadow: var(--brand-shadow-btn);
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-gap {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 0 2px;
 }
 
 .cell-title {
@@ -493,8 +793,44 @@
 }
 
 /* ---------- Responsivo ---------- */
+@media (max-width: 900px) {
+  .products-page .col-cat {
+    display: none;
+  }
+
+  .products-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .products-toolbar .btn-brand {
+    width: 100%;
+  }
+}
+
 @media (max-width: 560px) {
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .products-page .products-table .col-price {
+    width: 84px;
+  }
+
+  .products-page .products-table .col-stock {
+    width: 92px;
+  }
+
+  .products-page .products-table .col-status {
+    width: 104px;
+  }
+
+  .products-page .data-table thead th.th-actions {
+    width: 48px;
+  }
+
+  .products-toolbar .toolbar-select {
+    flex: 1 1 45%;
+    width: auto;
+    min-width: 0;
   }
 }

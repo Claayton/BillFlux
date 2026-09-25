@@ -52,9 +52,14 @@ function mountView() {
   })
 }
 
-// ícones diretos na linha: [Editar, Ajustar estoque, Movimentações, Excluir]
+// ações via menu ⋮: abrir o menu da primeira linha e clicar em Editar
 async function openEdit(wrapper) {
-  await wrapper.findAll('.product-actions button')[0].trigger('click')
+  await wrapper.findAll('.row-menu > .icon-btn')[0].trigger('click')
+  await flushPromises()
+  const editBtn = wrapper
+    .findAll('.row-menu-panel button')
+    .find((b) => b.text().includes('Editar'))
+  await editBtn.trigger('click')
   await flushPromises()
 }
 
@@ -71,14 +76,18 @@ describe('ProductsView', () => {
     })
   })
 
-  it('mostra ações diretas com ícones na linha', async () => {
+  it('mostra menu ⋮ com as 4 ações da linha', async () => {
     const wrapper = mountView()
     await flushPromises()
 
-    const buttons = wrapper.findAll('.product-actions button')
-    expect(buttons.length).toBe(4)
-    expect(buttons[0].find('i').classes()).toContain('fa-pen') // Editar
-    expect(buttons[3].classes()).toContain('is-danger') // Excluir
+    await wrapper.findAll('.row-menu > .icon-btn')[0].trigger('click')
+    await flushPromises()
+
+    const items = wrapper.findAll('.row-menu-panel button').map((b) => b.text())
+    expect(items).toEqual(
+      expect.arrayContaining(['Editar', 'Ajustar estoque', 'Movimentações', 'Excluir'])
+    )
+    expect(wrapper.find('.row-menu-panel .is-danger').text()).toContain('Excluir')
   })
 
   it('editar mostra código, categoria, código secundário e fornecedores', async () => {
@@ -177,7 +186,12 @@ describe('ProductsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.findAll('.product-actions button')[3].trigger('click') // Excluir
+    await wrapper.findAll('.row-menu > .icon-btn')[0].trigger('click')
+    await flushPromises()
+    const delBtn = wrapper
+      .findAll('.row-menu-panel button')
+      .find((b) => b.text().includes('Excluir'))
+    await delBtn.trigger('click') // Excluir
     await nextTick()
 
     expect(wrapper.text()).toContain('Excluir o produto "Doces arildo"?')
@@ -209,5 +223,97 @@ describe('ProductsView', () => {
         name: 'Doces arildo',
       })
     )
+  })
+
+  it('toolbar única com busca, selects e CTA, sem chips', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.products-sidebar').exists()).toBe(false)
+    expect(wrapper.find('.filter-segmented').exists()).toBe(false)
+    const toolbar = wrapper.find('.products-toolbar')
+    expect(toolbar.exists()).toBe(true)
+    expect(toolbar.find('.search-box input').exists()).toBe(true)
+    expect(toolbar.findAll('.toolbar-select').length).toBe(2)
+    expect(toolbar.find('.btn-brand').exists()).toBe(true)
+
+    const catSelect = toolbar.findAll('.toolbar-select')[0]
+    expect(catSelect.text()).toContain('Todas as categorias (1)')
+    await catSelect.setValue(1)
+    await flushPromises()
+    expect(wrapper.findAll('tbody tr:not(.empty-row)').length).toBe(1)
+  })
+
+  it('busca por código de barras e mostra status de estoque', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('.products-toolbar .search-box input').setValue('040141018496')
+    await flushPromises()
+    const rows = wrapper.findAll('tbody tr:not(.empty-row)')
+    expect(rows.length).toBe(1)
+    expect(rows[0].text()).toContain('Doces arildo')
+    expect(rows[0].find('.status-badge').text()).toBe('Em estoque')
+  })
+
+  it('zero sem min_stock não é sem estoque; com min_stock é', async () => {
+    apiMock.get.mockImplementation((url) => {
+      if (String(url).includes('/categories')) return Promise.resolve({ categories })
+      return Promise.resolve({
+        products: [
+          {
+            id: 11, name: 'Sem controle', price: 2, cost: 1, barcode: '', secondary_code: '',
+            category_id: null, category_name: '', suppliers: '', supplier_id: null,
+            stock_quantity: 0, min_stock: 0, ideal_stock: 0, obs: '', active: true,
+          },
+          {
+            id: 12, name: 'Zerado rastreado', price: 3, cost: 1, barcode: '', secondary_code: '',
+            category_id: null, category_name: '', suppliers: '', supplier_id: null,
+            stock_quantity: 0, min_stock: 5, ideal_stock: 0, obs: '', active: true,
+          },
+        ],
+        suppliers: [],
+      })
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    const badges = wrapper.findAll('tbody tr:not(.empty-row) .status-badge').map((b) => b.text())
+    expect(badges).toEqual(['Em estoque', 'Sem estoque'])
+  })
+
+  it('zero sem controle mostra — neutro em vez de 0 un.', async () => {
+    apiMock.get.mockImplementation((url) => {
+      if (String(url).includes('/categories')) return Promise.resolve({ categories })
+      return Promise.resolve({
+        products: [
+          {
+            id: 11, name: 'Sem controle', price: 2, cost: 1, barcode: '', secondary_code: '',
+            category_id: null, category_name: '', suppliers: '', supplier_id: null,
+            stock_quantity: 0, min_stock: 0, ideal_stock: 0, obs: '', active: true,
+          },
+        ],
+        suppliers: [],
+      })
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    const stock = wrapper.find('tbody tr:not(.empty-row) .cell-stock')
+    expect(stock.text()).not.toContain('0 un.')
+    expect(stock.text()).toContain('—')
+  })
+
+  it('filtro de estoque e paginação com contagem', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.table-count').text()).toContain('1 produto')
+    const selects = wrapper.findAll('.toolbar-select')
+    expect(selects.length).toBe(2)
+    await selects[1].setValue('sem')
+    await flushPromises()
+    expect(wrapper.findAll('tbody tr:not(.empty-row)').length).toBe(0)
+    expect(wrapper.text()).toContain('Nenhum produto encontrado')
   })
 })

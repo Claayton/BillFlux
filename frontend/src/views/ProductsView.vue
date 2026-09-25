@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl, maskMoney, moneyToDecimal } from '@/utils/format'
@@ -34,6 +34,10 @@ const creatingCategory = ref(false)
 const deleteTarget = ref(null)
 const searchQuery = ref('')
 const activeCategoryId = ref(null)
+const stockFilter = ref('todos')
+const openMenuId = ref(null)
+const page = ref(1)
+const PAGE_SIZE = 50
 const productSuppliers = ref([])
 const productSuppliersLoading = ref(false)
 const newSupplierLink = ref({ supplier_id: null, delivery_day: 1, lead_time: 1, is_primary: false, frequency: 'semanal', week_parity: 0 })
@@ -48,6 +52,9 @@ const filteredProducts = computed(() => {
   if (activeCategoryId.value !== null) {
     list = list.filter(p => p.category_id === activeCategoryId.value)
   }
+  if (stockFilter.value !== 'todos') {
+    list = list.filter(p => stockState(p) === stockFilter.value)
+  }
   const q = normalizeForSearch(searchQuery.value.trim())
   if (q) {
     list = list.filter(p =>
@@ -59,6 +66,80 @@ const filteredProducts = computed(() => {
   }
   return list
 })
+
+/** Estado de estoque (respeita a regra existente: min_stock).
+ * Sem mínimo configurado não há controle de "zerado": produto com
+ * estoque 0 e sem min_stock NÃO é classificado como sem estoque. */
+function stockState(p) {
+  if (!p.active) return 'inativo'
+  const stock = p.stock_quantity || 0
+  if (p.min_stock && stock <= 0) return 'sem'
+  if (p.min_stock && stock <= p.min_stock) return 'baixo'
+  return 'ok'
+}
+
+const STATUS_META = {
+  inativo: { label: 'Inativo', cls: 'is-off' },
+  sem: { label: 'Sem estoque', cls: 'is-out' },
+  baixo: { label: 'Estoque baixo', cls: 'is-low' },
+  ok: { label: 'Em estoque', cls: 'is-ok' },
+}
+
+function statusFor(p) {
+  return STATUS_META[stockState(p)]
+}
+
+/** Categorias ativas com contagem (mesma base do Todos). */
+const catsWithCount = computed(() => {
+  const products = data.value?.products || []
+  return categories.value
+    .filter(c => c.active)
+    .map(c => ({
+      ...c,
+      count: products.filter(p => p.category_id === c.id).length,
+    }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+})
+
+/** Rótulo do estoque: zero sem controle vira "—" (neutro, não "0 un."). */
+function stockLabel(p) {
+  const stock = p.stock_quantity || 0
+  if (stock > 0 || p.min_stock) return `${stock} un.`
+  return '—'
+}
+
+/** Paginação client-side sobre o já carregado (sem mudar a carga). */
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredProducts.value.length / PAGE_SIZE))
+)
+
+const pagedProducts = computed(() => {
+  const start = (page.value - 1) * PAGE_SIZE
+  return filteredProducts.value.slice(start, start + PAGE_SIZE)
+})
+
+const pageNumbers = computed(() => {
+  const total = totalPages.value
+  const current = page.value
+  const set = new Set([1, total, current - 1, current, current + 1])
+  return [...set].filter(n => n >= 1 && n <= total).sort((a, b) => a - b)
+})
+
+watch([searchQuery, activeCategoryId, stockFilter], () => {
+  page.value = 1
+})
+
+watch(totalPages, (total) => {
+  if (page.value > total) page.value = total
+})
+
+function toggleMenu(id) {
+  openMenuId.value = openMenuId.value === id ? null : id
+}
+
+function closeMenu() {
+  openMenuId.value = null
+}
 
 function blankProduct() {
   return {
@@ -424,10 +505,14 @@ onMounted(async () => {
     suppliers.value = res.suppliers || []
   } catch { /* ignora */ }
   document.addEventListener('keydown', onModalKeydown)
+  window.addEventListener('scroll', closeMenu, true)
+  window.addEventListener('resize', closeMenu)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onModalKeydown)
+  window.removeEventListener('scroll', closeMenu, true)
+  window.removeEventListener('resize', closeMenu)
 })
 
 // No modal de produto, Enter (leitor de código de barras) não salva:
@@ -436,6 +521,9 @@ function onModalKeydown(event) {
   if (event.key === 'F2' && showProductModal.value && detailsTab.value === 'dados') {
     event.preventDefault()
     saveProduct()
+  }
+  if (event.key === 'Escape') {
+    closeMenu()
   }
 }
 </script>
@@ -446,143 +534,177 @@ function onModalKeydown(event) {
       <div class="page-header">
         <div>
           <h1 class="page-title">Produtos</h1>
-          <p class="page-subtitle">Catálogo do PDV com controle de estoque.</p>
+          <p class="page-subtitle">Gerencie seu catálogo, preços e estoque.</p>
         </div>
-        <button type="button" class="btn btn-primary" @click="openNewProduct">
-          <i class="fas fa-plus"></i> Novo produto
-        </button>
       </div>
 
       <div v-if="loading" class="muted">Carregando…</div>
       <template v-else-if="data">
-        <div class="products-layout">
-          <aside class="products-sidebar">
-            <h3 class="sidebar-title">Categorias</h3>
-            <ul class="sidebar-list">
-              <li>
-                <button
-                  type="button"
-                  class="sidebar-item"
-                  :class="{ 'is-active': activeCategoryId === null }"
-                  @click="activeCategoryId = null"
-                >
-                  <i class="fas fa-layer-group"></i> Todos
-                  <span class="sidebar-count">{{ data.products.length }}</span>
-                </button>
-              </li>
-              <li v-for="cat in categories.filter(c => c.active)" :key="cat.id">
-                <button
-                  type="button"
-                  class="sidebar-item"
-                  :class="{ 'is-active': activeCategoryId === cat.id }"
-                  @click="activeCategoryId = cat.id"
-                >
-                  {{ cat.name }}
-                  <span class="sidebar-count">{{ data.products.filter(p => p.category_id === cat.id).length }}</span>
-                </button>
-              </li>
-            </ul>
-          </aside>
+        <div class="products-toolbar">
+          <div class="search-box products-search-box">
+            <i class="fas fa-search"></i>
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Buscar produto..."
+              aria-label="Buscar por nome, código, código de barras ou categoria"
+            />
+            <button
+              v-if="searchQuery"
+              type="button"
+              class="search-clear"
+              aria-label="Limpar busca"
+              @click="searchQuery = ''"
+            >
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <select
+            v-model="activeCategoryId"
+            class="toolbar-select toolbar-select-cat"
+            aria-label="Filtrar por categoria"
+          >
+            <option :value="null">Todas as categorias ({{ data.products.length }})</option>
+            <option v-for="cat in catsWithCount" :key="cat.id" :value="cat.id">
+              {{ cat.name }} ({{ cat.count }})
+            </option>
+          </select>
+          <select
+            v-model="stockFilter"
+            class="toolbar-select toolbar-select-stock"
+            aria-label="Filtrar por estoque"
+          >
+            <option value="todos">Todo estoque</option>
+            <option value="ok">Em estoque</option>
+            <option value="baixo">Estoque baixo</option>
+            <option value="sem">Sem estoque</option>
+          </select>
+          <button type="button" class="btn-brand" @click="openNewProduct">
+            <i class="fas fa-plus"></i> Novo produto
+          </button>
+        </div>
+        <div
+          v-if="openMenuId !== null"
+          class="popover-overlay"
+          @click="closeMenu()"
+        ></div>
 
-          <div class="products-main">
-            <div class="products-search">
-              <i class="fas fa-search"></i>
-              <input
-                v-model="searchQuery"
-                type="text"
-                placeholder="Buscar por nome, código ou categoria..."
-              />
-              <button
-                v-if="searchQuery"
-                type="button"
-                class="search-clear"
-                @click="searchQuery = ''"
-              >
-                <i class="fas fa-times"></i>
-              </button>
-            </div>
-
-            <div class="table-card">
-              <div class="table-container">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>Produto</th>
-                      <th class="th-amount">Preço</th>
-                      <th class="th-number">Estoque</th>
-                      <th class="th-actions"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="product in filteredProducts"
-                      :key="product.id"
-                      :class="{ 'is-active': product.active, 'is-inactive': !product.active }"
-                    >
-                      <td>
-                        <span class="cell-title">{{ product.name }}</span>
-                        <span v-if="product.category_name" class="cell-sub">{{ product.category_name }}</span>
-                        <span v-else-if="product.obs" class="cell-sub">{{ product.obs }}</span>
-                      </td>
-                      <td class="cell-amount">{{ brl(product.price) }}</td>
-                      <td class="cell-stock" :class="{ 'cell-stock-low': product.min_stock && product.stock_quantity <= product.min_stock }">
-                        {{ product.stock_quantity }}
-                        <span v-if="product.min_stock" class="cell-sub">mín. {{ product.min_stock }}</span>
-                      </td>
-                      <td class="cell-actions">
-                        <div class="product-actions">
+        <div class="table-card">
+          <div class="table-container">
+            <table class="data-table products-table">
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th class="col-cat">Categoria</th>
+                  <th class="th-amount col-price">Preço</th>
+                  <th class="th-number col-stock">Estoque</th>
+                  <th class="col-status">Status</th>
+                  <th class="th-actions"><span class="sr-only">Ações</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(product, idx) in pagedProducts"
+                  :key="product.id"
+                  :class="{ 'is-inactive': !product.active, 'menu-up': idx >= pagedProducts.length - 3 }"
+                >
+                  <td>
+                    <span class="cell-title" :title="product.name">{{ product.name }}</span>
+                    <span v-if="product.barcode || product.secondary_code" class="cell-sub cell-barcode">
+                      {{ product.barcode || product.secondary_code }}
+                    </span>
+                  </td>
+                  <td class="col-cat">
+                    <span v-if="product.category_name" class="cell-cat">{{ product.category_name }}</span>
+                    <span v-else class="cell-sub">—</span>
+                  </td>
+                  <td class="cell-amount">{{ brl(product.price) }}</td>
+                  <td class="cell-stock" :class="{ 'cell-stock-low': product.min_stock && product.stock_quantity <= product.min_stock }">
+                    {{ stockLabel(product) }}
+                    <span v-if="product.min_stock" class="cell-sub">mín. {{ product.min_stock }}</span>
+                  </td>
+                  <td>
+                    <span class="status-badge" :class="statusFor(product).cls">
+                      {{ statusFor(product).label }}
+                    </span>
+                  </td>
+                  <td class="cell-actions">
+                    <div class="row-menu">
                       <button
                         type="button"
                         class="icon-btn"
-                        title="Editar"
-                        aria-label="Editar produto"
-                        @click="openEditProduct(product)"
+                        title="Ações"
+                        :aria-label="`Ações de ${product.name}`"
+                        :aria-expanded="openMenuId === product.id ? 'true' : 'false'"
+                        @click="toggleMenu(product.id)"
                       >
-                        <i class="fas fa-pen"></i>
+                        <i class="fas fa-ellipsis-v"></i>
                       </button>
-                      <button
-                        type="button"
-                        class="icon-btn"
-                        title="Ajustar estoque"
-                        aria-label="Ajustar estoque"
-                        @click="openAdjust(product)"
-                      >
-                        <i class="fas fa-balance-scale"></i>
-                      </button>
-                      <button
-                        type="button"
-                        class="icon-btn"
-                        title="Movimentações"
-                        aria-label="Movimentações"
-                        @click="openMovements(product)"
-                      >
-                        <i class="fas fa-history"></i>
-                      </button>
-                      <button
-                        type="button"
-                        class="icon-btn is-danger"
-                        title="Excluir"
-                        aria-label="Excluir produto"
-                        @click="removeProduct(product)"
-                      >
-                        <i class="fas fa-trash"></i>
-                      </button>
+                      <div v-if="openMenuId === product.id" class="row-menu-panel" role="menu">
+                        <button type="button" role="menuitem" @click="closeMenu(); openEditProduct(product)">
+                          <i class="fas fa-pen"></i> Editar
+                        </button>
+                        <button type="button" role="menuitem" @click="closeMenu(); openAdjust(product)">
+                          <i class="fas fa-balance-scale"></i> Ajustar estoque
+                        </button>
+                        <button type="button" role="menuitem" @click="closeMenu(); openMovements(product)">
+                          <i class="fas fa-history"></i> Movimentações
+                        </button>
+                        <button type="button" role="menuitem" class="is-danger" @click="closeMenu(); removeProduct(product)">
+                          <i class="fas fa-trash"></i> Excluir
+                        </button>
+                      </div>
                     </div>
                   </td>
                 </tr>
                 <tr v-if="!filteredProducts.length" class="empty-row">
-                  <td colspan="4" class="empty-state">
+                  <td colspan="6" class="empty-state">
                     <i class="fas fa-box-open"></i>
-                    <h3 v-if="searchQuery || activeCategoryId !== null">Nenhum produto encontrado</h3>
+                    <h3 v-if="searchQuery || activeCategoryId !== null || stockFilter !== 'todos'">Nenhum produto encontrado</h3>
                     <h3 v-else>Nenhum produto cadastrado</h3>
-                    <p v-if="searchQuery || activeCategoryId !== null">Tente outros filtros ou limpe a busca.</p>
+                    <p v-if="searchQuery || activeCategoryId !== null || stockFilter !== 'todos'">Tente alterar os filtros ou buscar outro termo.</p>
                     <p v-else>Cadastre os itens vendidos no PDV para começar.</p>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
-        </div>
+          <div v-if="filteredProducts.length" class="table-footer">
+            <span class="table-count">
+              {{ filteredProducts.length }} {{ filteredProducts.length === 1 ? 'produto' : 'produtos' }}
+            </span>
+            <div v-if="totalPages > 1" class="pagination" role="navigation" aria-label="Paginação">
+              <button
+                type="button"
+                class="page-btn"
+                :disabled="page === 1"
+                aria-label="Página anterior"
+                @click="page = Math.max(1, page - 1)"
+              >
+                <i class="fas fa-chevron-left"></i>
+              </button>
+              <template v-for="(n, i) in pageNumbers" :key="n">
+                <span v-if="i > 0 && n - pageNumbers[i - 1] > 1" class="page-gap">…</span>
+                <button
+                  type="button"
+                  class="page-btn"
+                  :class="{ 'is-active': n === page }"
+                  :aria-current="n === page ? 'page' : undefined"
+                  @click="page = n"
+                >
+                  {{ n }}
+                </button>
+              </template>
+              <button
+                type="button"
+                class="page-btn"
+                :disabled="page === totalPages"
+                aria-label="Próxima página"
+                @click="page = Math.min(totalPages, page + 1)"
+              >
+                <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1046,23 +1168,6 @@ function onModalKeydown(event) {
   color: var(--text-muted);
   padding: 24px 4px;
 }
-.product-actions {
-  display: flex;
-  gap: 2px;
-  justify-content: flex-end;
-}
-.product-actions .icon-btn {
-  width: 32px;
-  height: 32px;
-  font-size: 14px;
-}
-.product-actions .icon-btn.is-danger {
-  color: var(--danger, #dc2626);
-}
-.product-actions .icon-btn.is-danger:hover {
-  background: color-mix(in srgb, var(--danger, #dc2626) 10%, transparent);
-  color: var(--danger, #dc2626);
-}
 .category-row {
   display: flex;
   gap: 4px;
@@ -1104,131 +1209,7 @@ function onModalKeydown(event) {
   cursor: not-allowed;
 }
 
-/* Products layout: sidebar + main */
-.products-page {
-  padding-left: 0;
-  padding-right: 0;
-}
-.products-page .page-header {
-  padding: 0 24px;
-}
-.products-page .account-hint {
-  padding: 0 24px;
-}
-.products-layout {
-  display: flex;
-  gap: 0;
-}
-.products-sidebar {
-  width: 210px;
-  flex-shrink: 0;
-  padding: 0 20px 0 0;
-  border-right: 1px solid var(--border, #e5e7eb);
-}
-.sidebar-title {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted, #999);
-  margin: 0 0 8px 8px;
-  font-weight: 600;
-}
-.sidebar-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  background: var(--surface, #fff);
-  border: 1px solid var(--border, #e5e7eb);
-  border-radius: 10px;
-  overflow: hidden;
-}
-.sidebar-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 14px;
-  border: none;
-  background: none;
-  color: var(--text, #333);
-  font-size: 14px;
-  cursor: pointer;
-  text-align: left;
-  border-bottom: 1px solid var(--border, #f0f0f0);
-}
-.sidebar-item:last-child {
-  border-bottom: none;
-}
-.sidebar-item:hover {
-  background: var(--hover, #f5f5f5);
-}
-.sidebar-item.is-active {
-  background: color-mix(in srgb, var(--primary, #2563eb) 8%, transparent);
-  color: var(--primary, #2563eb);
-  font-weight: 600;
-}
-.sidebar-item i {
-  width: 16px;
-  text-align: center;
-  font-size: 12px;
-}
-.sidebar-count {
-  margin-left: auto;
-  font-size: 12px;
-  color: var(--text-muted, #999);
-  background: var(--bg, #f3f4f6);
-  padding: 1px 8px;
-  border-radius: 10px;
-}
-
-/* Search bar */
-.products-main {
-  flex: 1;
-  min-width: 0;
-  padding: 0 24px;
-}
-.products-search {
-  position: relative;
-  margin-bottom: 16px;
-}
-.products-search i.fa-search {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-muted, #999);
-  font-size: 14px;
-  pointer-events: none;
-}
-.products-search input {
-  width: 100%;
-  padding: 10px 36px 10px 40px;
-  border: 1px solid var(--border, #e5e7eb);
-  border-radius: 8px;
-  font-size: 14px;
-  background: var(--surface, #fff);
-  color: var(--text, #333);
-  outline: none;
-  transition: border-color 0.15s;
-}
-.products-search input:focus {
-  border-color: var(--primary, #2563eb);
-}
-.search-clear {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  color: var(--text-muted, #999);
-  cursor: pointer;
-  padding: 4px;
-  font-size: 13px;
-}
-.search-clear:hover {
-  color: var(--text, #333);
-}
+/* (layout antigo com sidebar removido; espaçamento vem do .dashboard) */
 .inline-price-input {
   width: 90px;
   padding: 4px 8px;
