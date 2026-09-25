@@ -148,15 +148,19 @@ describe('SalesView', () => {
     expect(cancelled[0].classes()).toContain('is-cancelled')
   })
 
-  it('oculta somente os valores do topo, não os da lista', async () => {
+  it('valores do topo começam ocultos e o olho revela', async () => {
     const wrapper = mountView()
     await flushPromises()
+
+    let cards = wrapper.findAll('.stat-card .stat-value')
+    expect(cards[0].text()).toBe('R$ ••••')
+    expect(wrapper.find('.sale-value').text()).toContain('50,00')
 
     await wrapper.find('.eye-toggle').trigger('click')
     await flushPromises()
 
-    const cards = wrapper.findAll('.stat-card .stat-value')
-    expect(cards[0].text()).toBe('R$ ••••')
+    cards = wrapper.findAll('.stat-card .stat-value')
+    expect(cards[0].text()).not.toBe('R$ ••••')
     expect(wrapper.find('.sale-value').text()).toContain('50,00')
   })
 
@@ -169,6 +173,8 @@ describe('SalesView', () => {
     expect(cta.attributes('to')).toBe('/pdv')
     expect(wrapper.findAll('.stat-card').length).toBe(4)
     expect(wrapper.findAll('.stat-card .icon-tile').length).toBe(4)
+    await wrapper.find('.eye-toggle').trigger('click')
+    await flushPromises()
     expect(wrapper.text()).toContain('ticket médio')
   })
 
