@@ -152,12 +152,65 @@ describe('SalesView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.find('.eye-btn').trigger('click')
+    await wrapper.find('.eye-toggle').trigger('click')
     await flushPromises()
 
     const cards = wrapper.findAll('.stat-card .stat-value')
     expect(cards[0].text()).toBe('R$ ••••')
     expect(wrapper.find('.sale-value').text()).toContain('50,00')
+  })
+
+  it('cabeçalho com CTA Abrir PDV e KPIs com dicas', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    const cta = wrapper.find('.page-header .btn-brand')
+    expect(cta.exists()).toBe(true)
+    expect(cta.attributes('to')).toBe('/pdv')
+    expect(wrapper.findAll('.stat-card').length).toBe(4)
+    expect(wrapper.findAll('.stat-card .icon-tile').length).toBe(4)
+    expect(wrapper.text()).toContain('ticket médio')
+  })
+
+  it('avulsa começa recolhida e expande ao clicar', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    const head = wrapper.find('.sales-collapse-head')
+    expect(head.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('.sales-collapse-body.open').exists()).toBe(false)
+
+    await head.trigger('click')
+    await flushPromises()
+
+    expect(head.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.find('.sales-collapse-body.open').exists()).toBe(true)
+    expect(wrapper.find('#sale_total').exists()).toBe(true)
+  })
+
+  it('busca filtra por observação e contagens aparecem no filtro', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    const counts = wrapper.findAll('.sales-filter .filter-count').map((el) => el.text())
+    expect(counts).toEqual(['3', '2', '1'])
+    await wrapper.find('.search-box input').setValue('feira')
+    await flushPromises()
+
+    const rows = wrapper.findAll('.sale-row')
+    expect(rows.length).toBe(1)
+    expect(rows[0].text()).toContain('#5')
+  })
+
+  it('itens aparecem resumidos com tooltip completo', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    const summary = wrapper.findAll('.sale-row')[0].find('.sale-items-summary')
+    expect(summary.text()).toContain('4 itens')
+    expect(summary.text()).toContain('2x Doces +3')
+    expect(summary.attributes('title')).toContain('2x Doces')
+    expect(summary.attributes('title')).toContain('1x Suco')
   })
 
   it('abre o modal de recibo ao clicar em imprimir', async () => {

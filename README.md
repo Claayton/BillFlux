@@ -1,6 +1,10 @@
-# 💸 BillFlux
+# 💸 BeeFlux
 
 [![MIT License](https://img.shields.io/badge/license-MIT-007EC7.svg?style=flat-square)](/LICENSE) [![Code Style Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black/)
+
+<p align="center">
+  <img src="docs/logo.png" alt="BeeFlux" width="200" />
+</p>
 
 Gerenciador de contas a pagar e vendas para pequeno comércio: boletos, produtos com estoque,
 plano de contas, formas de pagamento e um PDV completo com recibo imprimível.
@@ -158,6 +162,7 @@ Veja `.env.example` — copie para `.env` e preencha os valores reais.
 |---|---|---|
 | `BILLFLUX_DATABASE__URL` | URL do banco (SQLite ou PostgreSQL) | `sqlite:///data/billflux.db` |
 | `BILLFLUX_SECRET_KEY` | Chave de sessão/CSRF (**obrigatória em produção**) | `change-me` |
+| `BILLFLUX_SESSION_COOKIE_SECURE` | Cookie `Secure` (`true` atrás de HTTPS, `false` no http local) | `false` |
 | `BILLFLUX_AUTH__ALLOW_SIGNUP` | Permite criar conta | `false` |
 | `BILLFLUX_AUTH__USERNAME` | Usuário padrão criado no boot | `coqueiral` |
 | `BILLFLUX_AUTH__PASSWORD_HASH` | Hash scrypt da senha do usuário padrão | — |

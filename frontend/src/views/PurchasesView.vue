@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { normalizeForSearch } from '@/utils/normalize'
@@ -49,7 +49,7 @@ function emptyItem() {
 }
 
 const statusLabel = { rascunho: 'Rascunho', confirmada: 'Confirmada', cancelada: 'Cancelada' }
-const statusClass = { rascunho: 'is-draft', confirmada: 'is-active', cancelada: 'is-inactive' }
+const statusClass = { rascunho: 'is-low', confirmada: 'is-ok', cancelada: 'is-off' }
 
 const filtered = computed(() => {
   let list = purchases.value
@@ -475,7 +475,86 @@ function fmtChave(chave) {
   return chave.replace(/(\d{4})/g, '$1 ').trim()
 }
 
-onMounted(() => { load(); loadProducts(); loadSuppliers() })
+const chaveCopied = ref(false)
+let chaveCopiedTimer = null
+
+async function copyChave() {
+  const raw = String(detailPurchase.value?.nf_chave || '').replace(/\s/g, '')
+  if (!raw) return
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(raw)
+    } else {
+      const ta = document.createElement('textarea')
+      ta.value = raw
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      ta.remove()
+    }
+    chaveCopied.value = true
+    ElMessage.success('Chave copiada')
+    clearTimeout(chaveCopiedTimer)
+    chaveCopiedTimer = setTimeout(() => {
+      chaveCopied.value = false
+    }, 1500)
+  } catch {
+    ElMessage.error('Não foi possível copiar a chave.')
+  }
+}
+
+const openMenuId = ref(null)
+const menuPos = ref({ top: 0, left: 0 })
+
+const menuPurchase = computed(() =>
+  (purchases.value || []).find((p) => p.id === openMenuId.value) || null
+)
+
+function toggleMenu(purchase, event) {
+  if (openMenuId.value === purchase.id) {
+    closeMenu()
+    return
+  }
+  const rect = event?.currentTarget?.getBoundingClientRect()
+  let top = 0
+  let left = 0
+  if (rect) {
+    const PANEL_W = 200
+    const PANEL_H = 170
+    const up = window.innerHeight - rect.bottom < PANEL_H + 12 && rect.top > PANEL_H + 12
+    top = up ? rect.top - PANEL_H - 6 : rect.bottom + 6
+    left = Math.max(8, Math.min(rect.right - PANEL_W, window.innerWidth - PANEL_W - 8))
+  }
+  menuPos.value = { top, left }
+  openMenuId.value = purchase.id
+}
+
+function closeMenu() {
+  openMenuId.value = null
+}
+
+function onKeydown(event) {
+  if (event.key !== 'Escape') return
+  if (detailModal.value) {
+    detailModal.value = false
+    return
+  }
+  closeMenu()
+}
+
+onMounted(() => {
+  load(); loadProducts(); loadSuppliers()
+  document.addEventListener('keydown', onKeydown)
+  window.addEventListener('scroll', closeMenu, true)
+  window.addEventListener('resize', closeMenu)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('scroll', closeMenu, true)
+  window.removeEventListener('resize', closeMenu)
+  clearTimeout(chaveCopiedTimer)
+})
 </script>
 
 <template>
@@ -490,7 +569,7 @@ onMounted(() => { load(); loadProducts(); loadSuppliers() })
           <button type="button" class="btn btn-ghost" @click="openNfModal">
             <i class="fas fa-file-import"></i> Importar NF-e
           </button>
-          <button type="button" class="btn btn-primary" @click="openNew">
+          <button type="button" class="btn-brand" @click="openNew">
             <i class="fas fa-plus"></i> Nova compra
           </button>
         </div>
@@ -498,10 +577,30 @@ onMounted(() => { load(); loadProducts(); loadSuppliers() })
 
       <div v-if="loading" class="muted">Carregando…</div>
       <template v-else>
-        <div class="search-bar">
-          <i class="fas fa-search"></i>
-          <input v-model="search" type="text" placeholder="Buscar por NF, chave, fornecedor…" />
-          <select v-model="statusFilter" class="filter-select">
+        <div class="products-toolbar">
+          <div class="search-box products-search-box">
+            <i class="fas fa-search"></i>
+            <input
+              v-model="search"
+              type="text"
+              placeholder="Buscar por NF, chave ou fornecedor..."
+              aria-label="Buscar por NF, chave ou fornecedor"
+            />
+            <button
+              v-if="search"
+              type="button"
+              class="search-clear"
+              aria-label="Limpar busca"
+              @click="search = ''"
+            >
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <select
+            v-model="statusFilter"
+            class="toolbar-select toolbar-select-status"
+            aria-label="Filtrar por status"
+          >
             <option value="">Todos os status</option>
             <option value="rascunho">Rascunho</option>
             <option value="confirmada">Confirmada</option>
@@ -509,50 +608,55 @@ onMounted(() => { load(); loadProducts(); loadSuppliers() })
           </select>
         </div>
 
+        <div
+          v-if="openMenuId !== null"
+          class="popover-overlay"
+          @click="closeMenu()"
+        ></div>
+
         <div class="table-card">
           <div class="table-container">
-            <table class="data-table">
+            <table class="data-table purchases-table">
               <thead>
                 <tr>
-                  <th>Nº NF</th>
+                  <th class="col-nf">Nº NF</th>
                   <th>Fornecedor</th>
-                  <th>Chave</th>
-                  <th>Total</th>
-                  <th>Data</th>
-                  <th>Status</th>
-                  <th class="th-actions"></th>
+                  <th class="col-chave">Chave NF-e</th>
+                  <th class="th-amount col-total">Total</th>
+                  <th class="col-data">Data</th>
+                  <th class="col-status">Status</th>
+                  <th class="th-actions"><span class="sr-only">Ações</span></th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="p in filtered" :key="p.id" style="cursor:pointer" @click="openDetail(p)">
-                  <td>{{ p.nf_number || '—' }}</td>
-                  <td>{{ p.supplier_name || '—' }}</td>
-                  <td><span class="chave-text">{{ fmtChave(p.nf_chave) }}</span></td>
-                  <td>{{ fmtBrl(p.net_total) }}</td>
-                  <td>{{ fmtDate(p.created_at) }}</td>
+                  <td class="col-nf nowrap">{{ p.nf_number || '—' }}</td>
                   <td>
+                    <span class="cell-title" :title="p.supplier_name || ''">{{ p.supplier_name || '—' }}</span>
+                  </td>
+                  <td class="col-chave">
+                    <span class="chave-short" :title="p.nf_chave || ''">{{ fmtChave(p.nf_chave) }}</span>
+                  </td>
+                  <td class="cell-amount nowrap">{{ fmtBrl(p.net_total) }}</td>
+                  <td class="col-data nowrap">{{ fmtDate(p.created_at) }}</td>
+                  <td class="col-status">
                     <span class="status-badge" :class="statusClass[p.status]">
                       {{ statusLabel[p.status] || p.status }}
                     </span>
                   </td>
                   <td class="cell-actions" @click.stop>
-                    <template v-if="p.status === 'rascunho'">
-                      <button type="button" class="icon-btn btn-launch" title="Lançar"
-                        @click="openLaunchModal(p)">
-                        <i class="fas fa-rocket"></i>
+                    <div v-if="p.status === 'rascunho' || p.status === 'confirmada'" class="row-menu">
+                      <button
+                        type="button"
+                        class="icon-btn"
+                        title="Ações"
+                        :aria-label="`Ações da compra ${p.nf_number || p.id}`"
+                        :aria-expanded="openMenuId === p.id ? 'true' : 'false'"
+                        @click="toggleMenu(p, $event)"
+                      >
+                        <i class="fas fa-ellipsis-v"></i>
                       </button>
-                      <button type="button" class="icon-btn" title="Editar" @click="openEdit(p)">
-                        <i class="fas fa-edit"></i>
-                      </button>
-                      <button type="button" class="icon-btn" title="Excluir" @click="deleteTarget = p">
-                        <i class="fas fa-trash"></i>
-                      </button>
-                    </template>
-                    <template v-else-if="p.status === 'confirmada'">
-                      <button type="button" class="icon-btn" title="Cancelar" @click="cancelPurchase(p)">
-                        <i class="fas fa-times"></i>
-                      </button>
-                    </template>
+                    </div>
                   </td>
                 </tr>
                 <tr v-if="!filtered.length" class="empty-row">
@@ -570,6 +674,32 @@ onMounted(() => { load(); loadProducts(); loadSuppliers() })
     </div>
 
     <!-- Modal Nova/Editar Compra -->
+    <Teleport to="body">
+      <div
+        v-if="menuPurchase"
+        class="row-menu-panel menu-float"
+        role="menu"
+        :style="{ top: menuPos.top + 'px', left: menuPos.left + 'px' }"
+      >
+        <template v-if="menuPurchase.status === 'rascunho'">
+          <button type="button" role="menuitem" @click="openLaunchModal(menuPurchase); closeMenu()">
+            <i class="fas fa-rocket"></i> Lançar no estoque
+          </button>
+          <button type="button" role="menuitem" @click="openEdit(menuPurchase); closeMenu()">
+            <i class="fas fa-pen"></i> Editar
+          </button>
+          <button type="button" role="menuitem" class="is-danger" @click="deleteTarget = menuPurchase; closeMenu()">
+            <i class="fas fa-trash"></i> Excluir
+          </button>
+        </template>
+        <template v-else-if="menuPurchase.status === 'confirmada'">
+          <button type="button" role="menuitem" class="is-danger" @click="cancelPurchase(menuPurchase); closeMenu()">
+            <i class="fas fa-times"></i> Cancelar compra
+          </button>
+        </template>
+      </div>
+    </Teleport>
+
     <div class="modal" :class="{ 'is-open': showModal }">
       <div class="modal-content modal-content-lg">
         <div class="modal-header">
@@ -657,44 +787,80 @@ onMounted(() => { load(); loadProducts(); loadSuppliers() })
     </div>
 
     <!-- Modal Detalhes -->
-    <div class="modal" :class="{ 'is-open': detailModal }">
-      <div class="modal-content modal-content-lg">
-        <div class="modal-header">
-          <h2>Compra #{{ detailPurchase?.id }}</h2>
-          <button type="button" class="modal-close" @click="detailModal = false">&times;</button>
+    <div class="modal" :class="{ 'is-open': detailModal }" @click.self="detailModal = false">
+      <div class="modal-content detail-modal">
+        <div class="modal-header detail-header">
+          <div>
+            <h2>
+              Compra #{{ detailPurchase?.id }}
+              <span
+                v-if="detailPurchase"
+                class="status-badge"
+                :class="statusClass[detailPurchase.status]"
+              >{{ statusLabel[detailPurchase.status] }}</span>
+            </h2>
+            <p v-if="detailPurchase" class="detail-sub">
+              NF {{ detailPurchase.nf_number || '—' }} · {{ fmtDate(detailPurchase.created_at) }}
+            </p>
+          </div>
+          <button type="button" class="modal-close" aria-label="Fechar" @click="detailModal = false">&times;</button>
         </div>
         <div v-if="detailPurchase" class="detail-body">
-          <div class="detail-row">
-            <span>NF: {{ detailPurchase.nf_number || '—' }}</span>
-            <span>Fornecedor: {{ detailPurchase.supplier_name || '—' }}</span>
-            <span>Status: <span class="status-badge" :class="statusClass[detailPurchase.status]">{{ statusLabel[detailPurchase.status] }}</span></span>
+          <div class="detail-supplier">
+            <span>Fornecedor</span>
+            <strong :title="detailPurchase.supplier_name || ''">
+              {{ detailPurchase.supplier_name || '—' }}
+            </strong>
           </div>
-          <div class="detail-row">
-            <span>Total: {{ fmtBrl(detailPurchase.total) }}</span>
-            <span>Frete: {{ fmtBrl(detailPurchase.freight) }}</span>
-            <span>Desconto: {{ fmtBrl(detailPurchase.discount) }}</span>
-            <span>Líquido: {{ fmtBrl(detailPurchase.net_total) }}</span>
+          <dl class="detail-money">
+            <div>
+              <dt>Total</dt>
+              <dd>{{ fmtBrl(detailPurchase.total) }}</dd>
+            </div>
+            <div>
+              <dt>Frete</dt>
+              <dd>{{ fmtBrl(detailPurchase.freight) }}</dd>
+            </div>
+            <div>
+              <dt>Desconto</dt>
+              <dd>{{ fmtBrl(detailPurchase.discount) }}</dd>
+            </div>
+            <div class="is-total">
+              <dt>Líquido</dt>
+              <dd>{{ fmtBrl(detailPurchase.net_total) }}</dd>
+            </div>
+          </dl>
+          <div v-if="detailPurchase.nf_chave" class="detail-chave">
+            <div class="detail-chave-head">
+              <span>Chave de acesso</span>
+              <button
+                type="button"
+                class="icon-btn chave-copy"
+                title="Copiar chave"
+                aria-label="Copiar chave de acesso"
+                @click="copyChave"
+              >
+                <i :class="chaveCopied ? 'fas fa-check' : 'fas fa-copy'"></i>
+              </button>
+            </div>
+            <code :title="detailPurchase.nf_chave">{{ fmtChave(detailPurchase.nf_chave) }}</code>
           </div>
-          <div v-if="detailPurchase.nf_chave" class="detail-row">
-            <span>Chave: {{ fmtChave(detailPurchase.nf_chave) }}</span>
+          <h3>Itens ({{ detailItems.length }})</h3>
+          <div v-if="detailItems.length" class="table-container">
+            <table class="data-table detail-table">
+              <thead>
+                <tr><th>Produto</th><th class="th-number col-qtd">Qtd</th><th class="th-amount col-custo">Custo unit.</th><th class="th-amount col-total">Total</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in detailItems" :key="item.id">
+                  <td><span class="cell-title" :title="item.product_name || ''">{{ item.product_name || '—' }}</span></td>
+                  <td class="cell-number">{{ item.quantity }}</td>
+                  <td class="cell-amount">{{ fmtBrl(item.unit_cost) }}</td>
+                  <td class="cell-amount">{{ fmtBrl(item.total) }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <h3 style="margin-top:16px">Itens</h3>
-          <table class="data-table" v-if="detailItems.length">
-            <thead>
-              <tr><th>Produto</th><th>Qtd</th><th>Custo unit.</th><th>Total</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in detailItems" :key="item.id">
-                <td>{{ item.product_name || '—' }}</td>
-                <td>{{ item.quantity }}</td>
-                <td>{{ fmtBrl(item.unit_cost) }}</td>
-                <td>{{ fmtBrl(item.total) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-ghost" @click="detailModal = false">Fechar</button>
         </div>
       </div>
     </div>
@@ -934,7 +1100,7 @@ onMounted(() => { load(); loadProducts(); loadSuppliers() })
       v-if="deleteTarget"
       title="Excluir compra"
       :message="'Excluir a compra #' + deleteTarget.id + '?'"
-      confirm-text="Excluir"
+      confirm-label="Excluir"
       @confirm="confirmDelete"
       @cancel="deleteTarget = null"
     />
@@ -948,12 +1114,253 @@ onMounted(() => { load(); loadProducts(); loadSuppliers() })
 .input-with-btn select { flex: 1; }
 .input-with-btn .btn { padding: 6px 10px; }
 .header-actions { display: flex; gap: 8px; }
-.search-bar { display: flex; align-items: center; gap: 8px; background: var(--surface, #fff); border: 1px solid var(--border, #d1d5db); border-radius: 8px; padding: 8px 12px; margin-bottom: 16px; }
-.search-bar i { color: var(--text-muted, #999); }
-.search-bar input { flex: 1; border: none; outline: none; font-size: 14px; background: transparent; }
-.filter-select { border: 1px solid var(--border, #d1d5db); border-radius: 6px; padding: 4px 8px; font-size: 13px; background: var(--surface, #fff); }
-.chave-text { font-family: monospace; font-size: 11px; word-break: break-all; }
-.btn-launch { color: var(--primary, #2563eb) !important; }
+.products-toolbar .toolbar-select-status {
+  width: 180px;
+}
+
+/* Tabela com layout fixo: Fornecedor flexível, demais compactas */
+.purchases-table {
+  table-layout: fixed;
+}
+.purchases-table .col-nf {
+  width: 100px;
+}
+.purchases-table .col-chave {
+  width: 210px;
+}
+.purchases-table .col-total {
+  width: 130px;
+}
+.purchases-table .col-data {
+  width: 122px;
+}
+.purchases-table .col-status {
+  width: 130px;
+}
+.purchases-table tbody td {
+  min-width: 0;
+  padding: 10px 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.purchases-table .cell-title,
+.purchases-table .chave-short {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.purchases-table .cell-actions {
+  padding-left: 8px;
+  padding-right: 8px;
+  overflow: visible;
+}
+.chave-short {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.nowrap {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.purchases-table tbody tr:hover td {
+  background: var(--surface-hover);
+}
+
+/* Modal de detalhes */
+.detail-modal {
+  max-width: 780px;
+}
+
+.detail-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.detail-body {
+  padding: 20px 24px 24px;
+}
+
+.detail-supplier {
+  margin-bottom: 16px;
+}
+
+.detail-supplier span {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.detail-supplier strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-money {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--brand-radius-sm);
+  background: var(--surface-hover);
+}
+
+.detail-money > div {
+  min-width: 0;
+}
+
+.detail-money dt {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.detail-money dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.detail-money .is-total dd {
+  color: var(--primary-hover);
+  font-weight: 800;
+}
+
+.detail-chave {
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--brand-radius-sm);
+  background: var(--surface-hover);
+}
+
+.detail-chave-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.detail-chave-head span {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+
+.chave-copy {
+  width: 28px;
+  height: 28px;
+  font-size: 13px;
+}
+
+.detail-chave code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  word-break: break-all;
+  line-height: 1.6;
+}
+
+.detail-body h3 {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  margin: 0 0 10px;
+}
+
+.detail-table {
+  table-layout: fixed;
+}
+
+.detail-table .col-qtd {
+  width: 70px;
+}
+
+.detail-table .col-custo {
+  width: 130px;
+}
+
+.detail-table .col-total {
+  width: 130px;
+}
+
+.detail-table tbody td {
+  padding: 10px 14px;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .detail-money {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.detail-table .cell-number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Menu flutuante via Teleport: fixo na viewport, acima de tudo */
+.menu-float {
+  position: fixed;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  z-index: 1200;
+}
+
+@media (max-width: 900px) {
+  .purchases-table .col-data {
+    display: none;
+  }
+  .products-toolbar {
+    flex-wrap: wrap;
+  }
+  .products-toolbar .btn-brand {
+    width: 100%;
+  }
+}
+@media (max-width: 640px) {
+  .purchases-table .col-chave {
+    width: 150px;
+  }
+  .products-toolbar .toolbar-select-status {
+    flex: 1 1 45%;
+    width: auto;
+    min-width: 0;
+  }
+}
 .btn-launch-confirm { background: var(--primary, #2563eb); min-width: 200px; }
 .form-row { display: flex; gap: 12px; }
 .form-field { margin-bottom: 4px; }

@@ -26,14 +26,12 @@ def test_csrf_endpoint(client):
 
 
 def test_me_logged_out(client):
-    """Sem sessão, /api/auth/me devolve user null."""
+    """Sem sessão, /api/auth/me devolve 401 (sessão expirada/inexistente)."""
 
     response = client.get("/api/auth/me")
 
-    assert response.status_code == 200
-    data = response.get_json()
-    assert data["user"] is None
-    assert data["allow_signup"] is True
+    assert response.status_code == 401
+    assert response.get_json()["error"]
 
 
 def test_login_success(client):
@@ -94,7 +92,7 @@ def test_logout(client):
 
     assert response.status_code == 200
     assert response.get_json()["ok"] is True
-    assert client.get("/api/auth/me").get_json()["user"] is None
+    assert client.get("/api/auth/me").status_code == 401
 
 
 def test_signin_creates_account(client):
@@ -135,3 +133,38 @@ def test_signin_duplicate_user(client):
     )
 
     assert response.status_code == 400
+
+
+def test_session_config_24h(app):
+    """Sessão permanente deslizante de 24h, sem expiração própria de CSRF."""
+
+    from datetime import timedelta
+
+    assert app.config["PERMANENT_SESSION_LIFETIME"] == timedelta(hours=24)
+    assert app.config["SESSION_REFRESH_EACH_REQUEST"] is True
+    assert app.config["WTF_CSRF_TIME_LIMIT"] is None
+    assert app.config["SESSION_COOKIE_HTTPONLY"] is True
+    assert app.config["SESSION_COOKIE_SAMESITE"] == "Lax"
+    assert app.config["SESSION_COOKIE_SECURE"] is False
+
+
+def test_login_sets_sliding_cookie(client):
+    """Login emite cookie de sessão permanente (com Expires ~24h)."""
+
+    response = _login(client)
+
+    assert response.status_code == 200
+    set_cookie = response.headers.get("Set-Cookie", "")
+    assert "expires=" in set_cookie.lower()
+    assert "httponly" in set_cookie.lower()
+
+
+def test_session_cookie_refreshes_each_request(client):
+    """Cada request renova o cookie (janela deslizante de 24h)."""
+
+    assert _login(client).status_code == 200
+
+    response = client.get("/api/auth/me")
+
+    assert response.status_code == 200
+    assert "expires=" in response.headers.get("Set-Cookie", "").lower()

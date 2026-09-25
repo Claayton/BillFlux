@@ -62,6 +62,26 @@ describe('PdvView', () => {
     })
   })
 
+  it('não mostra aviso de caixa fechado antes de carregar', async () => {
+    apiMock.get.mockImplementation((url) => {
+      if (String(url).includes('/caixa')) return new Promise(() => {})
+      return Promise.resolve({ products, methods })
+    })
+    const wrapper = mountView()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.pdv-caixa-warning').exists()).toBe(false)
+  })
+
+  it('mostra aviso só quando confirmado caixa fechado', async () => {
+    apiMock.get.mockImplementation((url) => {
+      if (String(url).includes('/caixa')) return Promise.resolve({ open: null })
+      return Promise.resolve({ products, methods })
+    })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('.pdv-caixa-warning').exists()).toBe(true)
+  })
+
   it('carrega produtos e formas de pagamento', async () => {
     const wrapper = mountView()
     await flushPromises()

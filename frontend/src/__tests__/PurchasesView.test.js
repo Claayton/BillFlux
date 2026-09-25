@@ -1,5 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+
+function menuButtons() {
+  return [...document.querySelectorAll('.row-menu-panel button')]
+}
+
+afterEach(() => {
+  document.querySelectorAll('.row-menu-panel').forEach((el) => el.remove())
+})
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -59,7 +67,7 @@ describe('PurchasesView', () => {
     const wrapper = mount(PurchasesView)
     await flushPromises()
 
-    const statusSelect = wrapper.findAll('.filter-select').at(0)
+    const statusSelect = wrapper.find('.toolbar-select-status')
     await statusSelect.setValue('rascunho')
     await flushPromises()
 
@@ -72,7 +80,7 @@ describe('PurchasesView', () => {
     const wrapper = mount(PurchasesView)
     await flushPromises()
 
-    const input = wrapper.find('.search-bar input')
+    const input = wrapper.find('.products-toolbar .search-box input')
     await input.setValue('ABC')
     await flushPromises()
 
@@ -85,12 +93,26 @@ describe('PurchasesView', () => {
     const wrapper = mount(PurchasesView)
     await flushPromises()
 
-    await wrapper.find('.page-header .btn-primary').trigger('click')
+    await wrapper.find('.page-header .btn-brand').trigger('click')
     await flushPromises()
 
     const modal = wrapper.find('.modal.is-open')
     expect(modal.exists()).toBe(true)
     expect(modal.text()).toContain('Nova compra')
+  })
+
+  it('menu ⋮ por status com ações corretas e chave com tooltip', async () => {
+    const wrapper = mount(PurchasesView)
+    await flushPromises()
+
+    await wrapper.findAll('.row-menu > .icon-btn')[0].trigger('click')
+    await flushPromises()
+
+    const items = menuButtons().map((b) => b.textContent.trim())
+    expect(items).toEqual(expect.arrayContaining(['Lançar no estoque', 'Editar', 'Excluir']))
+
+    const chave = wrapper.find('.chave-short')
+    expect(chave.attributes('title')).toContain('35260812345678000199550010000100011234567890')
   })
 
   it('abre modal importar NF-e', async () => {

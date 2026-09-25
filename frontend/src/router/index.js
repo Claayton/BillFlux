@@ -125,7 +125,7 @@ router.beforeEach(async (to) => {
     }
   }
   if (to.meta.auth && !auth.isAuthenticated) {
-    return { name: 'login', query: { redirect: to.fullPath } }
+    return { name: 'landing', query: { redirect: to.fullPath } }
   }
   if (to.meta.public && auth.isAuthenticated && to.name !== 'landing') {
     return { name: 'sales' }

@@ -1,5 +1,6 @@
 <script setup>
 import { useAuthStore } from '@/stores/auth'
+import logoUrl from '@/assets/logo.png'
 
 const auth = useAuthStore()
 </script>
@@ -9,8 +10,8 @@ const auth = useAuthStore()
     <div class="container header-inner">
       <div class="header-left">
         <a class="logo" href="/">
-          <span class="logo-mark">BF</span>
-          <span class="logo-text">BillFlux</span>
+          <img class="logo-mark" :src="logoUrl" alt="BeeFlux" />
+          <span class="logo-text">eeFlux</span>
         </a>
         <nav class="main-nav" aria-label="Navegação principal">
           <ul>

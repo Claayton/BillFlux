@@ -1,5 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+
+function menuButtons() {
+  return [...document.querySelectorAll('.row-menu-panel button')]
+}
+
+async function openMenu(wrapper, idx = 0) {
+  await wrapper.findAll('.row-menu > .icon-btn')[idx].trigger('click')
+  await flushPromises()
+}
+
+afterEach(() => {
+  document.querySelectorAll('.row-menu-panel').forEach((el) => el.remove())
+})
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -84,11 +97,31 @@ describe('BillsView', () => {
     expect(wrapper.text()).toContain('100,00')
   })
 
+  it('toolbar padrão e menu ⋮ com ações condicionais', async () => {
+    const wrapper = mount(BillsView)
+    await flushPromises()
+
+    const toolbar = wrapper.find('.products-toolbar')
+    expect(toolbar.find('.search-box input').exists()).toBe(true)
+    expect(toolbar.findAll('.toolbar-select').length).toBe(2)
+
+    await openMenu(wrapper, 0)
+    const paidItems = menuButtons().map((b) => b.textContent.trim())
+    expect(paidItems).toEqual(expect.arrayContaining(['Ver detalhes', 'Editar', 'Excluir']))
+    expect(paidItems.some((t) => t.includes('Marcar como paga'))).toBe(false)
+
+    await openMenu(wrapper, 1)
+    const unpaidItems = menuButtons().map((b) => b.textContent.trim())
+    expect(unpaidItems).toEqual(
+      expect.arrayContaining(['Ver detalhes', 'Editar', 'Marcar como paga', 'Excluir'])
+    )
+  })
+
   it('filtra por status vencida', async () => {
     const wrapper = mount(BillsView)
     await flushPromises()
 
-    const filterSelects = wrapper.findAll('.filter-select')
+    const filterSelects = wrapper.findAll('.toolbar-select')
     await filterSelects[1].setValue('Vencidas')
     await flushPromises()
 
@@ -101,11 +134,11 @@ describe('BillsView', () => {
     const wrapper = mount(BillsView)
     await flushPromises()
 
-    const unpaidRow = wrapper.findAll('.account-row')[1]
-    const payBtn = unpaidRow
-      .findAll('.bills-actions .icon-btn')
-      .find((el) => el.attributes('title') === 'Marcar como paga')
-    await payBtn.trigger('click')
+    await openMenu(wrapper, 1)
+    menuButtons()
+      .find((b) => b.textContent.trim().startsWith('Marcar como paga'))
+      .click()
+    await flushPromises()
     await flushPromises()
 
     const payModal = wrapper.find('#pay-modal')
@@ -119,7 +152,7 @@ describe('BillsView', () => {
     const wrapper = mount(BillsView)
     await flushPromises()
 
-    await wrapper.find('.page-header .btn-primary').trigger('click')
+    await wrapper.find('.page-header .btn-brand').trigger('click')
     await flushPromises()
 
     await wrapper.find('#bill_value').setValue('50,00')
@@ -145,11 +178,11 @@ describe('BillsView', () => {
     const wrapper = mount(BillsView)
     await flushPromises()
 
-    const row = wrapper.findAll('.account-row')[1]
-    const editBtn = row
-      .findAll('.bills-actions .icon-btn')
-      .find((el) => el.attributes('title') === 'Editar')
-    await editBtn.trigger('click')
+    await openMenu(wrapper, 1)
+    menuButtons()
+      .find((b) => b.textContent.trim().startsWith('Editar'))
+      .click()
+    await flushPromises()
     await flushPromises()
 
     expect(wrapper.find('.modal.is-open').text()).toContain('Editar conta')

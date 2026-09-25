@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import JsBarcode from 'jsbarcode'
 import qrcode from 'qrcode-generator'
@@ -28,9 +28,38 @@ function openDetails(bill) {
   detailsModal.value = true
 }
 
-function rowClick(bill, event) {
-  if (event.target.closest('a, button, select, input, .dropdown-panel')) return
-  openDetails(bill)
+const openMenuId = ref(null)
+const menuPos = ref({ top: 0, left: 0 })
+
+const menuBill = computed(() =>
+  (data.value?.bills || []).find((b) => b.id === openMenuId.value) || null
+)
+
+function toggleMenu(bill, event) {
+  if (openMenuId.value === bill.id) {
+    closeMenu()
+    return
+  }
+  const rect = event?.currentTarget?.getBoundingClientRect()
+  let top = 0
+  let left = 0
+  if (rect) {
+    const PANEL_W = 200
+    const PANEL_H = 200
+    const up = window.innerHeight - rect.bottom < PANEL_H + 12 && rect.top > PANEL_H + 12
+    top = up ? rect.top - PANEL_H - 6 : rect.bottom + 6
+    left = Math.max(8, Math.min(rect.right - PANEL_W, window.innerWidth - PANEL_W - 8))
+  }
+  menuPos.value = { top, left }
+  openMenuId.value = bill.id
+}
+
+function closeMenu() {
+  openMenuId.value = null
+}
+
+function onKeydown(event) {
+  if (event.key === 'Escape') closeMenu()
 }
 
 // ---------- Autofill a partir do código de barras ----------
@@ -457,7 +486,6 @@ async function copyText(text, label) {
 
 async function confirmPay() {
   if (!payingBill.value) return
-  if (!window.confirm('Confirmar o pagamento desta conta?')) return
   try {
     data.value = await api.post(`/bills/${payingBill.value.id}/pay`)
     payModal.value = false
@@ -469,6 +497,15 @@ async function confirmPay() {
 
 onMounted(() => {
   load()
+  document.addEventListener('keydown', onKeydown)
+  window.addEventListener('scroll', closeMenu, true)
+  window.addEventListener('resize', closeMenu)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('scroll', closeMenu, true)
+  window.removeEventListener('resize', closeMenu)
 })
 </script>
 
@@ -480,7 +517,7 @@ onMounted(() => {
           <h1 class="page-title">Contas</h1>
           <p class="page-subtitle">Acompanhe boletos, fornecedores e despesas fixas.</p>
         </div>
-        <button type="button" class="btn btn-primary" @click="openNew">
+        <button type="button" class="btn-brand" @click="openNew">
           <i class="fas fa-plus"></i> Nova conta
         </button>
       </div>
@@ -489,27 +526,39 @@ onMounted(() => {
       <template v-else-if="data">
         <div class="stats-row">
           <div class="stat-card">
-            <span class="stat-label">Total em aberto</span>
+            <div class="stat-top">
+              <span class="icon-tile"><i class="fas fa-wallet"></i></span>
+              <span class="stat-label">Total em aberto</span>
+            </div>
             <span class="stat-value">{{ brl(data.stats.open) }}</span>
           </div>
           <div class="stat-card">
-            <span class="stat-label">Vencidas</span>
+            <div class="stat-top">
+              <span class="icon-tile"><i class="fas fa-triangle-exclamation"></i></span>
+              <span class="stat-label">Vencidas</span>
+            </div>
             <span class="stat-value" :class="{ 'stat-value-danger': data.stats.overdue > 0 }">
               {{ brl(data.stats.overdue) }}
             </span>
           </div>
           <div class="stat-card">
-            <span class="stat-label">Pagas este mês</span>
+            <div class="stat-top">
+              <span class="icon-tile"><i class="fas fa-check-circle"></i></span>
+              <span class="stat-label">Pagas este mês</span>
+            </div>
             <span class="stat-value stat-value-success">{{ brl(data.stats.paid_month) }}</span>
           </div>
           <div class="stat-card">
-            <span class="stat-label">Total de contas</span>
+            <div class="stat-top">
+              <span class="icon-tile"><i class="fas fa-receipt"></i></span>
+              <span class="stat-label">Total de contas</span>
+            </div>
             <span class="stat-value">{{ data.stats.total }}</span>
           </div>
         </div>
 
-        <div class="toolbar">
-          <div class="search">
+        <div class="products-toolbar">
+          <div class="search-box products-search-box">
             <i class="fas fa-search"></i>
             <input
               v-model="search"
@@ -517,61 +566,67 @@ onMounted(() => {
               placeholder="Buscar por fornecedor, descrição..."
               aria-label="Buscar contas"
             />
+            <button
+              v-if="search"
+              type="button"
+              class="search-clear"
+              aria-label="Limpar busca"
+              @click="search = ''"
+            >
+              <i class="fas fa-times"></i>
+            </button>
           </div>
-          <div class="filter-group">
-            <div class="filter-wrap">
-              <i class="fas fa-sort"></i>
-              <select v-model="sortBy" class="filter-select" aria-label="Ordenar por">
-                <option value="due_asc">Vencimento (mais próximo)</option>
-                <option value="due_desc">Vencimento (mais distante)</option>
-                <option value="value_desc">Maior valor</option>
-                <option value="value_asc">Menor valor</option>
-                <option value="reference_asc">Descrição (A-Z)</option>
-              </select>
-            </div>
-            <div class="filter-wrap">
-              <i class="fas fa-filter"></i>
-              <select v-model="filterStatus" class="filter-select" aria-label="Filtrar por status">
-                <option value="Todas">Todos os status</option>
-                <option value="NaoPagas">Não pagas</option>
-                <option value="Vencidas">Vencidas</option>
-                <option value="AVencer">À vencer</option>
-                <option value="Hoje">Vence hoje</option>
-                <option value="Pagas">Pagas</option>
-              </select>
-            </div>
-          </div>
+          <select v-model="sortBy" class="toolbar-select toolbar-select-sort" aria-label="Ordenar por">
+            <option value="due_asc">Vencimento (mais próximo)</option>
+            <option value="due_desc">Vencimento (mais distante)</option>
+            <option value="value_desc">Maior valor</option>
+            <option value="value_asc">Menor valor</option>
+            <option value="reference_asc">Descrição (A-Z)</option>
+          </select>
+          <select v-model="filterStatus" class="toolbar-select toolbar-select-status" aria-label="Filtrar por status">
+            <option value="Todas">Todos os status</option>
+            <option value="NaoPagas">Não pagas</option>
+            <option value="Vencidas">Vencidas</option>
+            <option value="AVencer">À vencer</option>
+            <option value="Hoje">Vence hoje</option>
+            <option value="Pagas">Pagas</option>
+          </select>
         </div>
+        <div
+          v-if="openMenuId !== null"
+          class="popover-overlay"
+          @click="closeMenu()"
+        ></div>
 
         <div class="table-card">
           <div class="table-container">
-            <table class="data-table">
+            <table class="data-table bills-table">
               <thead>
                 <tr>
-                  <th class="th-status">Status</th>
+                  <th class="col-status">Status</th>
                   <th>Descrição</th>
-                  <th class="th-supplier">Fornecedor</th>
-                  <th>Vencimento</th>
-                  <th class="th-amount">Valor</th>
-                  <th class="th-actions"></th>
+                  <th class="col-supplier">Fornecedor</th>
+                  <th class="col-venc">Vencimento</th>
+                  <th class="th-amount col-amount">Valor</th>
+                  <th class="th-actions"><span class="sr-only">Ações</span></th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="bill in filteredBills" :key="bill.id" class="account-row" @click="rowClick(bill, $event)">
-                  <td>
+                <tr v-for="bill in filteredBills" :key="bill.id" class="account-row">
+                  <td class="col-status">
                     <span class="status" :class="'status-' + bill.status">
                       <span class="status-dot"></span>
                       {{ STATUS_LABELS[bill.status] || 'Pendente' }}
                     </span>
                   </td>
                   <td>
-                    <span class="cell-title">{{ bill.reference || 'Sem descrição' }}</span>
-                    <span v-if="bill.category || bill.bill_type" class="cell-sub">
+                    <span class="cell-title" :title="bill.reference || ''">{{ bill.reference || 'Sem descrição' }}</span>
+                    <span v-if="bill.category || bill.bill_type" class="cell-sub cell-ellipsis">
                       {{ bill.category || bill.bill_type }}
                     </span>
                   </td>
-                  <td class="cell-supplier">{{ bill.suplyer || '—' }}</td>
-                  <td>
+                  <td class="col-supplier cell-ellipsis">{{ bill.suplyer || '—' }}</td>
+                  <td class="col-venc nowrap">
                     <span v-if="bill.due_date" class="cell-date" :class="{ 'cell-date-overdue': bill.status === 'vencida' }">
                       {{ brdateShort(bill.due_date) }}
                     </span>
@@ -583,20 +638,18 @@ onMounted(() => {
                       Pago em {{ brdateShort(bill.payday) }}
                     </span>
                   </td>
-                  <td class="cell-amount">{{ brl(bill.value) }}</td>
+                  <td class="cell-amount nowrap">{{ brl(bill.value) }}</td>
                   <td class="cell-actions">
-                    <div class="bills-actions">
-                      <button type="button" class="icon-btn" title="Ver detalhes" aria-label="Ver detalhes" @click.stop="openDetails(bill)">
-                        <i class="fas fa-eye"></i>
-                      </button>
-                      <button type="button" class="icon-btn" title="Editar" aria-label="Editar conta" @click.stop="openEdit(bill)">
-                        <i class="fas fa-pen"></i>
-                      </button>
-                      <button v-if="bill.status !== 'paga'" type="button" class="icon-btn" title="Marcar como paga" aria-label="Marcar como paga" @click.stop="payBill(bill)">
-                        <i class="fas fa-check-circle"></i>
-                      </button>
-                      <button type="button" class="icon-btn is-danger" title="Excluir" aria-label="Excluir conta" @click.stop="deleteTarget = bill">
-                        <i class="fas fa-trash"></i>
+                    <div class="row-menu">
+                      <button
+                        type="button"
+                        class="icon-btn"
+                        title="Ações"
+                        :aria-label="`Ações da conta ${bill.reference || bill.id}`"
+                        :aria-expanded="openMenuId === bill.id ? 'true' : 'false'"
+                        @click="toggleMenu(bill, $event)"
+                      >
+                        <i class="fas fa-ellipsis-v"></i>
                       </button>
                     </div>
                   </td>
@@ -615,6 +668,33 @@ onMounted(() => {
         </div>
       </template>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="menuBill"
+        class="row-menu-panel menu-float"
+        role="menu"
+        :style="{ top: menuPos.top + 'px', left: menuPos.left + 'px' }"
+      >
+        <button type="button" role="menuitem" @click="openDetails(menuBill); closeMenu()">
+          <i class="fas fa-eye"></i> Ver detalhes
+        </button>
+        <button type="button" role="menuitem" @click="openEdit(menuBill); closeMenu()">
+          <i class="fas fa-pen"></i> Editar
+        </button>
+        <button
+          v-if="menuBill.status !== 'paga'"
+          type="button"
+          role="menuitem"
+          @click="payBill(menuBill); closeMenu()"
+        >
+          <i class="fas fa-check-circle"></i> Marcar como paga
+        </button>
+        <button type="button" role="menuitem" class="is-danger" @click="deleteTarget = menuBill; closeMenu()">
+          <i class="fas fa-trash"></i> Excluir
+        </button>
+      </div>
+    </Teleport>
 
     <div class="modal" :class="{ 'is-open': showModal }">
       <div class="modal-content">
@@ -873,34 +953,80 @@ onMounted(() => {
   color: var(--text-muted);
   padding: 24px 4px;
 }
-.th-status {
-  width: 100px;
+.products-toolbar .toolbar-select-sort {
+  width: 220px;
 }
-.th-supplier {
-  max-width: 140px;
+
+.products-toolbar .toolbar-select-status {
+  width: 180px;
 }
-.cell-supplier {
-  max-width: 140px;
+
+/* Tabela com layout fixo: Descrição flexível, demais compactas */
+.bills-table {
+  table-layout: fixed;
+}
+.bills-table .col-status {
+  width: 130px;
+}
+.bills-table .col-supplier {
+  width: 150px;
+}
+.bills-table .col-venc {
+  width: 130px;
+}
+.bills-table .col-amount {
+  width: 120px;
+}
+.bills-table tbody td {
+  min-width: 0;
+  padding: 10px 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bills-table .cell-title,
+.bills-table .cell-ellipsis {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.bills-actions {
-  display: flex;
-  gap: 2px;
-  justify-content: flex-end;
+.bills-table .cell-actions {
+  padding-left: 8px;
+  padding-right: 8px;
+  overflow: visible;
 }
-.bills-actions .icon-btn {
-  width: 32px;
-  height: 32px;
-  font-size: 14px;
+.bills-table tbody tr:hover td {
+  background: var(--surface-hover);
 }
-.bills-actions .icon-btn.is-danger {
-  color: var(--danger, #dc2626);
+.nowrap {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-.bills-actions .icon-btn.is-danger:hover {
-  background: color-mix(in srgb, var(--danger, #dc2626) 10%, transparent);
-  color: var(--danger, #dc2626);
+
+/* Menu flutuante via Teleport: fixo na viewport, acima de tudo */
+.menu-float {
+  position: fixed;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  z-index: 1200;
+}
+
+@media (max-width: 900px) {
+  .bills-table .col-supplier {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .bills-table .col-venc {
+    display: none;
+  }
+  .products-toolbar .toolbar-select-sort,
+  .products-toolbar .toolbar-select-status {
+    flex: 1 1 45%;
+    width: auto;
+    min-width: 0;
+  }
 }
 /* O products.css redefine .modal-content (520px) após o bills.css; força a
    largura original do modal de pagamento (880px) com especificidade maior. */

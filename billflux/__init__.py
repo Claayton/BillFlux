@@ -1,5 +1,7 @@
 """Module to create the app"""
 
+from datetime import timedelta
+
 from flask import Flask
 from dynaconf import FlaskDynaconf
 from flask_wtf import CSRFProtect
@@ -23,6 +25,13 @@ from billflux.api import schedule as api_schedule
 from billflux.api import product_units as api_product_units
 
 csrf = CSRFProtect()
+
+
+def _as_bool(value):
+    """Normaliza flag vinda do settings/.env ("false" como string é truthy)."""
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
 
 
 def _seed_default_user():
@@ -82,6 +91,21 @@ def create_app():
     app = Flask(__name__, static_folder=None)
     FlaskDynaconf(app, dynaconf_instance=settings)
     app.secret_key = settings.secret_key
+    # ---- Sessão longa deslizante (PDV) ----
+    # O cookie dura 24h e é renovado a cada requisição: só expira após
+    # 24h SEM nenhuma atividade. Trocar o secret_key invalida todas as
+    # sessões, então a chave precisa ser estável entre restarts.
+    # (Atribuição direta: o Flask já traz defaults próprios e setdefault
+    # seria ignorado.)
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=24)
+    app.config["SESSION_REFRESH_EACH_REQUEST"] = True
+    # O CSRF vale enquanto a sessão valer (sem expiração própria de 1h).
+    app.config["WTF_CSRF_TIME_LIMIT"] = None
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = _as_bool(
+        settings.get("session_cookie_secure", False)
+    )
     csrf.init_app(app)
     create_db()
     _seed_default_user()

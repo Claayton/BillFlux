@@ -30,14 +30,75 @@ describe('api client', () => {
     expect(global.fetch).toHaveBeenCalledWith('/api/sales', expect.anything())
   })
 
-  it('GET com erro lança Error com status e mensagem', async () => {
-    const { api } = await loadClient(async () =>
-      mockResponse({ error: 'não autorizado' }, 401)
+  it('401 em rota protegida marca sessão expirada e chama o handler', async () => {
+    const handler = vi.fn()
+    const mod = await loadClient(async () =>
+      mockResponse({ error: 'Não autenticado.' }, 401)
     )
-    await expect(api.get('/sales')).rejects.toMatchObject({
+    mod.setUnauthorizedHandler(handler)
+
+    await expect(mod.api.get('/sales')).rejects.toMatchObject({
       status: 401,
-      message: 'não autorizado',
+      sessionExpired: true,
+      message: mod.SESSION_EXPIRED_MESSAGE,
     })
+    expect(handler).toHaveBeenCalledTimes(1)
+  })
+
+  it('401 no login (senha errada) não dispara o handler de sessão', async () => {
+    const handler = vi.fn()
+    const mod = await loadClient(async (url) => {
+      if (url === '/api/auth/csrf') return mockResponse({ csrf_token: 'tok' })
+      return mockResponse({ error: 'Usuário ou senha inválidos.' }, 401)
+    })
+    mod.setUnauthorizedHandler(handler)
+
+    await expect(
+      mod.api.post('/auth/login', { username: 'admin', password: 'x' })
+    ).rejects.toMatchObject({
+      status: 401,
+      message: 'Usuário ou senha inválidos.',
+    })
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('POST com 400 sem JSON (CSRF velho) renova o token e repete 1x', async () => {
+    const calls = []
+    const mod = await loadClient(async (url, opts) => {
+      calls.push({ url, opts })
+      if (url === '/api/auth/csrf') {
+        return mockResponse({ csrf_token: `tok${calls.length}` })
+      }
+      if (calls.filter((c) => c.url === '/api/sales').length === 1) {
+        return { ok: false, status: 400, text: async () => '<html>CSRF Failed</html>' }
+      }
+      return mockResponse({ ok: true })
+    })
+
+    const data = await mod.api.post('/sales', { total: 10 })
+
+    expect(data).toEqual({ ok: true })
+    expect(calls.filter((c) => c.url === '/api/auth/csrf')).toHaveLength(2)
+    expect(calls.filter((c) => c.url === '/api/sales')).toHaveLength(2)
+    expect(calls.at(-1).opts.headers['X-CSRFToken']).toBe('tok3')
+  })
+
+  it('POST com 400 JSON (validação) não repete a requisição', async () => {
+    const calls = []
+    const mod = await loadClient(async (url) => {
+      calls.push(url)
+      if (url === '/api/auth/csrf') {
+        return mockResponse({ csrf_token: 'tok' })
+      }
+      return mockResponse({ error: 'Campo inválido.' }, 400)
+    })
+
+    await expect(mod.api.post('/sales', {})).rejects.toMatchObject({
+      status: 400,
+      message: 'Campo inválido.',
+    })
+    expect(calls.filter((c) => c === '/api/auth/csrf')).toHaveLength(1)
+    expect(calls.filter((c) => c === '/api/sales')).toHaveLength(1)
   })
 
   it('GET com erro sem corpo usa status como mensagem', async () => {
