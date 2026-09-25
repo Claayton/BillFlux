@@ -9,7 +9,7 @@ body.pdv-screen {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #ffffff;
+  background: #f4f5fa;
   color: #111827;
 }
 
@@ -17,9 +17,9 @@ body.pdv-screen {
 .pdv-topbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  height: 64px;
-  padding: 0 20px;
+  gap: 12px;
+  height: 48px;
+  padding: 0 16px;
   background: #ffffff;
   border-bottom: 1px solid #e5e7eb;
   flex-shrink: 0;
@@ -28,7 +28,7 @@ body.pdv-screen {
 .pdv-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   text-decoration: none;
   color: #111827;
   flex-shrink: 0;
@@ -38,18 +38,14 @@ body.pdv-screen {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: var(--primary);
-  color: #fff;
-  font-weight: 800;
-  font-size: 14px;
-  letter-spacing: -0.5px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  object-fit: contain;
 }
 
 .pdv-brand-text {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 800;
   letter-spacing: -0.4px;
 }
@@ -73,13 +69,15 @@ body.pdv-screen {
 
 .pdv-search-wrap input.pdv-search {
   width: 100%;
-  padding: 12px 16px 12px 42px;
+  min-height: 50px;
+  padding: 12px 16px 12px 44px;
   border: 1px solid #d1d5db;
-  border-radius: var(--radius);
-  background: #f9fafb;
+  border-radius: var(--brand-radius-md);
+  background: #ffffff;
   color: #111827;
   font-size: 16px;
   font-family: inherit;
+  box-shadow: var(--shadow-xs);
   transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
 }
 
@@ -165,11 +163,11 @@ body.pdv-screen {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   border-radius: var(--radius);
   color: #6b7280;
-  font-size: 15px;
+  font-size: 14px;
   text-decoration: none;
   flex-shrink: 0;
 }
@@ -233,45 +231,48 @@ body.pdv-screen {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   color: #9ca3af;
+  padding: 32px 16px;
 }
 
 .pdv-empty-icon {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: #f9fafb;
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  background: var(--primary-soft);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 52px;
-  color: #d1d5db;
-  margin-bottom: 12px;
+  font-size: 26px;
+  color: var(--primary);
+  margin-bottom: 10px;
 }
 
 .pdv-empty h2 {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
-  color: #6b7280;
+  color: #374151;
 }
 
 .pdv-empty p {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* ---------- Linha do carrinho ---------- */
 .pdv-row {
   display: grid;
-  grid-template-columns: 52px 56px 1fr 110px auto auto;
+  grid-template-columns: 48px 52px 1fr 110px auto auto;
   align-items: center;
   gap: 12px;
-  padding: 12px 10px;
-  border-bottom: 1px solid #f3f4f6;
+  padding: 10px;
+  border-bottom: 1px solid #eef0f4;
+  border-radius: 10px;
 }
 
 .pdv-row:hover {
-  background: #fafafa;
+  background: #ffffff;
+  box-shadow: var(--shadow-xs);
 }
 
 .pdv-row-num {
@@ -294,8 +295,9 @@ body.pdv-screen {
 
 .pdv-row-name {
   display: block;
-  font-weight: 600;
-  font-size: 14px;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -304,11 +306,13 @@ body.pdv-screen {
 .pdv-row-sub {
   display: block;
   font-size: 12px;
-  color: #6b7280;
+  color: #9ca3af;
 }
 
 .pdv-row-price {
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -320,13 +324,13 @@ body.pdv-screen {
 }
 
 .pdv-row-qty-ctrl button {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border: 1px solid #d1d5db;
   border-radius: var(--radius-sm);
   background: #ffffff;
   color: #111827;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   cursor: pointer;
   line-height: 1;
@@ -357,13 +361,11 @@ body.pdv-screen {
   background: #fee2e2;
 }
 
-/* ---------- Painel direito (30%) ---------- */
+/* ---------- Painel direito (compacto) ---------- */
 .pdv-panel {
-  width: 30%;
-  max-width: 380px;
-  min-width: 280px;
+  width: 300px;
   border-left: 1px solid #e5e7eb;
-  background: #fafafa;
+  background: #ffffff;
   padding: 20px;
   overflow-y: auto;
   flex-shrink: 0;
@@ -371,6 +373,63 @@ body.pdv-screen {
 
 .pdv-panel-block {
   margin-bottom: 22px;
+}
+
+/* Resumo compacto da venda em andamento */
+.pdv-summary {
+  padding-bottom: 16px;
+  border-bottom: 1px solid #eef0f4;
+}
+
+.pdv-summary-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.pdv-summary-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.pdv-summary-row strong {
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdv-summary-row.is-customer strong {
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdv-summary-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #e5e7eb;
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pdv-summary-total strong {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--primary-hover);
+  font-variant-numeric: tabular-nums;
 }
 
 .pdv-panel-block h3 {
@@ -518,9 +577,9 @@ kbd {
 }
 
 .pdv-footer-total {
-  font-size: 26px;
+  font-size: 30px;
   font-weight: 800;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.8px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -532,6 +591,20 @@ kbd {
   justify-content: center;
   padding: 13px 26px;
   font-size: 15px;
+  background: var(--brand-gradient);
+  border: none;
+  border-radius: var(--brand-radius-sm);
+  box-shadow: var(--brand-shadow-btn);
+}
+
+.pdv-finish:hover:not(:disabled) {
+  background: var(--brand-gradient-hover);
+  box-shadow: var(--brand-shadow-btn-hover);
+}
+
+.pdv-finish:disabled {
+  filter: saturate(0.6);
+  box-shadow: none;
 }
 
 .pdv-finish kbd {
@@ -613,7 +686,7 @@ kbd {
 }
 
 .pdv-discount-type button.is-active {
-  background: var(--primary);
+  background: var(--brand-gradient);
   color: #fff;
 }
 

@@ -121,19 +121,31 @@ onBeforeUnmount(() => {
       <template v-else-if="data">
         <div class="stats-row">
           <div class="stat-card">
-            <span class="stat-label">Faturamento</span>
+            <div class="stat-top">
+              <span class="icon-tile"><i class="fas fa-wallet"></i></span>
+              <span class="stat-label">Faturamento</span>
+            </div>
             <span class="stat-value stat-value-success">{{ brl(data.metrics.faturamento) }}</span>
           </div>
           <div class="stat-card">
-            <span class="stat-label">Nº de vendas</span>
+            <div class="stat-top">
+              <span class="icon-tile"><i class="fas fa-receipt"></i></span>
+              <span class="stat-label">Nº de vendas</span>
+            </div>
             <span class="stat-value">{{ data.metrics.vendas }}</span>
           </div>
           <div class="stat-card">
-            <span class="stat-label">Ticket médio</span>
+            <div class="stat-top">
+              <span class="icon-tile"><i class="fas fa-tag"></i></span>
+              <span class="stat-label">Ticket médio</span>
+            </div>
             <span class="stat-value">{{ brl(data.metrics.ticket) }}</span>
           </div>
           <div class="stat-card">
-            <span class="stat-label">Lucro bruto</span>
+            <div class="stat-top">
+              <span class="icon-tile"><i class="fas fa-chart-line"></i></span>
+              <span class="stat-label">Lucro bruto</span>
+            </div>
             <span class="stat-value">{{ brl(data.metrics.lucro) }}</span>
           </div>
         </div>

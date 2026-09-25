@@ -26,6 +26,7 @@ services:
       BILLFLUX_AUTH__ALLOW_SIGNUP: ${BILLFLUX_AUTH__ALLOW_SIGNUP:-false}
       BILLFLUX_AUTH__USERNAME: ${BILLFLUX_AUTH__USERNAME:-coqueiral}
       BILLFLUX_AUTH__PASSWORD_HASH: ${BILLFLUX_AUTH__PASSWORD_HASH:-}
+      BILLFLUX_SESSION_COOKIE_SECURE: ${BILLFLUX_SESSION_COOKIE_SECURE:-true}
     depends_on:
       postgres:
         condition: service_healthy

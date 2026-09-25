@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { normalizeForSearch } from '@/utils/normalize'
@@ -10,6 +10,9 @@ const data = ref(null)
 const loading = ref(false)
 const saving = ref(false)
 const search = ref('')
+const statusFilter = ref('todos')
+const openMenuId = ref(null)
+const menuPos = ref({ top: 0, left: 0, up: false })
 
 const showModal = ref(false)
 const editing = ref(null)
@@ -34,14 +37,49 @@ function emptyForm() {
 
 const filtered = computed(() => {
   if (!data.value) return []
+  let list = data.value.suppliers
+  if (statusFilter.value !== 'todos') {
+    const wantActive = statusFilter.value === 'ativos'
+    list = list.filter((s) => Boolean(s.active) === wantActive)
+  }
   const q = normalizeForSearch(search.value)
-  if (!q) return data.value.suppliers
-  return data.value.suppliers.filter((s) =>
+  if (!q) return list
+  return list.filter((s) =>
     normalizeForSearch(s.name).includes(q) ||
     normalizeForSearch(s.cnpj || '').includes(q) ||
     normalizeForSearch(s.phone || '').includes(q)
   )
 })
+
+const menuSupplier = computed(() =>
+  (data.value?.suppliers || []).find((s) => s.id === openMenuId.value) || null
+)
+
+/** Menu flutuante (teleport p/ body): escolhe abrir p/ baixo ou p/ cima
+ *  conforme o espaço visível, sem ser cortado pelo card/tabela. */
+function toggleMenu(supplier, event) {
+  if (openMenuId.value === supplier.id) {
+    closeMenu()
+    return
+  }
+  const rect = event?.currentTarget?.getBoundingClientRect()
+  let up = false
+  let top = 0
+  let left = 0
+  if (rect) {
+    const PANEL_W = 200
+    const PANEL_H = 170
+    up = window.innerHeight - rect.bottom < PANEL_H + 12 && rect.top > PANEL_H + 12
+    top = up ? rect.top - PANEL_H - 6 : rect.bottom + 6
+    left = Math.max(8, Math.min(rect.right - PANEL_W, window.innerWidth - PANEL_W - 8))
+  }
+  menuPos.value = { top, left, up }
+  openMenuId.value = supplier.id
+}
+
+function closeMenu() {
+  openMenuId.value = null
+}
 
 async function load() {
   loading.value = true
@@ -141,47 +179,86 @@ function fmtPhone(phone) {
   return phone
 }
 
+function onKeydown(event) {
+  if (event.key === 'Escape') closeMenu()
+}
+
 onMounted(() => {
   load()
+  document.addEventListener('keydown', onKeydown)
+  window.addEventListener('scroll', closeMenu, true)
+  window.addEventListener('resize', closeMenu)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('scroll', closeMenu, true)
+  window.removeEventListener('resize', closeMenu)
 })
 </script>
 
 <template>
   <AppShell>
-    <div class="dashboard">
+    <div class="dashboard suppliers-page">
       <div class="page-header">
         <div>
           <h1 class="page-title">Fornecedores</h1>
           <p class="page-subtitle">Cadastro de fornecedores do seu comércio.</p>
         </div>
-        <button type="button" class="btn btn-primary" @click="openNew">
-          <i class="fas fa-plus"></i> Novo fornecedor
-        </button>
       </div>
 
       <div v-if="loading" class="muted">Carregando…</div>
       <template v-else-if="data">
-        <div class="search-bar">
-          <i class="fas fa-search"></i>
-          <input
-            v-model="search"
-            type="text"
-            placeholder="Buscar por nome, CNPJ ou telefone…"
-          />
+        <div class="products-toolbar">
+          <div class="search-box products-search-box">
+            <i class="fas fa-search"></i>
+            <input
+              v-model="search"
+              type="text"
+              placeholder="Buscar por nome, CNPJ ou telefone..."
+              aria-label="Buscar fornecedores"
+            />
+            <button
+              v-if="search"
+              type="button"
+              class="search-clear"
+              aria-label="Limpar busca"
+              @click="search = ''"
+            >
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <select
+            v-model="statusFilter"
+            class="toolbar-select toolbar-select-status"
+            aria-label="Filtrar por status"
+          >
+            <option value="todos">Todos os status</option>
+            <option value="ativos">Ativos</option>
+            <option value="inativos">Inativos</option>
+          </select>
+          <button type="button" class="btn-brand" @click="openNew">
+            <i class="fas fa-plus"></i> Novo fornecedor
+          </button>
         </div>
+        <div
+          v-if="openMenuId !== null"
+          class="popover-overlay"
+          @click="closeMenu()"
+        ></div>
 
         <div class="table-card">
           <div class="table-container">
-            <table class="data-table">
+            <table class="data-table suppliers-table">
               <thead>
                 <tr>
-                  <th>Nome</th>
-                  <th>CNPJ</th>
-                  <th>Telefone</th>
-                  <th>Contato</th>
-                  <th>Cidade</th>
-                  <th>Status</th>
-                  <th class="th-actions"></th>
+                  <th>Fornecedor</th>
+                  <th class="col-cnpj">CNPJ</th>
+                  <th class="col-tel">Telefone</th>
+                  <th class="col-contato">Contato</th>
+                  <th class="col-cidade">Cidade</th>
+                  <th class="col-status">Status</th>
+                  <th class="th-actions"><span class="sr-only">Ações</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -189,46 +266,40 @@ onMounted(() => {
                   v-for="s in filtered"
                   :key="s.id"
                   :class="{ 'is-inactive': !s.active }"
-                  @click="openEdit(s)"
-                  style="cursor: pointer"
                 >
                   <td>
-                    <span class="cell-title">{{ s.name }}</span>
+                    <span class="cell-title" :title="s.name">{{ s.name }}</span>
                     <span v-if="s.email" class="cell-sub">{{ s.email }}</span>
                   </td>
-                  <td>{{ fmtCnpj(s.cnpj) }}</td>
-                  <td>{{ fmtPhone(s.phone) }}</td>
-                  <td>{{ s.contact || '—' }}</td>
-                  <td>{{ s.city || '—' }}</td>
-                  <td>
-                    <span class="status-badge" :class="s.active ? 'is-active' : 'is-inactive'">
+                  <td class="col-cnpj nowrap">{{ fmtCnpj(s.cnpj) }}</td>
+                  <td class="col-tel nowrap">{{ fmtPhone(s.phone) }}</td>
+                  <td class="col-contato"><span class="cell-ellipsis">{{ s.contact || '—' }}</span></td>
+                  <td class="col-cidade"><span class="cell-ellipsis">{{ s.city || '—' }}</span></td>
+                  <td class="col-status">
+                    <span class="status-badge" :class="s.active ? 'is-ok' : 'is-off'">
                       {{ s.active ? 'Ativo' : 'Inativo' }}
                     </span>
                   </td>
                   <td class="cell-actions" @click.stop>
-                    <button
-                      type="button"
-                      class="icon-btn"
-                      :title="s.active ? 'Desativar' : 'Ativar'"
-                      @click="toggleActive(s)"
-                    >
-                      <i class="fas" :class="s.active ? 'fa-toggle-on' : 'fa-toggle-off'"></i>
-                    </button>
-                    <button
-                      type="button"
-                      class="icon-btn"
-                      title="Excluir"
-                      @click="deleteTarget = s"
-                    >
-                      <i class="fas fa-trash"></i>
-                    </button>
+                    <div class="row-menu">
+                      <button
+                        type="button"
+                        class="icon-btn"
+                        title="Ações"
+                        :aria-label="`Ações de ${s.name}`"
+                        :aria-expanded="openMenuId === s.id ? 'true' : 'false'"
+                        @click="toggleMenu(s, $event)"
+                      >
+                        <i class="fas fa-ellipsis-v"></i>
+                      </button>
+                    </div>
                   </td>
                 </tr>
                 <tr v-if="!filtered.length" class="empty-row">
                   <td colspan="7" class="empty-state">
                     <i class="fas fa-truck"></i>
-                    <h3>{{ search ? 'Nenhum fornecedor encontrado' : 'Nenhum fornecedor cadastrado' }}</h3>
-                    <p>{{ search ? 'Tente outro termo de busca.' : 'Cadastre o primeiro fornecedor.' }}</p>
+                    <h3>{{ search || statusFilter !== 'todos' ? 'Nenhum fornecedor encontrado' : 'Nenhum fornecedor cadastrado' }}</h3>
+                    <p>{{ search || statusFilter !== 'todos' ? 'Tente alterar os filtros ou buscar outro termo.' : 'Cadastre o primeiro fornecedor.' }}</p>
                   </td>
                 </tr>
               </tbody>
@@ -239,6 +310,26 @@ onMounted(() => {
     </div>
 
     <!-- Modal Novo/Editar -->
+    <Teleport to="body">
+      <div
+        v-if="menuSupplier"
+        class="row-menu-panel menu-float"
+        role="menu"
+        :style="{ top: menuPos.top + 'px', left: menuPos.left + 'px' }"
+      >
+        <button type="button" role="menuitem" @click="openEdit(menuSupplier); closeMenu()">
+          <i class="fas fa-pen"></i> Editar
+        </button>
+        <button type="button" role="menuitem" @click="toggleActive(menuSupplier); closeMenu()">
+          <i class="fas" :class="menuSupplier.active ? 'fa-toggle-off' : 'fa-toggle-on'"></i>
+          {{ menuSupplier.active ? 'Desativar' : 'Ativar' }}
+        </button>
+        <button type="button" role="menuitem" class="is-danger" @click="deleteTarget = menuSupplier; closeMenu()">
+          <i class="fas fa-trash"></i> Excluir
+        </button>
+      </div>
+    </Teleport>
+
     <div class="modal" :class="{ 'is-open': showModal }">
       <div class="modal-content modal-content-md">
         <div class="modal-header">
@@ -310,7 +401,7 @@ onMounted(() => {
       v-if="deleteTarget"
       :title="'Excluir fornecedor'"
       :message="'Tem certeza que deseja excluir ' + deleteTarget.name + '?'"
-      confirm-text="Excluir"
+      confirm-label="Excluir"
       @confirm="confirmDelete"
       @cancel="deleteTarget = null"
     />
@@ -322,25 +413,69 @@ onMounted(() => {
   color: var(--text-muted);
   padding: 24px 4px;
 }
-.search-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--surface, #fff);
-  border: 1px solid var(--border, #d1d5db);
-  border-radius: 8px;
-  padding: 8px 12px;
-  margin-bottom: 16px;
+.products-toolbar .toolbar-select-status {
+  width: 180px;
 }
-.search-bar i {
-  color: var(--text-muted, #999);
+
+/* Tabela com layout fixo: Fornecedor flexível, demais compactas */
+.suppliers-table {
+  table-layout: fixed;
 }
-.search-bar input {
-  flex: 1;
-  border: none;
-  outline: none;
-  font-size: 14px;
-  background: transparent;
+.suppliers-table tbody td {
+  padding: 10px 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Ações: respiro menor para o botão ⋮ (36px) caber sem ellipsis fantasma */
+.suppliers-table .cell-actions {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+/* Menu flutuante via Teleport: fixo na viewport, acima de tudo */
+.menu-float {
+  position: fixed;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  z-index: 1200;
+}
+.suppliers-table .col-cnpj {
+  width: 188px;
+}
+.suppliers-table .col-tel {
+  width: 176px;
+}
+.suppliers-table .col-contato {
+  width: 118px;
+}
+.suppliers-table .col-cidade {
+  width: 110px;
+}
+.suppliers-table .col-status {
+  width: 98px;
+}
+.suppliers-table tbody td {
+  min-width: 0;
+}
+.suppliers-table .cell-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cell-ellipsis {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nowrap {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.suppliers-table tbody tr:hover td {
+  background: var(--surface-hover);
 }
 .cell-sub {
   display: block;
@@ -359,21 +494,46 @@ onMounted(() => {
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary, #666);
-  margin-bottom: 4px;
+  color: var(--text);
+  margin-bottom: 6px;
 }
 .form-field input {
   width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--border, #d1d5db);
-  border-radius: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--brand-radius-sm);
+  background: var(--surface);
+  color: var(--text);
   font-size: 14px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.form-field input::placeholder {
+  color: var(--text-muted);
+}
+.form-field input:hover {
+  border-color: var(--border-strong);
 }
 .form-field input:focus {
   outline: none;
-  border-color: var(--primary, #2563eb);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+  border-color: var(--primary);
+  box-shadow: var(--brand-input-ring);
 }
 .flex-1 { flex: 1; }
 .flex-2 { flex: 2; }
+
+@media (max-width: 900px) {
+  .suppliers-table .col-cidade {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .suppliers-table .col-contato {
+    display: none;
+  }
+  .products-toolbar .toolbar-select-status {
+    flex: 1 1 45%;
+    width: auto;
+    min-width: 0;
+  }
+}
 </style>

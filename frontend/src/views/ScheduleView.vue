@@ -2,15 +2,27 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
-import { brl } from '@/utils/format'
 import AppShell from '@/components/AppShell.vue'
-import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const loading = ref(false)
 const week = ref([])
 const selectedDay = ref(null)
 
-const dayNamesFull = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo']
+const WEEKDAYS_FULL = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado']
+const MONTHS_FULL = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+
+function cap(text) {
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+/** Data amigável pt-BR a partir do ISO (montada manualmente para o
+ *  formato ser idêntico em qualquer navegador; API intacta). */
+function friendlyDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso + 'T12:00:00')
+  if (Number.isNaN(d.getTime())) return iso
+  return `${cap(WEEKDAYS_FULL[d.getDay()])}, ${d.getDate()} de ${MONTHS_FULL[d.getMonth()]}`
+}
 
 async function load() {
   loading.value = true
@@ -41,30 +53,29 @@ async function createOrder(supplierId) {
   }
 }
 
-function totalProducts(day) {
-  return day.suggestions.reduce((sum, s) => sum + s.products.length, 0)
-}
-
 onMounted(load)
 </script>
 
 <template>
   <AppShell>
-    <div class="page-header">
-      <h1><i class="fas fa-calendar-alt"></i> Agenda de Pedidos</h1>
-    </div>
+    <div class="dashboard">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Agenda de pedidos</h1>
+          <p class="page-subtitle">Organize e acompanhe as sugestões de pedidos por dia.</p>
+        </div>
+      </div>
 
-    <div v-if="loading" class="muted">Carregando...</div>
+      <div v-if="loading" class="muted">Carregando...</div>
 
-    <div v-else class="schedule-layout">
+      <div v-else class="schedule-layout">
       <div class="week-strip">
         <div
           v-for="day in week" :key="day.date"
           class="week-day"
           :class="{
             'is-today': day.is_today,
-            'is-selected': selectedDay?.date === day.date,
-            'has-orders': day.product_count > 0
+            'is-selected': selectedDay?.date === day.date
           }"
           @click="selectDay(day)"
         >
@@ -75,11 +86,12 @@ onMounted(load)
       </div>
 
       <div v-if="selectedDay" class="schedule-content">
-        <h2>{{ dayNamesFull[selectedDay.day_of_week] }} — {{ selectedDay.date }}</h2>
+        <h2>{{ friendlyDate(selectedDay.date) }}</h2>
 
         <div v-if="!selectedDay.suggestions.length" class="empty-state">
-          <i class="fas fa-check-circle"></i>
-          <p>Nenhum pedido sugerido para este dia.</p>
+          <i class="fas fa-calendar-day"></i>
+          <h3>Nenhum pedido sugerido</h3>
+          <p>Não há sugestões de pedido para este dia.</p>
         </div>
 
         <div v-else class="supplier-cards">
@@ -116,39 +128,118 @@ onMounted(load)
           </div>
         </div>
       </div>
+      </div>
     </div>
   </AppShell>
 </template>
 
 <style scoped>
-.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-.page-header h1 { font-size: 20px; display: flex; align-items: center; gap: 8px; }
-.muted { color: var(--text-muted); padding: 24px; }
+.muted { color: var(--text-muted); padding: 24px 4px; }
 
 .schedule-layout { display: flex; flex-direction: column; gap: 20px; }
 
-.week-strip { display: flex; gap: 6px; }
+.week-strip { display: flex; gap: 8px; }
+
 .week-day {
-  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 12px 8px; border-radius: 10px; cursor: pointer;
-  background: var(--surface, #fff); border: 2px solid transparent;
-  transition: all .15s;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border-radius: var(--brand-radius-sm);
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-xs);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 }
-.week-day:hover { border-color: var(--primary, #2563eb33); }
-.week-day.is-today { border-color: var(--primary, #2563eb); }
-.week-day.is-selected { background: var(--primary, #2563eb); color: #fff; }
-.week-day-name { font-size: 12px; text-transform: uppercase; opacity: .7; }
-.week-day-num { font-size: 20px; font-weight: 700; }
+
+.week-day:hover {
+  border-color: var(--border-strong);
+}
+
+.week-day.is-today {
+  border-color: var(--primary);
+}
+
+.week-day.is-selected {
+  background: var(--brand-gradient);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: var(--brand-shadow-btn);
+}
+
+.week-day-name {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  opacity: 0.75;
+}
+
+.week-day-num {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
 .week-day-badge {
-  background: var(--danger, #ef4444); color: #fff; font-size: 11px; font-weight: 700;
-  padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  min-width: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
-.week-day.is-selected .week-day-badge { background: #fff; color: var(--primary, #2563eb); }
 
-.schedule-content h2 { font-size: 18px; margin-bottom: 16px; }
+.week-day.is-selected .week-day-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
 
-.empty-state { text-align: center; padding: 40px; color: var(--text-muted, #999); }
-.empty-state i { font-size: 40px; margin-bottom: 12px; color: var(--success, #22c55e); display: block; }
+.schedule-content h2 {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  margin: 0 0 10px;
+}
+
+.empty-state {
+  padding: 12px 16px 28px;
+  color: var(--text-secondary);
+}
+
+.empty-state i {
+  font-size: 30px;
+  margin-bottom: 12px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+}
+
+.empty-state h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 13px;
+}
 
 .supplier-cards { display: flex; flex-direction: column; gap: 16px; }
 .supplier-card {
@@ -161,4 +252,15 @@ onMounted(load)
 
 .stock-low { color: var(--danger, #ef4444); font-weight: 700; }
 .cell-highlight { color: var(--primary, #2563eb); font-weight: 700; }
+
+@media (max-width: 640px) {
+  .week-strip {
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .week-day {
+    min-width: 64px;
+  }
+}
 </style>

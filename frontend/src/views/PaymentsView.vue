@@ -1,8 +1,10 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
+import { normalizeForSearch } from '@/utils/normalize'
 import AppShell from '@/components/AppShell.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { useRowMenu } from '@/composables/useRowMenu'
 
 const { openMenu, menuPos, toggleMenu, closeMenus } = useRowMenu()
@@ -13,6 +15,15 @@ const saving = ref(false)
 
 const showModal = ref(false)
 const methodName = ref('')
+const search = ref('')
+const deleteTarget = ref(null)
+
+const filteredMethods = computed(() => {
+  const list = data.value?.methods || []
+  const q = normalizeForSearch(search.value.trim())
+  if (!q) return list
+  return list.filter((m) => normalizeForSearch(m.name).includes(q))
+})
 
 async function load() {
   loading.value = true
@@ -50,8 +61,14 @@ async function toggleMethod(method) {
   }
 }
 
-async function removeMethod(method) {
-  if (!window.confirm(`Excluir a forma de pagamento "${method.name}"?`)) return
+function removeMethod(method) {
+  deleteTarget.value = method
+}
+
+async function confirmRemove() {
+  const method = deleteTarget.value
+  deleteTarget.value = null
+  if (!method) return
   try {
     data.value = await api.del(`/payments/${method.id}`)
     ElMessage.success('Forma de pagamento excluída.')
@@ -67,37 +84,58 @@ onMounted(() => {
 
 <template>
   <AppShell>
-    <div class="dashboard">
+    <div class="dashboard payments-page">
       <div class="page-header">
         <div>
           <h1 class="page-title">Formas de pagamento</h1>
           <p class="page-subtitle">Gerencie as formas aceitas no PDV.</p>
         </div>
-        <button type="button" class="btn btn-primary" @click="showModal = true">
-          <i class="fas fa-plus"></i> Nova forma
-        </button>
       </div>
 
       <div v-if="loading" class="muted">Carregando…</div>
       <template v-else-if="data">
+        <div class="products-toolbar">
+          <div class="search-box products-search-box">
+            <i class="fas fa-search"></i>
+            <input
+              v-model="search"
+              type="text"
+              placeholder="Buscar forma de pagamento..."
+              aria-label="Buscar formas de pagamento"
+            />
+            <button
+              v-if="search"
+              type="button"
+              class="search-clear"
+              aria-label="Limpar busca"
+              @click="search = ''"
+            >
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <button type="button" class="btn-brand" @click="showModal = true">
+            <i class="fas fa-plus"></i> Nova forma
+          </button>
+        </div>
+
         <div class="table-card">
           <div class="table-container">
-            <table class="data-table">
+            <table class="data-table payments-table">
               <thead>
                 <tr>
                   <th>Forma de pagamento</th>
-                  <th>Status</th>
-                  <th class="th-actions"></th>
+                  <th class="col-status">Status</th>
+                  <th class="th-actions"><span class="sr-only">Ações</span></th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="method in data.methods" :key="method.id" :class="{ 'is-inactive': !method.active }">
+                <tr v-for="method in filteredMethods" :key="method.id" :class="{ 'is-inactive': !method.active }">
                   <td>
-                    <span class="cell-title">{{ method.name }}</span>
+                    <span class="cell-title" :title="method.name">{{ method.name }}</span>
                     <span v-if="!method.active" class="cell-sub">não aparece no PDV</span>
                   </td>
-                  <td>
-                    <span class="status-badge" :class="method.active ? 'is-active' : 'is-inactive'">
+                  <td class="col-status">
+                    <span class="status-badge" :class="method.active ? 'is-ok' : 'is-off'">
                       {{ method.active ? 'Ativa' : 'Inativa' }}
                     </span>
                   </td>
@@ -107,7 +145,7 @@ onMounted(() => {
                         type="button"
                         class="icon-btn row-menu-btn"
                         aria-haspopup="true"
-                        aria-expanded="false"
+                        :aria-expanded="openMenu === method.id ? 'true' : 'false'"
                         aria-label="Ações da forma de pagamento"
                         :data-menu="method.id"
                         @click.stop="toggleMenu(method.id)"
@@ -129,11 +167,11 @@ onMounted(() => {
                     </div>
                   </td>
                 </tr>
-                <tr v-if="!data.methods.length" class="empty-row">
+                <tr v-if="!filteredMethods.length" class="empty-row">
                   <td colspan="3" class="empty-state">
                     <i class="fas fa-credit-card"></i>
-                    <h3>Nenhuma forma de pagamento</h3>
-                    <p>Adicione as formas aceitas no seu comércio.</p>
+                    <h3>{{ search ? 'Nenhuma forma encontrada' : 'Nenhuma forma de pagamento' }}</h3>
+                    <p>{{ search ? 'Tente outro termo de busca.' : 'Adicione as formas aceitas no seu comércio.' }}</p>
                   </td>
                 </tr>
               </tbody>
@@ -174,6 +212,15 @@ onMounted(() => {
         </form>
       </div>
     </div>
+    <ConfirmDialog
+      v-if="deleteTarget"
+      title="Excluir forma de pagamento"
+      :message="`Excluir a forma de pagamento \u201C${deleteTarget.name}\u201D?`"
+      confirm-label="Excluir"
+      danger
+      @confirm="confirmRemove"
+      @cancel="deleteTarget = null"
+    />
   </AppShell>
 </template>
 
@@ -181,5 +228,33 @@ onMounted(() => {
 .muted {
   color: var(--text-muted);
   padding: 24px 4px;
+}
+
+/* Tabela com layout fixo: Nome flexível, demais compactas */
+.payments-table {
+  table-layout: fixed;
+}
+.payments-table .col-status {
+  width: 130px;
+}
+.payments-table tbody td {
+  min-width: 0;
+  padding: 10px 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.payments-table .cell-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.payments-table .cell-actions {
+  padding-left: 8px;
+  padding-right: 8px;
+  overflow: visible;
+}
+.payments-table tbody tr:hover td {
+  background: var(--surface-hover);
 }
 </style>

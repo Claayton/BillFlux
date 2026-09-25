@@ -1,1 +1,1 @@
-"""Service modules for BillFlux"""
+"""Service modules for BeeFlux"""

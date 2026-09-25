@@ -3,10 +3,9 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import PublicHeader from '@/components/PublicHeader.vue'
-import { useAuthStore } from '@/stores/auth'
 import { api } from '@/api/client'
+import logoUrl from '@/assets/logo.png'
 
-const auth = useAuthStore()
 const router = useRouter()
 const username = ref('')
 const email = ref('')
@@ -41,9 +40,9 @@ async function submit() {
     <section class="auth-page">
       <div class="auth-card">
         <div class="auth-header">
-          <span class="logo-mark">BF</span>
+          <img class="logo-mark" :src="logoUrl" alt="BeeFlux" />
           <h2>Criar conta</h2>
-          <p>Comece a usar o BillFlux.</p>
+          <p>Comece a usar o BeeFlux.</p>
         </div>
 
         <form class="auth-form" @submit.prevent="submit">

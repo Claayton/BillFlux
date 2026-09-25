@@ -1,4 +1,4 @@
-"""Importa produtos do XLS exportado do NX1 para o BillFlux."""
+"""Importa produtos do XLS exportado do NX1 para o BeeFlux."""
 
 import sys
 import os

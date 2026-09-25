@@ -8,7 +8,7 @@ from billflux.domain.models.bills import Bill
 from billflux.infra.config.database import create_db
 from billflux.infra.repository.bill_repository import BillRepository
 
-main = typer.Typer(help="BillFlux - Gerenciador de Contas a Pagar")
+main = typer.Typer(help="BeeFlux - Gerenciador de Contas a Pagar")
 console = Console()
 
 

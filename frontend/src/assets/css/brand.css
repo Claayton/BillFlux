@@ -1,0 +1,101 @@
+@charset 'UTF8';
+
+/* ---------- BeeFlux — linguagem visual (tokens reutilizáveis) ----------
+   Importado primeiro no main.js. Telas futuras (dashboard, PDV etc.)
+   devem consumir estas variáveis em vez de valores hardcoded. */
+
+:root {
+  /* Gradiente da identidade */
+  --brand-gradient: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  --brand-gradient-hover: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
+
+  /* Raio */
+  --brand-radius-sm: 10px;
+  --brand-radius-md: 14px;
+  --brand-radius-lg: 16px;
+
+  /* Sombras */
+  --brand-shadow-btn: 0 8px 20px -6px rgba(99, 102, 241, 0.55);
+  --brand-shadow-btn-hover: 0 12px 26px -6px rgba(99, 102, 241, 0.65);
+  --brand-shadow-card: 0 12px 32px rgba(16, 24, 40, 0.1);
+
+  /* Inputs */
+  --brand-input-h: 48px;
+  --brand-input-bg: #ffffff;
+  --brand-input-bg-filled: #fbfbff;
+  --brand-input-ring: 0 0 0 3px rgba(99, 102, 241, 0.18);
+
+  /* Transições padrão */
+  --brand-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---------- Acessibilidade ---------- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- CTA primário BeeFlux (ações principais) ----------
+   Gradiente da identidade, com moderação: só em elementos importantes. */
+.btn-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: 1px solid transparent;
+  border-radius: var(--brand-radius-sm);
+  background: var(--brand-gradient);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: var(--brand-shadow-btn);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease,
+    background 0.15s ease;
+}
+
+.btn-brand:hover:not(:disabled) {
+  background: var(--brand-gradient-hover);
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+  box-shadow: var(--brand-shadow-btn-hover);
+  color: #fff;
+}
+
+.btn-brand:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--brand-shadow-btn);
+}
+
+.btn-brand:disabled {
+  filter: saturate(0.6);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* ---------- Tile de ícone (lilás muito claro) ----------
+   Contexto visual para ícones de indicadores e seções. */
+.icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 16px;
+}
