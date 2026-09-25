@@ -5,6 +5,8 @@ import { api } from '@/api/client'
 import logoUrl from '@/assets/logo.png'
 
 const auth = useAuthStore()
+// true só no `vite` dev (túnel pdvdev); no build de produção vira false.
+const isDev = import.meta.env.DEV
 
 // Mantém a sessão deslizante de 24h viva durante o turno e detecta
 // sessão morta antes do usuário estar no meio de uma venda.
@@ -42,6 +44,9 @@ onBeforeUnmount(() => {
     <img class="app-boot-mark" :src="logoUrl" alt="BeeFlux" />
     <p>Carregando BeeFlux…</p>
   </div>
+  <div v-if="isDev" class="dev-badge" role="status" title="Ambiente de desenvolvimento (dados de teste)">
+    DEV
+  </div>
 </template>
 
 <style scoped>
@@ -60,5 +65,24 @@ onBeforeUnmount(() => {
   height: 60px;
   border-radius: 14px;
   object-fit: contain;
+}
+/* Etiqueta DEV: só existe no bundle de desenvolvimento (import.meta.env.DEV).
+   Fixa acima de tudo, sem interceptar cliques. */
+.dev-badge {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: #d97706;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  user-select: none;
 }
 </style>
