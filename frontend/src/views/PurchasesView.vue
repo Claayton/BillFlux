@@ -516,8 +516,8 @@ function toggleMenu(purchase, event) {
     return
   }
   const rect = event?.currentTarget?.getBoundingClientRect()
-  let top = 0
-  let left = 0
+  let top = 80
+  let left = Math.max(8, window.innerWidth - 216)
   if (rect) {
     const PANEL_W = 200
     const PANEL_H = 170

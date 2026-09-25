@@ -12,7 +12,7 @@ const saving = ref(false)
 const search = ref('')
 const statusFilter = ref('todos')
 const openMenuId = ref(null)
-const menuPos = ref({ top: 0, left: 0, up: false })
+const menuPos = ref({ top: 0, left: 0 })
 
 const showModal = ref(false)
 const editing = ref(null)
@@ -63,17 +63,16 @@ function toggleMenu(supplier, event) {
     return
   }
   const rect = event?.currentTarget?.getBoundingClientRect()
-  let up = false
-  let top = 0
-  let left = 0
+  let top = 80
+  let left = Math.max(8, window.innerWidth - 216)
   if (rect) {
     const PANEL_W = 200
     const PANEL_H = 170
-    up = window.innerHeight - rect.bottom < PANEL_H + 12 && rect.top > PANEL_H + 12
+    const up = window.innerHeight - rect.bottom < PANEL_H + 12 && rect.top > PANEL_H + 12
     top = up ? rect.top - PANEL_H - 6 : rect.bottom + 6
     left = Math.max(8, Math.min(rect.right - PANEL_W, window.innerWidth - PANEL_W - 8))
   }
-  menuPos.value = { top, left, up }
+  menuPos.value = { top, left }
   openMenuId.value = supplier.id
 }
 

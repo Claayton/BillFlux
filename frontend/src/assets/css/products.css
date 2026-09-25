@@ -227,6 +227,11 @@
   min-width: 0;
 }
 
+.products-page .products-table .cell-actions {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
 .products-page .cell-title,
 .products-page .cell-sub {
   display: block;
@@ -341,12 +346,6 @@
 
 .row-menu-panel button.is-danger:hover {
   background: var(--danger-soft);
-}
-
-/* últimas linhas: menu abre para cima (table-card tem overflow hidden) */
-.menu-up .row-menu-panel {
-  top: auto;
-  bottom: calc(100% + 4px);
 }
 
 /* Rodapé com paginação */
@@ -600,6 +599,37 @@
 
 .modal-content-wide {
   max-width: 720px;
+}
+
+/* Modal de produto: altura fixa, abas com scroll interno e rodapé persistente */
+.product-modal {
+  display: flex;
+  flex-direction: column;
+  height: min(88vh, 920px);
+  overflow: hidden;
+}
+
+.product-modal > .modal-header,
+.product-modal > .modal-tabs,
+.product-modal > .clone-hint,
+.product-modal > .modal-footer {
+  flex-shrink: 0;
+}
+
+.product-modal > form.modal-form,
+.product-modal > .modal-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.product-modal > .product-movements {
+  max-height: none;
+}
+
+.product-modal > .modal-footer {
+  margin-top: 0;
+  padding: 16px 24px;
 }
 
 .clone-hint {

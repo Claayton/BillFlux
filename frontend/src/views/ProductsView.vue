@@ -133,8 +133,31 @@ watch(totalPages, (total) => {
   if (page.value > total) page.value = total
 })
 
-function toggleMenu(id) {
-  openMenuId.value = openMenuId.value === id ? null : id
+const menuPos = ref({ top: 0, left: 0 })
+
+const menuProduct = computed(() =>
+  (data.value?.products || []).find((p) => p.id === openMenuId.value) || null
+)
+
+/** Menu flutuante (teleport p/ body): escolhe abrir p/ baixo ou p/ cima
+ *  conforme o espaço visível, sem ser cortado pela tabela/card. */
+function toggleMenu(product, event) {
+  if (openMenuId.value === product.id) {
+    closeMenu()
+    return
+  }
+  const rect = event?.currentTarget?.getBoundingClientRect()
+  let top = 80
+  let left = Math.max(8, window.innerWidth - 216)
+  if (rect) {
+    const PANEL_W = 200
+    const PANEL_H = 210
+    const up = window.innerHeight - rect.bottom < PANEL_H + 12 && rect.top > PANEL_H + 12
+    top = up ? rect.top - PANEL_H - 6 : rect.bottom + 6
+    left = Math.max(8, Math.min(rect.right - PANEL_W, window.innerWidth - PANEL_W - 8))
+  }
+  menuPos.value = { top, left }
+  openMenuId.value = product.id
 }
 
 function closeMenu() {
@@ -428,6 +451,15 @@ async function saveProduct() {
 
 // Clona o produto em edição: preenche o modal como produto novo com as
 // mesmas informações (menos o id e o código de barras), sem fechar.
+/** Clona direto do menu ⋮, sem abrir a edição antes. */
+function cloneFromMenu(product) {
+  editingProduct.value = product
+  showNewCategory.value = false
+  newCategoryName.value = ''
+  cloneProduct()
+  showProductModal.value = true
+}
+
 function cloneProduct() {
   if (!editingProduct.value) return
   const product = editingProduct.value
@@ -516,9 +548,9 @@ onBeforeUnmount(() => {
 })
 
 // No modal de produto, Enter (leitor de código de barras) não salva:
-// só F2 ou o botão "Salvar produto".
+// só F2 ou o botão "Salvar produto" (vale em qualquer aba).
 function onModalKeydown(event) {
-  if (event.key === 'F2' && showProductModal.value && detailsTab.value === 'dados') {
+  if (event.key === 'F2' && showProductModal.value) {
     event.preventDefault()
     saveProduct()
   }
@@ -604,9 +636,9 @@ function onModalKeydown(event) {
               </thead>
               <tbody>
                 <tr
-                  v-for="(product, idx) in pagedProducts"
+                  v-for="product in pagedProducts"
                   :key="product.id"
-                  :class="{ 'is-inactive': !product.active, 'menu-up': idx >= pagedProducts.length - 3 }"
+                  :class="{ 'is-inactive': !product.active }"
                 >
                   <td>
                     <span class="cell-title" :title="product.name">{{ product.name }}</span>
@@ -636,24 +668,10 @@ function onModalKeydown(event) {
                         title="Ações"
                         :aria-label="`Ações de ${product.name}`"
                         :aria-expanded="openMenuId === product.id ? 'true' : 'false'"
-                        @click="toggleMenu(product.id)"
+                        @click="toggleMenu(product, $event)"
                       >
                         <i class="fas fa-ellipsis-v"></i>
                       </button>
-                      <div v-if="openMenuId === product.id" class="row-menu-panel" role="menu">
-                        <button type="button" role="menuitem" @click="closeMenu(); openEditProduct(product)">
-                          <i class="fas fa-pen"></i> Editar
-                        </button>
-                        <button type="button" role="menuitem" @click="closeMenu(); openAdjust(product)">
-                          <i class="fas fa-balance-scale"></i> Ajustar estoque
-                        </button>
-                        <button type="button" role="menuitem" @click="closeMenu(); openMovements(product)">
-                          <i class="fas fa-history"></i> Movimentações
-                        </button>
-                        <button type="button" role="menuitem" class="is-danger" @click="closeMenu(); removeProduct(product)">
-                          <i class="fas fa-trash"></i> Excluir
-                        </button>
-                      </div>
                     </div>
                   </td>
                 </tr>
@@ -715,8 +733,33 @@ function onModalKeydown(event) {
       </template>
     </div>
 
+    <Teleport to="body">
+      <div
+        v-if="menuProduct"
+        class="row-menu-panel menu-float"
+        role="menu"
+        :style="{ top: menuPos.top + 'px', left: menuPos.left + 'px' }"
+      >
+        <button type="button" role="menuitem" @click="openEditProduct(menuProduct); closeMenu()">
+          <i class="fas fa-pen"></i> Editar
+        </button>
+        <button type="button" role="menuitem" @click="cloneFromMenu(menuProduct); closeMenu()">
+          <i class="fas fa-clone"></i> Clonar
+        </button>
+        <button type="button" role="menuitem" @click="openAdjust(menuProduct); closeMenu()">
+          <i class="fas fa-balance-scale"></i> Ajustar estoque
+        </button>
+        <button type="button" role="menuitem" @click="openMovements(menuProduct); closeMenu()">
+          <i class="fas fa-history"></i> Movimentações
+        </button>
+        <button type="button" role="menuitem" class="is-danger" @click="removeProduct(menuProduct); closeMenu()">
+          <i class="fas fa-trash"></i> Excluir
+        </button>
+      </div>
+    </Teleport>
+
     <div class="modal" :class="{ 'is-open': showProductModal }">
-      <div class="modal-content modal-content-wide">
+      <div class="modal-content modal-content-wide product-modal">
         <div class="modal-header">
           <h2>{{ editingProduct ? 'Detalhes do produto' : 'Novo produto' }}</h2>
           <button type="button" class="modal-close" aria-label="Fechar" @click="showProductModal = false">&times;</button>
@@ -893,21 +936,6 @@ function onModalKeydown(event) {
             <span>Produto ativo (aparece no PDV)</span>
           </label>
 
-          <div class="modal-footer">
-            <button
-              v-if="editingProduct"
-              type="button"
-              class="btn btn-ghost modal-clone"
-              :disabled="saving"
-              @click="cloneProduct"
-            >
-              <i class="fas fa-clone"></i> Clonar
-            </button>
-            <button type="button" class="btn btn-ghost modal-cancel" @click="showProductModal = false">Cancelar</button>
-            <button type="submit" class="btn btn-primary" :disabled="saving">
-              <i class="fas fa-check"></i> {{ saving ? 'Salvando…' : 'Salvar produto' }}
-            </button>
-          </div>
         </form>
 
         <div v-show="detailsTab === 'transacoes'" class="modal-body product-movements">
@@ -1083,6 +1111,23 @@ function onModalKeydown(event) {
             </div>
           </div>
         </div>
+
+        <div class="modal-footer">
+          <button
+            v-if="editingProduct"
+            type="button"
+            class="btn btn-ghost modal-clone"
+            :disabled="saving"
+            @click="cloneProduct"
+          >
+            <i class="fas fa-clone"></i> Clonar
+          </button>
+          <button type="button" class="btn btn-ghost modal-cancel" @click="showProductModal = false">Cancelar</button>
+          <button type="button" class="btn btn-primary" :disabled="saving" aria-keyshortcuts="F2" @click="saveProduct">
+            <i class="fas fa-check"></i> {{ saving ? 'Salvando…' : 'Salvar produto' }}
+            <kbd>F2</kbd>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -1222,5 +1267,14 @@ function onModalKeydown(event) {
 .inline-price-input:focus {
   border-color: var(--primary, #2563eb);
   outline: none;
+}
+
+/* Menu flutuante via Teleport: fixo na viewport, acima de tudo */
+.menu-float {
+  position: fixed;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  z-index: 1200;
 }
 </style>
