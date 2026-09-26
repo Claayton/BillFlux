@@ -13,7 +13,7 @@ const navSections = [
   {
     items: [
       { name: 'sales', label: 'Vendas', icon: 'fas fa-cash-register', to: '/sales' },
-      { name: 'caixa', label: 'Caixa', icon: 'fas fa-cash-register', to: '/caixa' },
+      { name: 'caixa', label: 'Caixa', icon: 'fas fa-money-bill-wave', to: '/caixa' },
     ]
   },
   {
