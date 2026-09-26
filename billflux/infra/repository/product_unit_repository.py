@@ -102,6 +102,9 @@ class ProductUnitRepository:
                 pu.is_default = is_default
 
                 if is_default:
+                    # Flush antes: com pu.id ainda None, `id != None` vira
+                    # `IS NOT NULL` e a query desmarcaria a própria linha.
+                    session.flush()
                     stmt = select(ProductUnitModel).where(
                         ProductUnitModel.product_id == product_id,
                         ProductUnitModel.is_default == True,
@@ -127,6 +130,33 @@ class ProductUnitRepository:
                     session.commit()
                     return True
                 return False
+        finally:
+            session.close()
+
+    def sync_default_price(self, product_id: int, price) -> int:
+        """Espelha o preço base nas apresentações padrão de fator 1.
+
+        É o que o PDV exibe ao lançar o produto; sem isso, editar o
+        preço do produto não refletia no PDV. Apresentações de
+        caixa/pack (factor > 1) têm preço próprio e nunca são tocadas.
+        Retorna quantas apresentações foram atualizadas.
+        """
+        session = get_session()
+        try:
+            with session:
+                stmt = select(ProductUnitModel).where(
+                    ProductUnitModel.product_id == product_id,
+                    ProductUnitModel.is_default == True,  # noqa: E712
+                    ProductUnitModel.factor == 1,
+                )
+                count = 0
+                for pu in session.exec(stmt).all():
+                    if pu.price != price:
+                        pu.price = price
+                        session.add(pu)
+                        count += 1
+                session.commit()
+                return count
         finally:
             session.close()
 

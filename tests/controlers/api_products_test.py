@@ -236,3 +236,38 @@ def test_products_delete(logged_client):
         "/api/products/999999", headers={"X-CSRFToken": token}
     )
     assert missing.status_code == 404
+
+
+def test_products_edit_syncs_default_unit_price(logged_client):
+    """PUT com preço novo espelha na apresentação padrão (PDV usa ela)."""
+
+    token = _csrf(logged_client)
+    created = logged_client.post(
+        "/api/products",
+        json={"name": "Sinc", "price": "10,00"},
+        headers={"X-CSRFToken": token},
+    ).get_json()
+    product_id = next(p["id"] for p in created["products"] if p["name"] == "Sinc")
+
+    logged_client.post(
+        f"/api/products/{product_id}/units",
+        json={"name": "Unidade", "factor": 1, "price": "10,00", "is_default": True},
+        headers={"X-CSRFToken": token},
+    )
+    logged_client.post(
+        f"/api/products/{product_id}/units",
+        json={"name": "Caixa", "factor": 12, "price": "100,00"},
+        headers={"X-CSRFToken": token},
+    )
+
+    response = logged_client.put(
+        f"/api/products/{product_id}",
+        json={"name": "Sinc", "price": "12,00", "cost": "5,00"},
+        headers={"X-CSRFToken": token},
+    )
+    assert response.status_code == 200
+
+    units = logged_client.get(f"/api/products/{product_id}/units").get_json()["units"]
+    by_name = {u["name"]: u for u in units}
+    assert by_name["Unidade"]["price"] == 12.0
+    assert by_name["Caixa"]["price"] == 100.0

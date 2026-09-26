@@ -18,7 +18,7 @@ const periods = [
 ]
 
 const active = ref('hoje')
-const showValues = ref(true)
+const showValues = ref(false)
 const saleFilter = ref('todas')
 const search = ref('')
 const showAvulsa = ref(false)

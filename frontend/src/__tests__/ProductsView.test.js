@@ -1,6 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mount, flushPromises, DOMWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
+
+function menuButtons() {
+  return [...document.querySelectorAll('.row-menu-panel button')].map(
+    (el) => new DOMWrapper(el)
+  )
+}
+
+afterEach(() => {
+  document.querySelectorAll('.row-menu-panel').forEach((el) => el.remove())
+})
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -52,13 +62,11 @@ function mountView() {
   })
 }
 
-// ações via menu ⋮: abrir o menu da primeira linha e clicar em Editar
+// ações via menu ⋮ (Teleport p/ body): abrir o menu da primeira linha e clicar em Editar
 async function openEdit(wrapper) {
   await wrapper.findAll('.row-menu > .icon-btn')[0].trigger('click')
   await flushPromises()
-  const editBtn = wrapper
-    .findAll('.row-menu-panel button')
-    .find((b) => b.text().includes('Editar'))
+  const editBtn = menuButtons().find((b) => b.text().includes('Editar'))
   await editBtn.trigger('click')
   await flushPromises()
 }
@@ -83,11 +91,15 @@ describe('ProductsView', () => {
     await wrapper.findAll('.row-menu > .icon-btn')[0].trigger('click')
     await flushPromises()
 
-    const items = wrapper.findAll('.row-menu-panel button').map((b) => b.text())
+    const items = menuButtons().map((b) => b.text())
     expect(items).toEqual(
-      expect.arrayContaining(['Editar', 'Ajustar estoque', 'Movimentações', 'Excluir'])
+      expect.arrayContaining(['Editar', 'Clonar', 'Ajustar estoque', 'Movimentações', 'Excluir'])
     )
-    expect(wrapper.find('.row-menu-panel .is-danger').text()).toContain('Excluir')
+    expect(
+      menuButtons()
+        .find((b) => b.classes().includes('is-danger'))
+        .text()
+    ).toContain('Excluir')
   })
 
   it('editar mostra código, categoria, código secundário e fornecedores', async () => {
@@ -124,6 +136,24 @@ describe('ProductsView', () => {
     expect(apiMock.get).toHaveBeenCalledWith('/products/3/movements')
     expect(wrapper.text()).toContain('Estoque inicial')
     expect(wrapper.text()).toContain('+9')
+  })
+
+  it('clona direto do menu ⋮ sem abrir a edição', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.findAll('.row-menu > .icon-btn')[0].trigger('click')
+    await flushPromises()
+    const cloneBtn = menuButtons().find((b) => b.text().includes('Clonar'))
+    await cloneBtn.trigger('click')
+    await flushPromises()
+
+    expect(apiMock.post).not.toHaveBeenCalled()
+    expect(wrapper.find('.modal.is-open').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Novo produto')
+    expect(wrapper.text()).toContain('Clonando de "Doces arildo"')
+    expect(wrapper.find('#product_name').element.value).toBe('Doces arildo')
+    expect(wrapper.find('#product_barcode').element.value).toBe('')
   })
 
   it('clona pré-preenchendo o formulário sem fechar o modal', async () => {
@@ -188,9 +218,7 @@ describe('ProductsView', () => {
 
     await wrapper.findAll('.row-menu > .icon-btn')[0].trigger('click')
     await flushPromises()
-    const delBtn = wrapper
-      .findAll('.row-menu-panel button')
-      .find((b) => b.text().includes('Excluir'))
+    const delBtn = menuButtons().find((b) => b.text().includes('Excluir'))
     await delBtn.trigger('click') // Excluir
     await nextTick()
 
