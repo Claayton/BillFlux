@@ -52,7 +52,7 @@ def _serialize_link(ps):
 def product_suppliers(product_id):
     repo = ProductSupplierRepository()
     links = repo.get_suppliers_for_product(product_id)
-    return api_response({"links": [_serialize_link(l) for l in links]})
+    return api_response({"links": [_serialize_link(link) for link in links]})
 
 
 @bp.route("/products/<int:product_id>/suppliers", methods=["POST"])
@@ -108,7 +108,7 @@ def update_product_supplier(link_id):
                 if data["is_primary"]:
                     stmt = select(ProductSupplierModel).where(
                         ProductSupplierModel.product_id == ps.product_id,
-                        ProductSupplierModel.is_primary == True,
+                        ProductSupplierModel.is_primary.is_(True),
                         ProductSupplierModel.id != link_id,
                     )
                     for old in session.exec(stmt).all():
@@ -151,7 +151,7 @@ def _avg_daily_sales(product_id: int, days: int = 28) -> Decimal:
                 .join(OrderModel, OrderItemModel.order_id == OrderModel.id)
                 .where(
                     OrderItemModel.product_id == product_id,
-                    OrderModel.cancelled == False,
+                    OrderModel.cancelled.is_(False),
                     OrderModel.created_at >= str(cutoff),
                 )
             )

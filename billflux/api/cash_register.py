@@ -32,10 +32,7 @@ def _serialize(cr):
 
 def _payment_methods_map():
     """Dict id -> name das formas de pagamento ativas."""
-    return {
-        m.id: m.name
-        for m in PaymentMethodRepository().get_active_methods()
-    }
+    return {m.id: m.name for m in PaymentMethodRepository().get_active_methods()}
 
 
 def _caixa_payload():
@@ -111,13 +108,9 @@ def caixa_open():
             try:
                 v = round(float(val), 2)
             except (TypeError, ValueError):
-                return api_error(
-                    f"Valor inválido para a forma {mid}.", 400
-                )
+                return api_error(f"Valor inválido para a forma {mid}.", 400)
             if v < 0:
-                return api_error(
-                    f"Valor da forma {mid} não pode ser negativo.", 400
-                )
+                return api_error(f"Valor da forma {mid} não pode ser negativo.", 400)
             opening_details[str(mid)] = v
             opening_amount += v
         opening_amount = round(opening_amount, 2)
@@ -147,9 +140,7 @@ def caixa_close():
 
     # calcula totais do sistema
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    system_totals = repository.compute_system_totals(
-        open_register.opened_at, now_str
-    )
+    system_totals = repository.compute_system_totals(open_register.opened_at, now_str)
 
     # closing_details: {"1": 150.00, "2": 75.00} (method_id -> counted amount)
     closing_details_raw = data.get("closing_details")
@@ -174,13 +165,9 @@ def caixa_close():
             try:
                 v = round(float(val), 2)
             except (TypeError, ValueError):
-                return api_error(
-                    f"Valor inválido para a forma {mid}.", 400
-                )
+                return api_error(f"Valor inválido para a forma {mid}.", 400)
             if v < 0:
-                return api_error(
-                    f"Valor da forma {mid} não pode ser negativo.", 400
-                )
+                return api_error(f"Valor da forma {mid} não pode ser negativo.", 400)
             closing_details[str(mid)] = v
             closing_amount += v
         closing_amount = round(closing_amount, 2)

@@ -141,7 +141,7 @@ class ProductSupplierRepository:
                     if is_primary:
                         stmt_primary = select(ProductSupplierModel).where(
                             ProductSupplierModel.product_id == product_id,
-                            ProductSupplierModel.is_primary == True,
+                            ProductSupplierModel.is_primary.is_(True),
                         )
                         for old_primary in session.exec(stmt_primary).all():
                             old_primary.is_primary = False
