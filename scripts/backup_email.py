@@ -12,7 +12,7 @@ Fluxo:
 Uso na VPS (com o .env de produção carregado)::
     BACKUP_EMAIL_TO=beeflux.backup@gmail.com \\
     BACKUP_EMAIL_USER=beeflux.backup@gmail.com \\
-    BACKUP_EMAIL_APP_PASSWORD=xxxx \\
+    BACKUP_EMAIL_APP_PASSWORD=<senha-de-app> \\
     python3 scripts/backup_email.py
 
 Teste sem enviar nada (só monta o email e valida tudo)::
@@ -48,6 +48,35 @@ ROOT = Path(__file__).resolve().parent.parent
 def fail(message: str, code: int = 1) -> NoReturn:
     print(f"backup_email: ERRO: {message}", file=sys.stderr)
     raise SystemExit(code)
+
+
+def load_dotenv(env_path: Path) -> None:
+    """Carrega o .env como dados (nunca executa nada).
+
+    Parser mínimo e seguro: ignora linhas vazias/comentários, aceita
+    prefixo `export`, aspas simples/duplas e valores com `=` ou `#`.
+    Variáveis já presentes no ambiente têm prioridade (não sobrescreve).
+    """
+    try:
+        text = env_path.read_text(encoding="utf-8")
+    except OSError:
+        return
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.lower().startswith("export "):
+            line = line[7:].lstrip()
+        key, sep, value = line.partition("=")
+        if not sep:
+            continue
+        key = key.strip()
+        if not key or not key.replace("_", "").isalnum() or key[0].isdigit():
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
 
 
 def run_pg_dump() -> bytes:
@@ -153,9 +182,13 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # .env da raiz do projeto (funciona de qualquer cwd; ambiente vence).
+    load_dotenv(ROOT / ".env")
+
     dump_sql = run_pg_dump()
     with tempfile.NamedTemporaryFile(suffix=".sql.gz", delete=False) as tmp:
-        with gzip.open(tmp.name, "wb", mtime=0) as gz:
+        # gzip.GzipFile (não gzip.open): mtime existe em qualquer versão.
+        with gzip.GzipFile(tmp.name, "wb", compresslevel=9, mtime=0) as gz:
             gz.write(dump_sql)
         dump_path = Path(tmp.name)
 
