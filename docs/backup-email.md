@@ -11,7 +11,7 @@ Script: `scripts/backup_email.py` (só stdlib).
    ```bash
    BACKUP_EMAIL_TO=beeflux.backup@gmail.com
    BACKUP_EMAIL_USER=beeflux.backup@gmail.com
-   BACKUP_EMAIL_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
+   BACKUP_EMAIL_APP_PASSWORD=<cole-aqui-a-senha-de-app>
    ```
 4. No Gmail da conta de backup: filtro `subject:"[BeeFlux backup]"` → aplicar label + arquivar.
 
