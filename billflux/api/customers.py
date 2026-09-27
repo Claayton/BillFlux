@@ -160,18 +160,22 @@ def customer_orders(customer_id):
     result = []
     for order in orders:
         method = method_repo.get_method(order.payment_method_id)
-        result.append({
-            "order_id": order.id,
-            "date": order.created_at.isoformat(),
-            "total": float(order.total),
-            "discount": float(order.discount or 0),
-            "payment_method": method.name if method else "—",
-            "cancelled": order.cancelled,
-        })
+        result.append(
+            {
+                "order_id": order.id,
+                "date": order.created_at.isoformat(),
+                "total": float(order.total),
+                "discount": float(order.discount or 0),
+                "payment_method": method.name if method else "—",
+                "cancelled": order.cancelled,
+            }
+        )
 
-    return api_response({
-        "customer": _serialize(customer),
-        "orders": result,
-        "total_spent": sum(o["total"] for o in result if not o["cancelled"]),
-        "order_count": len([o for o in result if not o["cancelled"]]),
-    })
+    return api_response(
+        {
+            "customer": _serialize(customer),
+            "orders": result,
+            "total_spent": sum(o["total"] for o in result if not o["cancelled"]),
+            "order_count": len([o for o in result if not o["cancelled"]]),
+        }
+    )

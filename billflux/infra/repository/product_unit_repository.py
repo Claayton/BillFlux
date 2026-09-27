@@ -107,7 +107,7 @@ class ProductUnitRepository:
                     session.flush()
                     stmt = select(ProductUnitModel).where(
                         ProductUnitModel.product_id == product_id,
-                        ProductUnitModel.is_default == True,
+                        ProductUnitModel.is_default.is_(True),
                         ProductUnitModel.id != pu.id,
                     )
                     for old in session.exec(stmt).all():
@@ -146,7 +146,7 @@ class ProductUnitRepository:
             with session:
                 stmt = select(ProductUnitModel).where(
                     ProductUnitModel.product_id == product_id,
-                    ProductUnitModel.is_default == True,  # noqa: E712
+                    ProductUnitModel.is_default.is_(True),  # noqa: E712
                     ProductUnitModel.factor == 1,
                 )
                 count = 0
