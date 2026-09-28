@@ -25,6 +25,9 @@ from billflux.api import schedule as api_schedule
 from billflux.api import product_units as api_product_units
 from billflux.api import settings as api_settings
 from billflux.api import audit as api_audit
+from billflux.api import reports as api_reports
+from billflux.api import inventory as api_inventory
+from billflux.api import receivables as api_receivables
 
 csrf = CSRFProtect()
 
@@ -74,17 +77,19 @@ def _seed_default_accounts():
 
 
 def _seed_default_payment_methods():
-    """Cria as formas de pagamento padrão se a tabela estiver vazia."""
+    """Cria as formas de pagamento padrão se a tabela estiver vazia e
+    garante que a forma 'Fiado' exista mesmo em bancos já populados."""
     from billflux.infra.repository.payment_method_repository import (
         PaymentMethodRepository,
     )
+    from billflux.services.credit import ensure_fiado_method
 
     repository = PaymentMethodRepository()
-    if repository.get_methods():
-        return
+    if not repository.get_methods():
+        for name in ("Dinheiro", "PIX", "Crédito", "Débito", "VR/VA"):
+            repository.insert_method(name=name)
 
-    for name in ("Dinheiro", "PIX", "Crédito", "Débito", "VR/VA"):
-        repository.insert_method(name=name)
+    ensure_fiado_method()
 
 
 def create_app():

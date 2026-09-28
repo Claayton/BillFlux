@@ -12,6 +12,17 @@ from billflux.infra.repository.payment_method_repository import (
     PaymentMethodRepository,
 )
 from billflux.services.audit import audit
+from billflux.services.credit import get_fiado_method_ids
+
+
+def _without_fiado(system_totals):
+    """Remove pagamentos na forma fiado: dívida não é dinheiro esperado no caixa."""
+    fiado_ids = get_fiado_method_ids()
+    if not fiado_ids:
+        return system_totals
+    return {
+        mid: total for mid, total in system_totals.items() if int(mid) not in fiado_ids
+    }
 
 
 def _serialize(cr):
@@ -47,8 +58,8 @@ def _caixa_payload():
     system_totals_named = {}
     if open_register:
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        system_totals = repository.compute_system_totals(
-            open_register.opened_at, now_str
+        system_totals = _without_fiado(
+            repository.compute_system_totals(open_register.opened_at, now_str)
         )
         methods = _payment_methods_map()
         for mid, total in system_totals.items():
@@ -169,7 +180,9 @@ def caixa_close():
 
     # calcula totais do sistema
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    system_totals = repository.compute_system_totals(open_register.opened_at, now_str)
+    system_totals = _without_fiado(
+        repository.compute_system_totals(open_register.opened_at, now_str)
+    )
 
     # closing_details: {"1": 150.00, "2": 75.00} (method_id -> counted amount)
     closing_details_raw = data.get("closing_details")
@@ -202,12 +215,14 @@ def caixa_close():
         closing_amount = round(closing_amount, 2)
         closing_details = json.dumps(closing_details)
 
-    # esperado = abertura + vendas + suprimentos − sangrias
+    # esperado = abertura + vendas + suprimentos + entradas − sangrias
+    # (entradas incluem recebimentos de fiado no caixa aberto)
     movement_totals = CashMovementRepository().totals_by_kind(open_register.id)
     expected_amount = (
         open_register.opening_amount
         + sum(system_totals.values())
         + movement_totals.get("suprimento", 0.0)
+        + movement_totals.get("entrada", 0.0)
         - movement_totals.get("sangria", 0.0)
     )
     expected_amount = round(expected_amount, 2)

@@ -150,7 +150,11 @@ def test_movement_affects_expected(client):
     )
 
     payload = client.get("/api/caixa").get_json()
-    assert payload["movement_totals"] == {"sangria": 20.0, "suprimento": 50.0}
+    assert payload["movement_totals"] == {
+        "sangria": 20.0,
+        "suprimento": 50.0,
+        "entrada": 0.0,
+    }
     assert len(payload["movements"]) == 2
     assert payload["movements"][0]["kind"] == "sangria"
 
@@ -177,7 +181,13 @@ def test_cancel_records_audit(client):
         json={"date": "2026-09-27", "total": "10,00"},
         headers={"X-CSRFToken": token},
     ).get_json()
-    sale_id = created["sales"][0]["id"]
+    # A lista combinada vem ordenada por data; pega a venda AVULSA da data
+    # certa (pedidos do PDV de hoje têm data mais nova e aparecem antes).
+    sale_id = next(
+        s["id"]
+        for s in created["sales"]
+        if s["kind"] == "manual" and s["date"] == "2026-09-27"
+    )
 
     response = client.post(
         f"/api/sales/{sale_id}/cancel",
