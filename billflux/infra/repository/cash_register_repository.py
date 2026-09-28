@@ -47,7 +47,10 @@ class CashRegisterRepository:
                 sql = (
                     select(CashRegisterModel)
                     .where(CashRegisterModel.status == "closed")
-                    .order_by(CashRegisterModel.closed_at.desc())
+                    .order_by(
+                        CashRegisterModel.closed_at.desc(),
+                        CashRegisterModel.id.desc(),
+                    )
                 )
                 cr = session.exec(sql).first()
                 return _to_domain(cr) if cr else None

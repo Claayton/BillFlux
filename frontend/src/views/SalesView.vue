@@ -255,16 +255,17 @@ function askCancel(sale) {
   cancelTarget.value = sale
 }
 
-async function confirmCancel() {
+async function confirmCancel(reason) {
   const sale = cancelTarget.value
   cancelTarget.value = null
   if (!sale) return
+  const body = reason && String(reason).trim() ? { reason: String(reason).trim() } : {}
   try {
     if (sale.kind === 'pdv') {
-      data.value = await api.post(`/sales/orders/${sale.id}/cancel`, {})
+      data.value = await api.post(`/sales/orders/${sale.id}/cancel`, body)
       ElMessage.success('Venda cancelada e estoque restaurado.')
     } else {
-      data.value = await api.post(`/sales/${sale.id}/cancel`, {})
+      data.value = await api.post(`/sales/${sale.id}/cancel`, body)
       ElMessage.success('Venda cancelada.')
     }
   } catch (error) {
@@ -567,7 +568,9 @@ onMounted(load)
         : `Excluir a venda #${cancelTarget.id}?`"
       confirm-label="Cancelar venda"
       danger
-      @confirm="confirmCancel"
+      input-label="Motivo (opcional)"
+      input-placeholder="Ex: erro de lançamento, desistência..."
+      @confirm="confirmCancel($event)"
       @cancel="cancelTarget = null"
     />
   </AppShell>
