@@ -6,6 +6,7 @@ const { apiMock, routerPush } = vi.hoisted(() => ({
   apiMock: {
     get: vi.fn(),
     post: vi.fn(),
+    put: vi.fn(),
   },
   routerPush: vi.fn(),
 }))
@@ -25,7 +26,8 @@ const products = [
   { id: 1, name: 'Doces arildo', price: 5, stock: 9, barcode: '040141018496', units: [{ id: 1, name: 'Unidade', barcode: '', factor: 1, price: 5, is_default: true }] },
   { id: 2, name: 'Bolo de fubá', price: 3, stock: 4, barcode: null, units: [{ id: 2, name: 'Unidade', barcode: '', factor: 1, price: 3, is_default: true }] },
 ]
-const methods = [{ id: 1, name: 'Dinheiro' }, { id: 2, name: 'PIX' }]
+const methods = [{ id: 1, name: 'Dinheiro' }, { id: 2, name: 'PIX' }, { id: 3, name: 'Fiado' }]
+const customers = [{ id: 7, name: 'João da Silva', cpf_cnpj: '123.456.789-00', active: true }]
 
 function mountView() {
   return mount(PdvView, {
@@ -37,7 +39,9 @@ describe('PdvView', () => {
   beforeEach(() => {
     apiMock.get.mockReset()
     apiMock.post.mockReset()
+    apiMock.put.mockReset()
     routerPush.mockReset()
+    sessionStorage.clear()
     apiMock.get.mockImplementation((url) => {
       if (String(url).startsWith('/pdv/recibo')) {
         const id = String(url).split('/').pop()
@@ -58,14 +62,14 @@ describe('PdvView', () => {
           open: { id: 1, opened_by: 'test', opening_amount: 100, status: 'open' },
         })
       }
-      return Promise.resolve({ products, methods })
+      return Promise.resolve({ products, methods, customers })
     })
   })
 
   it('não mostra aviso de caixa fechado antes de carregar', async () => {
     apiMock.get.mockImplementation((url) => {
       if (String(url).includes('/caixa')) return new Promise(() => {})
-      return Promise.resolve({ products, methods })
+      return Promise.resolve({ products, methods, customers })
     })
     const wrapper = mountView()
     await wrapper.vm.$nextTick()
@@ -75,7 +79,7 @@ describe('PdvView', () => {
   it('mostra aviso só quando confirmado caixa fechado', async () => {
     apiMock.get.mockImplementation((url) => {
       if (String(url).includes('/caixa')) return Promise.resolve({ open: null })
-      return Promise.resolve({ products, methods })
+      return Promise.resolve({ products, methods, customers })
     })
     const wrapper = mountView()
     await flushPromises()
@@ -147,6 +151,48 @@ describe('PdvView', () => {
     // recibo abre como modal, sem sair do PDV
     expect(wrapper.find('.sale-receipt-modal').exists()).toBe(true)
     expect(wrapper.text()).toContain('Recibo #7')
+  })
+
+  it('venda fiada exige cliente selecionado e envia customer_id', async () => {
+    apiMock.post.mockResolvedValue({ order: { order_id: 12 } })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('arildo')
+    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+    await wrapper.find('#pdv-finish').trigger('click')
+    await flushPromises()
+
+    const inputs = wrapper.findAll('.pdv-payfield input')
+    expect(inputs).toHaveLength(3)
+    await inputs[0].setValue('') // limpa o pré-preenchido em dinheiro
+    await inputs[2].setValue('500') // fiado: R$ 5,00
+
+    await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(ElMessage.warning).toHaveBeenCalledWith(
+      'Venda fiada: selecione o cliente para gerar o débito.'
+    )
+    expect(apiMock.post).not.toHaveBeenCalled()
+
+    // seleciona o cliente e a confirmação passa
+    const customerInput = wrapper.find('.pdv-customer-search input')
+    await customerInput.setValue('João')
+    await flushPromises()
+    await wrapper.find('.pdv-customer-option').trigger('click')
+
+    await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith(
+      '/pdv/complete',
+      expect.objectContaining({
+        customer_id: 7,
+        payments: [{ method_id: 3, amount: '5.00' }],
+      })
+    )
   })
 
   it('divide o pagamento entre duas formas navegando com a seta', async () => {
@@ -286,7 +332,7 @@ describe('PdvView', () => {
           },
         })
       }
-      return Promise.resolve({ products, methods })
+      return Promise.resolve({ products, methods, customers })
     })
     const wrapper = mountView()
     await flushPromises()
@@ -386,5 +432,277 @@ describe('PdvView', () => {
     // 10% de R$ 5,00 = R$ 0,50 de desconto -> total R$ 4,50
     expect(wrapper.find('#cart-total').text()).toBe('R$ 4,50')
     expect(wrapper.find('.pdv-footer-discount').exists()).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Comandas abertas
+// ---------------------------------------------------------------------------
+
+const tabListPayload = {
+  tabs: [
+    {
+      id: 42,
+      number: 7,
+      identification: 'Mesa 2',
+      status: 'open',
+      total: 5,
+      item_count: 1,
+      units_count: 1,
+      opened_at: '2026-09-28T10:00:00',
+    },
+  ],
+}
+
+const tabDetail = {
+  tab: {
+    id: 42,
+    number: 7,
+    identification: 'Mesa 2',
+    status: 'open',
+    subtotal: 5,
+    discount: 0,
+    total: 5,
+    item_count: 1,
+    units_count: 1,
+    print_count: 0,
+    opened_at: '2026-09-28T10:00:00',
+    opened_by: 'admin',
+    items: [
+      {
+        id: 101,
+        product_id: 1,
+        unit_id: 1,
+        name: 'Doces arildo',
+        quantity: 1,
+        unit_price: 5,
+        total: 5,
+        factor: 1,
+      },
+    ],
+  },
+}
+
+async function addProduct(wrapper, term) {
+  await wrapper.find('#pdv-search').setValue(term)
+  await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+  await nextTick()
+}
+
+function openWithActiveTab() {
+  sessionStorage.setItem('pdv.active_tab', '42')
+  apiMock.get.mockImplementation((url) => {
+    const path = String(url)
+    if (path === '/tabs/42') return Promise.resolve(tabDetail)
+    if (path.startsWith('/tabs')) return Promise.resolve(tabListPayload)
+    if (path.startsWith('/pdv/recibo')) {
+      return Promise.resolve({
+        order: {
+          order_id: 99,
+          date: '2026-09-28T12:00:00',
+          total: 5,
+          discount: 0,
+          items: [],
+          payments: [],
+          payment_method: 'Dinheiro',
+        },
+      })
+    }
+    if (path.includes('/caixa')) {
+      return Promise.resolve({ open: { id: 1, opened_by: 'test', status: 'open' } })
+    }
+    return Promise.resolve({ products, methods, customers })
+  })
+}
+
+describe('PdvView — comandas abertas', () => {
+  beforeEach(() => {
+    apiMock.get.mockReset()
+    apiMock.post.mockReset()
+    apiMock.put.mockReset()
+    routerPush.mockReset()
+    sessionStorage.clear()
+    apiMock.get.mockImplementation((url) => {
+      const path = String(url)
+      if (path.startsWith('/tabs?')) return Promise.resolve(tabListPayload)
+      if (path.startsWith('/tabs/')) return Promise.resolve(tabDetail)
+      if (path.includes('/caixa')) {
+        return Promise.resolve({ open: { id: 1, opened_by: 'test', status: 'open' } })
+      }
+      return Promise.resolve({ products, methods, customers })
+    })
+  })
+
+  it('F4 só abre a janela de comanda quando há itens no carrinho', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F4' }))
+    await nextTick()
+    expect(wrapper.find('#tab_identification').exists()).toBe(false)
+
+    await addProduct(wrapper, 'arildo')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F4' }))
+    await nextTick()
+    expect(wrapper.find('#tab_identification').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Abrir comanda')
+  })
+
+  it('abre a comanda, entra no contexto e espelha o carrinho', async () => {
+    apiMock.post.mockResolvedValue(tabDetail)
+    const wrapper = mountView()
+    await flushPromises()
+    await addProduct(wrapper, 'arildo')
+
+    await wrapper.find('.pdv-open-tab').trigger('click')
+    await flushPromises()
+    await wrapper.find('#tab_identification').setValue('Mesa 2')
+    await wrapper.find('.tab-open-print input').setValue(false)
+    const confirmOpen = wrapper
+      .findAll('.modal-footer .btn-primary')
+      .find((b) => b.text().includes('Abrir comanda'))
+    await confirmOpen.trigger('click')
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith('/tabs', {
+      identification: 'Mesa 2',
+      items: [{ product_id: 1, quantity: 1, unit_id: 1 }],
+    })
+    // banner com a comanda ativa e carrinho igual ao servidor
+    expect(wrapper.find('.pdv-tabbar').text()).toContain('Comanda #0007')
+    expect(wrapper.find('.pdv-tabbar').text()).toContain('Mesa 2')
+    expect(sessionStorage.getItem('pdv.active_tab')).toBe('42')
+    expect(wrapper.find('#cart-count').text()).toBe('1 item')
+    expect(wrapper.find('#pdv-finish').text()).toContain('Finalizar comanda')
+    // sem o modal de impressão (checkbox desmarcado)
+    expect(wrapper.find('.tab-ticket').exists()).toBe(false)
+  })
+
+  it('seleciona comanda da lista e carrega os itens no carrinho', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('.pdv-tabs-btn').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('.tab-card')).toHaveLength(1)
+
+    await wrapper.find('.tab-card').trigger('click')
+    await flushPromises()
+
+    expect(apiMock.get).toHaveBeenCalledWith('/tabs/42')
+    expect(wrapper.find('.pdv-tabbar').text()).toContain('Comanda #0007')
+    expect(wrapper.text()).toContain('Doces arildo')
+    expect(wrapper.find('#cart-count').text()).toBe('1 item')
+    expect(sessionStorage.getItem('pdv.active_tab')).toBe('42')
+  })
+
+  it('restaura a comanda ativa após recarregar a página', async () => {
+    openWithActiveTab()
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.pdv-tabbar').text()).toContain('Comanda #0007')
+    expect(wrapper.text()).toContain('Doces arildo')
+    expect(ElMessage.info).toHaveBeenCalled()
+  })
+
+  it('cada mudança no carrinho sincroniza via PUT /tabs/:id/items', async () => {
+    openWithActiveTab()
+    apiMock.put.mockResolvedValue({ tab: tabDetail.tab })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await addProduct(wrapper, 'bolo')
+    await flushPromises()
+
+    expect(apiMock.put).toHaveBeenCalledWith('/tabs/42/items', {
+      items: [
+        { product_id: 1, quantity: 1, unit_id: 1 },
+        { product_id: 2, quantity: 1, unit_id: 2 },
+      ],
+    })
+  })
+
+  it('finalizar comanda fecha via POST /tabs/:id/close sem reenviar itens', async () => {
+    openWithActiveTab()
+    apiMock.post.mockResolvedValue({ order: { order_id: 99 }, tab: tabDetail.tab })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-finish').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.pdv-checkout-modal').text()).toContain('Finalizar comanda')
+
+    await wrapper.findAll('.pdv-payfield input')[0].setValue('500')
+    await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith(
+      '/tabs/42/close',
+      expect.objectContaining({
+        payments: [{ method_id: 1, amount: '5.00' }],
+        discount: 0,
+      })
+    )
+    const payload = apiMock.post.mock.calls[0][1]
+    expect(payload.items).toBeUndefined()
+
+    // contexto limpo + recibo comum da venda
+    expect(wrapper.find('.pdv-tabbar').exists()).toBe(false)
+    expect(sessionStorage.getItem('pdv.active_tab')).toBeNull()
+    expect(wrapper.find('.sale-receipt-modal').text()).toContain('Recibo #99')
+    expect(ElMessage.success).toHaveBeenCalledWith('Comanda #0007 finalizada com sucesso.')
+  })
+
+  it('cancelar comanda da lista pede confirmação e chama o endpoint', async () => {
+    apiMock.post.mockResolvedValue({ tab: { ...tabDetail.tab, status: 'canceled' } })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('.pdv-tabs-btn').trigger('click')
+    await flushPromises()
+    await wrapper.find('.tab-card-action.is-danger').trigger('click')
+    await nextTick()
+
+    expect(wrapper.find('.btn-danger').text()).toContain('Cancelar comanda')
+    expect(wrapper.text()).toContain('O estoque dos itens será devolvido')
+
+    await wrapper.find('.btn-danger').trigger('click')
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith('/tabs/42/cancel', {})
+    expect(ElMessage.success).toHaveBeenCalledWith('Comanda #0007 cancelada.')
+    expect(wrapper.find('.tab-card').exists()).toBe(false)
+  })
+
+  it('sair da comanda libera o PDV sem fechar a comanda', async () => {
+    openWithActiveTab()
+    const wrapper = mountView()
+    await flushPromises()
+
+    const leave = wrapper
+      .findAll('.pdv-tabbar-actions button')
+      .find((b) => b.text().includes('Sair'))
+    await leave.trigger('click')
+    await flushPromises()
+
+    expect(apiMock.post).not.toHaveBeenCalled()
+    expect(wrapper.find('.pdv-tabbar').exists()).toBe(false)
+    expect(sessionStorage.getItem('pdv.active_tab')).toBeNull()
+    expect(wrapper.find('#cart-count').text()).toBe('0 itens')
+    expect(wrapper.text()).toContain('Carrinho vazio')
+  })
+
+  it('mostra o botão "Comandas abertas" com a contagem', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.pdv-tabs-btn').text()).toContain('Comandas abertas')
+    expect(wrapper.find('.pdv-tabs-count').text()).toBe('1')
+    // sem comanda ativa o botão principal continua "Concluir venda"
+    expect(wrapper.find('#pdv-finish').text()).toContain('Concluir venda')
+    // "Abrir comanda" fica visível porém desabilitado com o carrinho vazio
+    expect(wrapper.find('.pdv-open-tab').element.disabled).toBe(true)
+    expect(wrapper.find('.pdv-tabbar').exists()).toBe(false)
   })
 })
