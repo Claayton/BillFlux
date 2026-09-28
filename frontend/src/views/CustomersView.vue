@@ -305,6 +305,13 @@ onBeforeUnmount(() => {
                     <span class="status-badge" :class="c.active ? 'is-ok' : 'is-off'">
                       {{ c.active ? 'Ativo' : 'Inativo' }}
                     </span>
+                    <span
+                      v-if="c.credit_balance > 0"
+                      class="status-badge is-debt"
+                      :title="`Saldo devedor: ${brl(c.credit_balance)}`"
+                    >
+                      Deve {{ brl(c.credit_balance) }}
+                    </span>
                   </td>
                   <td class="cell-actions" @click.stop>
                     <div class="row-menu">
@@ -517,7 +524,13 @@ onBeforeUnmount(() => {
   width: 130px;
 }
 .customers-table .col-status {
-  width: 110px;
+  width: 190px;
+}
+.status-badge.is-debt {
+  background: #ffedd5;
+  color: #c2410c;
+  margin-top: 3px;
+  margin-right: 4px;
 }
 .customers-table tbody td {
   min-width: 0;
