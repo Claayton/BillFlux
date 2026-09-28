@@ -38,6 +38,8 @@ from billflux.infra.entities.receivable import Receivable  # noqa: F401
 from billflux.infra.entities.receivable_payment import (  # noqa: F401
     ReceivablePayment,
 )
+from billflux.infra.entities.tab import Tab  # noqa: F401
+from billflux.infra.entities.tab_item import TabItem  # noqa: F401
 
 _database_url = settings.database.url
 

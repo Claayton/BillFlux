@@ -28,6 +28,7 @@ from billflux.api import audit as api_audit
 from billflux.api import reports as api_reports
 from billflux.api import inventory as api_inventory
 from billflux.api import receivables as api_receivables
+from billflux.api import tabs as api_tabs
 
 csrf = CSRFProtect()
 

@@ -36,67 +36,109 @@ class OrderRepository:
         estiver inativo (nada é persistido). O estoque pode ficar negativo
         (venda sem estoque é permitida). O desconto (em R$) é abatido do total.
         `payments` é uma lista de (payment_method_id, valor); se não informada,
-        usa um único pagamento na forma indicada pelo total."""
+        usa um único pagamento na forma indicada pelo total.
+        Cada item é (product_id, quantidade_base) ou, opcionalmente,
+        (product_id, quantidade_base, preço_unitário_snapshot) — o terceiro
+        elemento grava o preço do momento (usado pelas comandas)."""
 
         session = get_session()
         try:
             with session:
-                products = []
-                subtotal = Decimal("0")
-                for product_id, quantity in items:
-                    if quantity <= 0:
-                        raise ValueError("Quantidade inválida.")
-                    product = session.get(ProductModel, product_id)
-                    if not product or not product.active:
-                        raise ValueError("Produto não encontrado.")
-                    products.append((product, quantity))
-                    subtotal += product.price * quantity
-
-                discount = discount or Decimal("0")
-                total = subtotal - discount
-                if total < 0:
-                    total = Decimal("0")
-
-                payments = self._normalize_payments(
-                    session, payments, payment_method_id, total
-                )
-
-                order = OrderModel(
-                    total=total,
-                    payment_method_id=payments[0][0],
+                order = self._create_order_in_session(
+                    session,
+                    items,
+                    payment_method_id,
                     obs=obs,
-                    discount=discount or None,
+                    discount=discount,
+                    payments=payments,
                     customer_id=customer_id,
+                    decrement_stock=True,
                 )
-                session.add(order)
-                session.flush()
-
-                self._insert_payments(session, order.id, payments)
-
-                for product, quantity in products:
-                    session.add(
-                        OrderItemModel(
-                            order_id=order.id,
-                            product_id=product.id,
-                            quantity=quantity,
-                            unit_price=product.price,
-                        )
-                    )
-                    product.stock_quantity -= quantity
-                    session.add(product)
-                    session.add(
-                        ProductMovementModel(
-                            product_id=product.id,
-                            movement_type="saida",
-                            quantity=quantity,
-                            obs=f"Venda #{order.id}",
-                        )
-                    )
                 session.commit()
                 session.refresh(order)
                 return Order(**dict(order))
         finally:
             session.close()
+
+    @staticmethod
+    def _create_order_in_session(
+        session,
+        items: List[tuple],
+        payment_method_id: int,
+        obs: Optional[str] = None,
+        discount: Optional[Decimal] = None,
+        payments: Optional[List[tuple]] = None,
+        customer_id: Optional[int] = None,
+        *,
+        decrement_stock: bool = True,
+        allow_inactive: bool = False,
+    ):
+        """Cria o pedido dentro da transação do chamador (sem commit).
+        Com `decrement_stock=False` não mexe no estoque (baixa já feita
+        antes, ex.: comanda); com `allow_inactive=True` aceita produto
+        inativo (mercadoria já entregue na comanda)."""
+
+        products = []
+        subtotal = Decimal("0")
+        for entry in items:
+            product_id = entry[0]
+            quantity = entry[1]
+            price_override = entry[2] if len(entry) > 2 else None
+            if quantity <= 0:
+                raise ValueError("Quantidade inválida.")
+            product = session.get(ProductModel, product_id)
+            if not product or (not allow_inactive and not product.active):
+                raise ValueError("Produto não encontrado.")
+            unit_price = (
+                Decimal(str(price_override))
+                if price_override is not None
+                else product.price
+            )
+            products.append((product, quantity, unit_price))
+            subtotal += unit_price * quantity
+
+        discount = discount or Decimal("0")
+        total = subtotal - discount
+        if total < 0:
+            total = Decimal("0")
+
+        payments = OrderRepository._normalize_payments(
+            session, payments, payment_method_id, total
+        )
+
+        order = OrderModel(
+            total=total,
+            payment_method_id=payments[0][0],
+            obs=obs,
+            discount=discount or None,
+            customer_id=customer_id,
+        )
+        session.add(order)
+        session.flush()
+
+        OrderRepository._insert_payments(session, order.id, payments)
+
+        for product, quantity, unit_price in products:
+            session.add(
+                OrderItemModel(
+                    order_id=order.id,
+                    product_id=product.id,
+                    quantity=quantity,
+                    unit_price=unit_price,
+                )
+            )
+            if decrement_stock:
+                product.stock_quantity -= quantity
+                session.add(product)
+                session.add(
+                    ProductMovementModel(
+                        product_id=product.id,
+                        movement_type="saida",
+                        quantity=quantity,
+                        obs=f"Venda #{order.id}",
+                    )
+                )
+        return order
 
     def get_orders(self) -> List[Order]:
         """Returns all orders, newest first."""
@@ -184,7 +226,8 @@ class OrderRepository:
         finally:
             session.close()
 
-    def _normalize_payments(self, session, payments, payment_method_id, total):
+    @staticmethod
+    def _normalize_payments(session, payments, payment_method_id, total):
         """Valida a lista de pagamentos (method_id, valor) e a usa, ou cria um
         único pagamento na forma indicada pelo total."""
 
