@@ -1,12 +1,18 @@
 <script setup>
+import { ref } from 'vue'
+
 defineProps({
   title: { type: String, required: true },
   message: { type: String, default: '' },
   confirmLabel: { type: String, default: 'Confirmar' },
   danger: { type: Boolean, default: false },
   summary: { type: Array, default: () => null },
+  inputLabel: { type: String, default: '' },
+  inputPlaceholder: { type: String, default: '' },
 })
 const emit = defineEmits(['confirm', 'cancel'])
+const inputText = ref('')
+
 </script>
 
 <template>
@@ -18,6 +24,10 @@ const emit = defineEmits(['confirm', 'cancel'])
       </div>
       <div class="confirm-body">
         <p v-if="message">{{ message }}</p>
+        <div v-if="inputLabel" class="form-field confirm-input">
+          <label>{{ inputLabel }}</label>
+          <input v-model="inputText" type="text" :placeholder="inputPlaceholder" />
+        </div>
         <dl v-if="summary && summary.length" class="confirm-summary">
           <div
             v-for="row in summary"
@@ -32,7 +42,7 @@ const emit = defineEmits(['confirm', 'cancel'])
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-ghost modal-cancel" @click="emit('cancel')">Voltar</button>
-        <button type="button" class="btn" :class="danger ? 'btn-danger' : 'btn-primary'" @click="emit('confirm')">
+        <button type="button" class="btn" :class="danger ? 'btn-danger' : 'btn-primary'" @click="emit('confirm', inputText)">
           {{ confirmLabel }}
         </button>
       </div>
@@ -52,6 +62,11 @@ const emit = defineEmits(['confirm', 'cancel'])
 }
 
 .confirm-body p:last-child {
+  margin-bottom: 0;
+}
+
+.confirm-input {
+  margin-top: 12px;
   margin-bottom: 0;
 }
 

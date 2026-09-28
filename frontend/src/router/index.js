@@ -105,6 +105,12 @@ const routes = [
     meta: { auth: true },
   },
   {
+    path: '/config',
+    name: 'config',
+    component: () => import('@/views/ConfigView.vue'),
+    meta: { auth: true },
+  },
+  {
     path: '/:pathMatch(.*)*',
     redirect: '/sales',
   },

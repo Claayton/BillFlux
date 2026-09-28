@@ -36,6 +36,7 @@ const navSections = [
   {
     items: [
       { name: 'home', label: 'Visão geral', icon: 'fas fa-th-large', to: '/home' },
+      { name: 'config', label: 'Configurações', icon: 'fas fa-cog', to: '/config' },
     ]
   },
 ]

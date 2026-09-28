@@ -596,6 +596,18 @@
     box-shadow: none;
     border: none;
   }
+
+  /* Impressão via clone: some com o app inteiro, sobra só o recibo
+     (1 folha do tamanho certo, sem duplicar). */
+  body.printing-receipt #app {
+    display: none !important;
+  }
+  .receipt-print-clone {
+    position: static;
+    visibility: visible;
+    margin: 0;
+    box-shadow: none;
+  }
 }
 
 /* ---------- Tabela ---------- */
