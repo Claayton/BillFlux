@@ -31,6 +31,9 @@ from billflux.infra.entities.product_supplier import (
 from billflux.infra.entities.product_unit import (
     ProductUnit as ProductUnitModel,
 )  # noqa: F401
+from billflux.infra.entities.cash_movement import CashMovement  # noqa: F401
+from billflux.infra.entities.audit_event import AuditEvent  # noqa: F401
+from billflux.infra.entities.setting import Setting  # noqa: F401
 
 _database_url = settings.database.url
 

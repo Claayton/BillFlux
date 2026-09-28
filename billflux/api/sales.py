@@ -12,6 +12,7 @@ from billflux.infra.repository.payment_method_repository import (
 )
 from billflux.infra.repository.product_repository import ProductRepository
 from billflux.infra.repository.sale_repository import SaleRepository
+from billflux.services.audit import audit
 
 
 def _build_range_summary(sales, orders, start, end):
@@ -202,10 +203,21 @@ def sales_delete(sale_id):
 def sales_cancel(sale_id):
     """Cancela uma venda avulsa mantendo-a na lista (marca como cancelada)."""
     repository = SaleRepository()
-    if not repository.get_sale(sale_id):
+    sale = repository.get_sale(sale_id)
+    if not sale:
         return api_error("Venda não encontrada.", 404)
     if not repository.cancel_sale(sale_id):
         return api_error("Venda já cancelada.", 400)
+    data = request.get_json(silent=True) or {}
+    audit(
+        "sale.cancel",
+        entity="sale",
+        entity_id=sale_id,
+        details={
+            "total": str(sale.total),
+            "reason": (data.get("reason") or "").strip() or None,
+        },
+    )
     return api_response(_sales_payload())
 
 
@@ -318,6 +330,13 @@ def order_cancel(order_id):
     """Cancela uma venda do PDV mantendo-a na lista: marca como cancelada e
     restaura o estoque dos itens."""
     if OrderRepository().cancel_order(order_id):
+        data = request.get_json(silent=True) or {}
+        audit(
+            "order.cancel",
+            entity="order",
+            entity_id=order_id,
+            details={"reason": (data.get("reason") or "").strip() or None},
+        )
         return api_response(_sales_payload())
     return api_error("Pedido não encontrado ou já cancelado.", 400)
 
