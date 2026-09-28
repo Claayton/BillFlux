@@ -18,6 +18,10 @@ from billflux.infra.repository.payment_method_repository import (
 from billflux.infra.repository.product_repository import ProductRepository
 from billflux.infra.repository.customer_repository import CustomerRepository
 from billflux.infra.repository.product_unit_repository import ProductUnitRepository
+from billflux.services.credit import (
+    ensure_fiado_customer,
+    register_order_credit,
+)
 
 
 def _serialize_product(product, units=None):
@@ -46,6 +50,41 @@ def _serialize_product(product, units=None):
 
 def _serialize_method(method):
     return {"id": method.id, "name": method.name}
+
+
+def _parse_payments_payload(data):
+    """Extrai (payments, method_id, error) do payload de fechamento.
+
+    `payments` é lista de (method_id, Decimal) para pagamento dividido;
+    `method_id` é a forma única quando não há divisão. `error` é a mensagem
+    de validação quando o payload é inválido (demais campos None)."""
+    method_id = None
+    payments = None
+    raw_payments = data.get("payments")
+    method_repository = PaymentMethodRepository()
+    if isinstance(raw_payments, list) and raw_payments:
+        payments = []
+        for entry in raw_payments:
+            try:
+                entry_method_id = int(entry.get("method_id"))
+                amount = br_to_decimal(entry.get("amount"))
+            except (TypeError, ValueError):
+                return None, None, "Forma de pagamento inválida."
+            if amount is None or amount <= 0:
+                return None, None, "Valor de pagamento inválido."
+            payment_method = method_repository.get_method(entry_method_id)
+            if not payment_method or not payment_method.active:
+                return None, None, "Selecione a forma de pagamento."
+            payments.append((entry_method_id, amount))
+    else:
+        try:
+            method_id = int(data.get("method_id")) if data.get("method_id") else None
+        except (TypeError, ValueError):
+            method_id = None
+        payment_method = method_repository.get_method(method_id) if method_id else None
+        if not payment_method or not payment_method.active:
+            return None, None, "Selecione a forma de pagamento."
+    return payments, method_id, None
 
 
 def _build_receipt(order_id):
@@ -155,32 +194,9 @@ def complete():
 
     data = request.get_json(silent=True) or {}
 
-    method_id = None
-    payments = None
-    raw_payments = data.get("payments")
-    method_repository = PaymentMethodRepository()
-    if isinstance(raw_payments, list) and raw_payments:
-        payments = []
-        for entry in raw_payments:
-            try:
-                entry_method_id = int(entry.get("method_id"))
-                amount = br_to_decimal(entry.get("amount"))
-            except (TypeError, ValueError):
-                return api_error("Forma de pagamento inválida.", 400)
-            if amount is None or amount <= 0:
-                return api_error("Valor de pagamento inválido.", 400)
-            payment_method = method_repository.get_method(entry_method_id)
-            if not payment_method or not payment_method.active:
-                return api_error("Selecione a forma de pagamento.", 400)
-            payments.append((entry_method_id, amount))
-    else:
-        try:
-            method_id = int(data.get("method_id")) if data.get("method_id") else None
-        except (TypeError, ValueError):
-            method_id = None
-        payment_method = method_repository.get_method(method_id) if method_id else None
-        if not payment_method or not payment_method.active:
-            return api_error("Selecione a forma de pagamento.", 400)
+    payments, method_id, payments_error = _parse_payments_payload(data)
+    if payments_error:
+        return api_error(payments_error, 400)
 
     items = data.get("items") or []
     if not isinstance(items, list) or not items:
@@ -224,6 +240,15 @@ def complete():
     if discount < 0:
         return api_error("Desconto inválido.", 400)
 
+    # Venda fiada exige cliente vinculado (gera débito no contas a receber)
+    selected_method_ids = (
+        [mid for mid, _ in payments] if payments is not None else [method_id]
+    )
+    try:
+        ensure_fiado_customer(selected_method_ids, customer_id)
+    except ValueError as error:
+        return api_error(str(error), 400)
+
     repository = OrderRepository()
     try:
         order = repository.create_order(
@@ -236,6 +261,8 @@ def complete():
         )
     except ValueError as error:
         return api_error(str(error), 400)
+
+    register_order_credit(order.id, customer_id)
 
     receipt = _build_receipt(order.id)
     return api_response({"order": receipt}, status=201)

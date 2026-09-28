@@ -15,7 +15,7 @@ class CashMovement(SQLModel, table=True):
     cash_register_id: Optional[int] = Field(
         default=None, foreign_key="cashregister.id", nullable=False
     )
-    kind: str = Field(nullable=False)  # "sangria" | "suprimento"
+    kind: str = Field(nullable=False)  # "sangria" | "suprimento" | "entrada"
     amount: float = Field(nullable=False)
     obs: Optional[str] = Field(default=None, nullable=True)
     created_by: str = Field(nullable=False, default="operador")

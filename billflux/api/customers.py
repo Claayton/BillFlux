@@ -8,6 +8,7 @@ from billflux.infra.repository.order_repository import OrderRepository
 from billflux.infra.repository.payment_method_repository import (
     PaymentMethodRepository,
 )
+from billflux.infra.repository.receivable_repository import ReceivableRepository
 
 
 def _serialize(c):
@@ -33,8 +34,14 @@ def _customers_payload():
     repository = CustomerRepository()
     search = request.args.get("search", "").strip() or None
     customers = repository.get_customers(search=search)
+    balances = ReceivableRepository().customer_balances()
+    items = []
+    for customer in customers:
+        data = _serialize(customer)
+        data["credit_balance"] = round(balances.get(customer.id, 0.0), 2)
+        items.append(data)
     return {
-        "customers": [_serialize(c) for c in customers],
+        "customers": items,
     }
 
 

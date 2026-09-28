@@ -150,7 +150,11 @@ def test_movement_affects_expected(client):
     )
 
     payload = client.get("/api/caixa").get_json()
-    assert payload["movement_totals"] == {"sangria": 20.0, "suprimento": 50.0}
+    assert payload["movement_totals"] == {
+        "sangria": 20.0,
+        "suprimento": 50.0,
+        "entrada": 0.0,
+    }
     assert len(payload["movements"]) == 2
     assert payload["movements"][0]["kind"] == "sangria"
 

@@ -69,7 +69,7 @@ const payloadClosed = {
 
 const payloadWithMovements = {
   ...payloadOpen,
-  movement_totals: { sangria: 20, suprimento: 50 },
+  movement_totals: { sangria: 20, suprimento: 50, entrada: 15 },
   movements: [
     {
       id: 7,
@@ -86,6 +86,14 @@ const payloadWithMovements = {
       obs: '',
       created_by: 'coqueiral',
       created_at: '2026-08-24 19:10:00',
+    },
+    {
+      id: 9,
+      kind: 'entrada',
+      amount: 15,
+      obs: 'Recebimento fiado: João (débito #4)',
+      created_by: 'coqueiral',
+      created_at: '2026-08-24 19:20:00',
     },
   ],
 }
@@ -213,17 +221,21 @@ describe('CaixaView', () => {
     const summary = wrapper.find('.caixa-summary')
     expect(summary.text()).toContain('Entradas')
     expect(summary.text()).toContain('Saídas')
-    // 100 abertura + 420,50 vendas + 50 suprimento − 20 sangria = 550,50
-    expect(summary.text()).toContain('550,50')
+    expect(summary.text()).toContain('Recebimentos')
+    // 100 abertura + 420,50 vendas + 50 suprimento + 15 entrada − 20 sangria = 565,50
+    expect(summary.text()).toContain('565,50')
 
     const rows = wrapper.findAll('.movement-row')
-    expect(rows).toHaveLength(2)
+    expect(rows).toHaveLength(3)
     expect(rows[0].text()).toContain('− Sangria')
     expect(rows[0].text()).toContain('20,00')
     expect(rows[0].text()).toContain('Pagamento fornecedor')
     expect(rows[1].text()).toContain('+ Suprimento')
     expect(rows[1].text()).toContain('50,00')
     expect(rows[1].text()).toContain('Sem motivo')
+    expect(rows[2].text()).toContain('+ Entrada')
+    expect(rows[2].text()).toContain('15,00')
+    expect(rows[2].text()).toContain('Recebimento fiado')
   })
 
   it('registra movimentação com valor e motivo', async () => {

@@ -53,21 +53,24 @@ const closeSystemTotal = computed(() => {
 const movementTotals = computed(() => ({
   sangria: Number(data.value?.movement_totals?.sangria || 0),
   suprimento: Number(data.value?.movement_totals?.suprimento || 0),
+  entrada: Number(data.value?.movement_totals?.entrada || 0),
 }))
 
 const movements = computed(() => data.value?.movements || [])
 
-/** Resumo do caixa atual: esperado = abertura + vendas + sup − sang. */
+/** Resumo do caixa atual: esperado = abertura + vendas + sup + entradas − sang. */
 const summary = computed(() => {
   const opening = Number(data.value?.open?.opening_amount || 0)
   const sales = closeSystemTotal.value
-  const { sangria, suprimento } = movementTotals.value
+  const { sangria, suprimento, entrada } = movementTotals.value
   return {
     opening,
     sales,
     suprimento,
     sangria,
-    expected: Math.round((opening + sales + suprimento - sangria) * 100) / 100,
+    entrada,
+    expected:
+      Math.round((opening + sales + suprimento + entrada - sangria) * 100) / 100,
   }
 })
 
@@ -361,6 +364,13 @@ onMounted(() => {
             </div>
             <span class="stat-value">{{ brl(summary.suprimento) }}</span>
           </div>
+          <div v-if="summary.entrada > 0" class="stat-card">
+            <div class="stat-top">
+              <span class="icon-tile"><i class="fas fa-hand-holding-usd"></i></span>
+              <span class="stat-label">Recebimentos</span>
+            </div>
+            <span class="stat-value">{{ brl(summary.entrada) }}</span>
+          </div>
           <div v-if="summary.sangria > 0" class="stat-card">
             <div class="stat-top">
               <span class="icon-tile"><i class="fas fa-arrow-up"></i></span>
@@ -427,7 +437,13 @@ onMounted(() => {
               <span
                 class="status-badge"
                 :class="m.kind === 'sangria' ? 'is-off' : 'is-ok'"
-              >{{ m.kind === 'sangria' ? '− Sangria' : '+ Suprimento' }}</span>
+              >{{
+                m.kind === 'sangria'
+                  ? '− Sangria'
+                  : m.kind === 'entrada'
+                    ? '+ Entrada'
+                    : '+ Suprimento'
+              }}</span>
               <strong>{{ brl(m.amount) }}</strong>
               <span class="movement-meta">
                 {{ m.obs || 'Sem motivo' }} · {{ m.created_by }}

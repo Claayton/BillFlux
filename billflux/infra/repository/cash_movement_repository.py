@@ -64,8 +64,8 @@ class CashMovementRepository:
             session.close()
 
     def totals_by_kind(self, cash_register_id: int) -> Dict[str, float]:
-        """Soma por tipo: {'sangria': X, 'suprimento': Y}."""
-        totals = {"sangria": 0.0, "suprimento": 0.0}
+        """Soma por tipo: {'sangria': X, 'suprimento': Y, 'entrada': Z}."""
+        totals = {"sangria": 0.0, "suprimento": 0.0, "entrada": 0.0}
         for m in self.list_for_register(cash_register_id):
             if m.kind in totals:
                 totals[m.kind] = round(totals[m.kind] + (m.amount or 0), 2)

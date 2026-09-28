@@ -11,8 +11,11 @@ from billflux.infra.repository.payment_method_repository import (
     PaymentMethodRepository,
 )
 from billflux.infra.repository.product_repository import ProductRepository
+from billflux.infra.repository.receivable_repository import ReceivableRepository
 from billflux.infra.repository.sale_repository import SaleRepository
+from billflux.infra.repository.customer_repository import CustomerRepository
 from billflux.services.audit import audit
+from billflux.services.credit import fiado_amount_for_order, get_fiado_method_ids
 
 
 def _build_range_summary(sales, orders, start, end):
@@ -327,16 +330,27 @@ def order_detail(order_id):
 @bp.route("/sales/orders/<int:order_id>/cancel", methods=["POST"])
 @api_login_required
 def order_cancel(order_id):
-    """Cancela uma venda do PDV mantendo-a na lista: marca como cancelada e
-    restaura o estoque dos itens."""
+    """Cancela uma venda do PDV mantendo-a na lista: marca como cancelada,
+    restaura o estoque dos itens e cancela o débito fiado (se houver)."""
     if OrderRepository().cancel_order(order_id):
         data = request.get_json(silent=True) or {}
-        audit(
-            "order.cancel",
-            entity="order",
-            entity_id=order_id,
-            details={"reason": (data.get("reason") or "").strip() or None},
-        )
+        details = {
+            "reason": (data.get("reason") or "").strip() or None,
+        }
+        receivable = ReceivableRepository().cancel_by_order(order_id)
+        if receivable:
+            details["credit_cancelled"] = round(float(receivable.amount or 0), 2)
+            audit(
+                "credit.cancel",
+                entity="receivable",
+                entity_id=receivable.id,
+                details={
+                    "order_id": order_id,
+                    "reason": "venda cancelada",
+                    "paid": round(float(receivable.paid_amount or 0), 2),
+                },
+            )
+        audit("order.cancel", entity="order", entity_id=order_id, details=details)
         return api_response(_sales_payload())
     return api_error("Pedido não encontrado ou já cancelado.", 400)
 
@@ -356,6 +370,21 @@ def order_edit(order_id):
     if not method or not method.active:
         return api_error("Selecione a forma de pagamento.", 400)
 
+    is_fiado = method.id in get_fiado_method_ids()
+    order_repo = OrderRepository()
+    order = order_repo.get_order(order_id)
+    if not order:
+        return api_error("Pedido não encontrado.", 404)
+    if is_fiado:
+        if not order.customer_id:
+            return api_error(
+                "Venda fiada: vincule um cliente à venda antes de usar 'Fiado'.",
+                400,
+            )
+        customer = CustomerRepository().get_customer(order.customer_id)
+        if not customer or not customer.active:
+            return api_error("Cliente da venda inválido para fiado.", 400)
+
     cart, error = _parse_order_items(data)
     if error:
         return api_error(error, 400)
@@ -363,9 +392,45 @@ def order_edit(order_id):
     obs = (data.get("obs") or "").strip() or None
 
     try:
-        OrderRepository().update_order(order_id, cart, method.id, obs=obs)
+        order_repo.update_order(order_id, cart, method.id, obs=obs)
     except ValueError as error_message:
         return api_error(str(error_message), 400)
+
+    # Reconcilia o débito fiado após a edição (forma pode ter mudado)
+    receivable_repo = ReceivableRepository()
+    cancelled_receivable = receivable_repo.cancel_by_order(
+        order_id, reason="venda editada"
+    )
+    if cancelled_receivable:
+        audit(
+            "credit.cancel",
+            entity="receivable",
+            entity_id=cancelled_receivable.id,
+            details={
+                "order_id": order_id,
+                "reason": "venda editada",
+                "paid": round(float(cancelled_receivable.paid_amount or 0), 2),
+            },
+        )
+    if is_fiado:
+        fiado_total = float(fiado_amount_for_order(order_id))
+        if fiado_total > 0:
+            receivable_repo.create(
+                order_id=order_id,
+                customer_id=order.customer_id,
+                amount=fiado_total,
+                obs=f"Venda #{order_id} (editada)",
+            )
+            audit(
+                "credit.sale",
+                entity="order",
+                entity_id=order_id,
+                details={
+                    "customer_id": order.customer_id,
+                    "amount": round(fiado_total, 2),
+                    "source": "edit",
+                },
+            )
     return api_response(_sales_payload())
 
 

@@ -5,7 +5,12 @@ import { api } from '@/api/client'
 import { maskMoney, moneyToDecimal } from '@/utils/format'
 import { normalizeForSearch } from '@/utils/normalize'
 import { paymentIcon, paymentColor } from '@/utils/payment'
+import { TAB_STATUS, tabLabel } from '@/utils/tabs'
 import SaleReceiptModal from '@/views/SaleReceiptModal.vue'
+import TabOpenModal from '@/components/TabOpenModal.vue'
+import TabListModal from '@/components/TabListModal.vue'
+import TabPrintModal from '@/components/TabPrintModal.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import logoUrl from '@/assets/logo.png'
 
 const products = ref([])
@@ -32,6 +37,18 @@ const discount = ref(null)
 
 const searchInput = ref(null)
 const cart = ref(new Map())
+
+// ---------- Comandas (tabs) ----------
+const TAB_STORAGE_KEY = 'pdv.active_tab'
+const activeTab = ref(null) // detalhe da comanda em atendimento no PDV
+const tabOpenModal = ref(false)
+const tabListOpen = ref(false)
+const tabsList = ref([])
+const tabsLoading = ref(false)
+const tabPrint = ref(null) // detalhe da comanda na tela de impressão
+const tabConfirm = ref(null) // comanda aguardando confirmação de cancelamento
+const tabBusy = ref(false) // abrindo/selecionando/fechando/cancelando
+const tabSyncing = ref(false) // sincronização de itens em andamento
 
 const cartItems = computed(() => Array.from(cart.value.values()))
 const cartCount = computed(() => cartItems.value.reduce((sum, item) => sum + item.qty, 0))
@@ -135,12 +152,14 @@ function addToCart(product, unit) {
       hasMultipleUnits: (product.units || []).length > 1,
     })
   }
+  scheduleTabSync()
 }
 
 function setQty(key, quantity) {
   const item = cart.value.get(key)
   if (!item) return
   item.qty = Math.max(1, quantity)
+  scheduleTabSync()
 }
 
 function changeQty(key, delta) {
@@ -149,11 +168,260 @@ function changeQty(key, delta) {
   const next = item.qty + delta
   if (next < 1) return
   item.qty = next
+  scheduleTabSync()
 }
 
 function removeItem(key) {
   cart.value.delete(key)
   if (cart.value.size === 0) discount.value = null
+  scheduleTabSync()
+}
+
+// ---------- Comandas (tabs) ----------
+// Enquanto uma comanda está aberta no PDV, o carrinho É a comanda: cada
+// mutação é sincronizada com o backend (PUT /tabs/<id>/items), de forma
+// serializada/coalescida — não depende só do estado local do navegador.
+
+function buildTabItemsPayload() {
+  return cartItems.value.map((item) => ({
+    product_id: item.id,
+    quantity: item.qty,
+    unit_id: item.unitId || null,
+  }))
+}
+
+let tabSyncInFlight = false
+let tabSyncDirty = false
+let tabSyncPromise = Promise.resolve()
+
+function scheduleTabSync() {
+  if (!activeTab.value) return
+  if (tabSyncInFlight) {
+    tabSyncDirty = true
+    return
+  }
+  tabSyncInFlight = true
+  tabSyncing.value = true
+  tabSyncPromise = runTabSync()
+}
+
+async function runTabSync() {
+  try {
+    do {
+      tabSyncDirty = false
+      const tabId = activeTab.value?.id
+      if (!tabId) return
+      const data = await api.put(`/tabs/${tabId}/items`, {
+        items: buildTabItemsPayload(),
+      })
+      if (activeTab.value && activeTab.value.id === tabId) {
+        activeTab.value = { ...activeTab.value, ...data.tab }
+      }
+    } while (tabSyncDirty)
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    tabSyncInFlight = false
+    tabSyncing.value = false
+  }
+}
+
+/** Espera a sincronização pendente terminar (fechar/sair/compartilhar). */
+async function flushTabSync() {
+  let guard = 0
+  while ((tabSyncInFlight || tabSyncDirty) && guard++ < 100) {
+    if (tabSyncInFlight) {
+      await tabSyncPromise
+    } else {
+      scheduleTabSync()
+    }
+  }
+}
+
+/** Carrega os itens da comanda no carrinho e assume o contexto no PDV. */
+function enterTab(tab) {
+  cart.value.clear()
+  discount.value = null
+  for (const item of tab.items || []) {
+    const product = byId(item.product_id)
+    const unit = product
+      ? (product.units || []).find((u) => u.id === item.unit_id)
+      : null
+    const unitId = item.unit_id || 0
+    cart.value.set(cartKey(item.product_id, unitId), {
+      id: item.product_id,
+      key: cartKey(item.product_id, unitId),
+      name: item.name,
+      unitName: unit ? unit.name : 'Unidade',
+      price: item.unit_price,
+      stock: product ? product.stock : 0,
+      qty: item.quantity,
+      factor: item.factor || 1,
+      unitId,
+      hasMultipleUnits: product ? (product.units || []).length > 1 : false,
+    })
+  }
+  activeTab.value = tab
+  sessionStorage.setItem(TAB_STORAGE_KEY, String(tab.id))
+  tabListOpen.value = false
+  searchInput.value?.focus()
+}
+
+async function refreshTabs() {
+  try {
+    const data = await api.get('/tabs?status=open')
+    tabsList.value = data.tabs || []
+  } catch {
+    /* lista de apoio: falha não bloqueia o PDV */
+  }
+}
+
+function openTabModal() {
+  if (!cart.value.size || activeTab.value || tabBusy.value) return
+  tabOpenModal.value = true
+}
+
+async function confirmOpenTab({ identification, print }) {
+  tabBusy.value = true
+  try {
+    const data = await api.post('/tabs', {
+      identification,
+      items: buildTabItemsPayload(),
+    })
+    // entra no contexto: o carrinho passa a espelhar a comanda no servidor
+    // (obrigatório: PUT /items substitui a lista inteira)
+    enterTab(data.tab)
+    tabOpenModal.value = false
+    ElMessage.success(`Comanda ${tabLabel(data.tab.number)} aberta com sucesso.`)
+    refreshTabs()
+    if (print) tabPrint.value = data.tab
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    tabBusy.value = false
+  }
+}
+
+async function openTabList() {
+  tabListOpen.value = true
+  tabsLoading.value = true
+  try {
+    await refreshTabs()
+  } finally {
+    tabsLoading.value = false
+  }
+}
+
+async function selectTab(tab) {
+  if (activeTab.value && activeTab.value.id === tab.id) {
+    tabListOpen.value = false
+    return
+  }
+  tabBusy.value = true
+  try {
+    if (activeTab.value) await flushTabSync()
+    const data = await api.get(`/tabs/${tab.id}`)
+    if (data.tab.status !== TAB_STATUS.OPEN) {
+      ElMessage.warning(`Comanda ${tabLabel(tab.number)} não está mais aberta.`)
+      refreshTabs()
+      return
+    }
+    enterTab(data.tab)
+    refreshTabs()
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    tabBusy.value = false
+  }
+}
+
+/** Sair sem fechar: grava o que mudou e libera o PDV pro próximo cliente. */
+async function leaveTab() {
+  tabBusy.value = true
+  try {
+    await flushTabSync()
+  } finally {
+    tabBusy.value = false
+  }
+  cart.value.clear()
+  discount.value = null
+  activeTab.value = null
+  sessionStorage.removeItem(TAB_STORAGE_KEY)
+  searchInput.value?.focus()
+}
+
+async function reprintActiveTab() {
+  if (!activeTab.value) return
+  await flushTabSync()
+  tabPrint.value = activeTab.value
+}
+
+async function printTabFromList(tab) {
+  try {
+    const data = await api.get(`/tabs/${tab.id}`)
+    tabListOpen.value = false
+    tabPrint.value = data.tab
+  } catch (error) {
+    ElMessage.error(error.message)
+  }
+}
+
+function onTabPrinted(tabData) {
+  if (activeTab.value && activeTab.value.id === tabData.id) {
+    activeTab.value = { ...activeTab.value, print_count: tabData.print_count }
+  }
+  const listed = tabsList.value.find((t) => t.id === tabData.id)
+  if (listed) listed.print_count = tabData.print_count
+}
+
+function requestCancelTab(tab) {
+  tabConfirm.value = tab
+}
+
+async function confirmCancelTab() {
+  const tab = tabConfirm.value
+  if (!tab) return
+  tabBusy.value = true
+  try {
+    await api.post(`/tabs/${tab.id}/cancel`, {})
+    ElMessage.success(`Comanda ${tabLabel(tab.number)} cancelada.`)
+    tabConfirm.value = null
+    tabListOpen.value = false
+    if (activeTab.value && activeTab.value.id === tab.id) {
+      cart.value.clear()
+      discount.value = null
+      activeTab.value = null
+      sessionStorage.removeItem(TAB_STORAGE_KEY)
+    }
+    refreshTabs()
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    tabBusy.value = false
+  }
+}
+
+/** Restaura a comanda em atendimento após recarregar a página. */
+async function restoreActiveTab() {
+  const raw = sessionStorage.getItem(TAB_STORAGE_KEY)
+  if (!raw) return
+  const tabId = Number(raw)
+  if (!tabId) {
+    sessionStorage.removeItem(TAB_STORAGE_KEY)
+    return
+  }
+  try {
+    const data = await api.get(`/tabs/${tabId}`)
+    if (data.tab.status === TAB_STATUS.OPEN) {
+      enterTab(data.tab)
+      refreshTabs()
+      ElMessage.info(`Comanda ${tabLabel(data.tab.number)} restaurada.`)
+    } else {
+      sessionStorage.removeItem(TAB_STORAGE_KEY)
+    }
+  } catch {
+    sessionStorage.removeItem(TAB_STORAGE_KEY)
+  }
 }
 
 // ---------- Busca / sugestões ----------
@@ -471,19 +739,29 @@ function onPayKeydown(event, index) {
   }
 }
 
+function usesFiadoPayment() {
+  const aliases = ['fiado', 'crediario']
+  return paymentsEntered.value.some((payment) => {
+    const method = methods.value.find((m) => m.id === payment.method_id)
+    return method && aliases.includes(normalizeForSearch(method.name))
+  })
+}
+
 async function confirmCheckout() {
   if (!methods.value.length) {
     ElMessage.warning('Nenhuma forma de pagamento ativa.')
     return
   }
-  const items = cartItems.value.map((item) => ({
-    product_id: item.id,
-    quantity: item.qty,
-    unit_id: item.unitId || null,
-  }))
   const payload = {
-    items,
     discount: discount.value || 0,
+  }
+  if (!activeTab.value) {
+    // venda normal: envia o carrinho; comanda fecha com os itens gravados
+    payload.items = cartItems.value.map((item) => ({
+      product_id: item.id,
+      quantity: item.qty,
+      unit_id: item.unitId || null,
+    }))
   }
   if (selectedCustomer.value) {
     payload.customer_id = selectedCustomer.value.id
@@ -501,6 +779,10 @@ async function confirmCheckout() {
       ElMessage.warning('Falta ' + formatBRL(Math.abs(paymentDiff.value)) + ' para fechar o valor.')
       return
     }
+    if (usesFiadoPayment() && !selectedCustomer.value) {
+      ElMessage.warning('Venda fiada: selecione o cliente para gerar o débito.')
+      return
+    }
     payload.payments = paymentsEntered.value.map((p) => ({
       method_id: p.method_id,
       amount: p.amount.toFixed(2),
@@ -508,11 +790,22 @@ async function confirmCheckout() {
   }
   finishing.value = true
   try {
-    const data = await api.post('/pdv/complete', payload)
+    let data
+    if (activeTab.value) {
+      await flushTabSync() // garante itens atualizados antes do fechamento
+      data = await api.post(`/tabs/${activeTab.value.id}/close`, payload)
+      const label = tabLabel(activeTab.value.number)
+      activeTab.value = null
+      sessionStorage.removeItem(TAB_STORAGE_KEY)
+      ElMessage.success(`Comanda ${label} finalizada com sucesso.`)
+    } else {
+      data = await api.post('/pdv/complete', payload)
+    }
     cart.value.clear()
     discount.value = null
     checkoutOpen.value = false
     receiptOrder.value = { id: data.order.order_id, kind: 'pdv' }
+    refreshTabs()
   } catch (error) {
     ElMessage.error(error.message)
   } finally {
@@ -526,7 +819,16 @@ function closeReceipt() {
 }
 
 function onGlobalKeydown(event) {
-  if (receiptOrder.value) return // recibo aberto: F2 imprime lá dentro
+  // modal aberto: cada modal cuida do próprio teclado (F2/Esc)
+  if (
+    receiptOrder.value ||
+    tabPrint.value ||
+    tabOpenModal.value ||
+    tabListOpen.value ||
+    tabConfirm.value
+  ) {
+    return
+  }
   if (event.key === 'F2') {
     event.preventDefault()
     if (checkoutOpen.value) {
@@ -537,6 +839,10 @@ function onGlobalKeydown(event) {
   } else if (event.key === 'F3' && !checkoutOpen.value) {
     event.preventDefault()
     openDiscount()
+  } else if (event.key === 'F4' && !checkoutOpen.value) {
+    event.preventDefault()
+    if (tabOpenModal.value) return
+    openTabModal()
   } else if (event.key === 'F9') {
     event.preventDefault()
     ElMessage.info('Entrega disponível em breve.')
@@ -545,9 +851,11 @@ function onGlobalKeydown(event) {
   }
 }
 
-onMounted(() => {
-  load()
+onMounted(async () => {
   document.addEventListener('keydown', onGlobalKeydown)
+  await load()
+  refreshTabs() // badge "Comandas abertas" já com contagem inicial
+  await restoreActiveTab()
 })
 
 onBeforeUnmount(() => {
@@ -613,6 +921,36 @@ onBeforeUnmount(() => {
               </span>
             </button>
           </div>
+        </div>
+
+        <!-- Banner da comanda em atendimento -->
+        <div v-if="activeTab" class="pdv-tabbar">
+          <span class="pdv-tabbar-icon"><i class="fas fa-clipboard-list"></i></span>
+          <span class="pdv-tabbar-info">
+            <strong>Comanda {{ tabLabel(activeTab.number) }}</strong>
+            <span class="pdv-tabbar-identification">{{ activeTab.identification }}</span>
+          </span>
+          <span v-if="tabSyncing" class="pdv-tabbar-sync">
+            <i class="fas fa-circle-notch fa-spin"></i> Salvando…
+          </span>
+          <span class="pdv-tabbar-actions">
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              title="Reimprimir comanda"
+              @click="reprintActiveTab"
+            >
+              <i class="fas fa-print"></i> Imprimir
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              title="Sair da comanda sem fechar"
+              @click="leaveTab"
+            >
+              <i class="fas fa-sign-out-alt"></i> Sair
+            </button>
+          </span>
         </div>
 
         <div class="pdv-items-head">
@@ -701,6 +1039,15 @@ onBeforeUnmount(() => {
           <div class="pdv-footer-left">
             <button
               type="button"
+              class="btn btn-ghost btn-sm pdv-tabs-btn"
+              :class="{ 'is-highlighted': tabsList.length > 0 }"
+              @click="openTabList"
+            >
+              <i class="fas fa-clipboard-list"></i> Comandas abertas
+              <span v-if="tabsList.length" class="pdv-tabs-count">{{ tabsList.length }}</span>
+            </button>
+            <button
+              type="button"
               class="btn btn-ghost btn-sm pdv-discount-btn"
               :disabled="cartCount === 0"
               @click="openDiscount"
@@ -716,16 +1063,28 @@ onBeforeUnmount(() => {
               <span class="pdv-footer-total" id="cart-total">{{ formatBRL(cartTotalAfter) }}</span>
             </div>
           </div>
-          <button
-            type="button"
-            id="pdv-finish"
-            class="btn btn-primary pdv-finish"
-            :disabled="cartCount === 0 || finishing"
-            @click="finishSale"
-          >
-            <i class="fas fa-check-circle"></i> {{ finishing ? 'Concluindo…' : 'Concluir venda' }}
-            <kbd>F2</kbd>
-          </button>
+          <div class="pdv-footer-right">
+            <button
+              v-if="!activeTab"
+              type="button"
+              class="btn btn-outline pdv-open-tab"
+              :disabled="cartCount === 0 || tabBusy"
+              @click="openTabModal"
+            >
+              <i class="fas fa-clipboard-list"></i> Abrir comanda <kbd>F4</kbd>
+            </button>
+            <button
+              type="button"
+              id="pdv-finish"
+              class="btn btn-primary pdv-finish"
+              :disabled="cartCount === 0 || finishing || tabBusy"
+              @click="finishSale"
+            >
+              <i class="fas fa-check-circle"></i>
+              {{ finishing ? (activeTab ? 'Finalizando…' : 'Concluindo…') : (activeTab ? 'Finalizar comanda' : 'Concluir venda') }}
+              <kbd>F2</kbd>
+            </button>
+          </div>
         </div>
       </section>
 
@@ -758,8 +1117,9 @@ onBeforeUnmount(() => {
         <div class="pdv-panel-block">
           <h3>Atalhos</h3>
           <ul class="pdv-shortcuts">
-            <li><kbd>F2</kbd> <span>Concluir venda</span></li>
+            <li><kbd>F2</kbd> <span>{{ activeTab ? 'Finalizar comanda' : 'Concluir venda' }}</span></li>
             <li><kbd>F3</kbd> <span>Desconto</span></li>
+            <li><kbd>F4</kbd> <span>Abrir comanda</span></li>
             <li><kbd>F9</kbd> <span>Entrega</span></li>
             <li><kbd>N*</kbd> <span>Multiplicar (ex: 3*7890001)</span></li>
             <li><kbd>+ / −</kbd> <span>Alterar quantidade</span></li>
@@ -834,7 +1194,7 @@ onBeforeUnmount(() => {
     <div class="modal" :class="{ 'is-open': checkoutOpen }">
       <div class="modal-content pdv-checkout-modal">
         <div class="modal-header">
-          <h2>Finalizar venda</h2>
+          <h2>{{ activeTab ? 'Finalizar comanda' : 'Finalizar venda' }}</h2>
           <button type="button" class="modal-close" aria-label="Fechar" @click="checkoutOpen = false">&times;</button>
         </div>
         <div class="pdv-modal-body">
@@ -888,7 +1248,7 @@ onBeforeUnmount(() => {
             :disabled="finishing || !canConfirm"
             @click="confirmCheckout"
           >
-            <i class="fas fa-check-circle"></i> {{ finishing ? 'Finalizando…' : 'Finalizar venda' }}
+            <i class="fas fa-check-circle"></i> {{ finishing ? 'Finalizando…' : (activeTab ? 'Finalizar comanda' : 'Finalizar venda') }}
             <kbd>F2</kbd>
           </button>
         </div>
@@ -900,6 +1260,44 @@ onBeforeUnmount(() => {
       v-if="receiptOrder"
       :sale="receiptOrder"
       @close="closeReceipt"
+    />
+
+    <!-- Comandas: abrir / listar / imprimir / cancelar -->
+    <TabOpenModal
+      v-if="tabOpenModal"
+      :total="cartTotalAfter"
+      :item-count="cartCount"
+      :loading="tabBusy"
+      @confirm="confirmOpenTab"
+      @cancel="tabOpenModal = false"
+    />
+
+    <TabListModal
+      v-if="tabListOpen"
+      :tabs="tabsList"
+      :loading="tabsLoading"
+      :active-id="activeTab ? activeTab.id : null"
+      @close="tabListOpen = false"
+      @select="selectTab"
+      @print="printTabFromList"
+      @cancel="requestCancelTab"
+    />
+
+    <TabPrintModal
+      v-if="tabPrint"
+      :tab="tabPrint"
+      @close="tabPrint = null"
+      @printed="onTabPrinted"
+    />
+
+    <ConfirmDialog
+      v-if="tabConfirm"
+      title="Cancelar comanda"
+      :message="`Cancelar a comanda ${tabLabel(tabConfirm.number)} (${tabConfirm.identification})? O estoque dos itens será devolvido.`"
+      confirm-label="Cancelar comanda"
+      danger
+      @confirm="confirmCancelTab"
+      @cancel="tabConfirm = null"
     />
   </div>
 </template>
@@ -1181,5 +1579,91 @@ onBeforeUnmount(() => {
   border-radius: 3px;
   margin-left: 4px;
   vertical-align: middle;
+}
+
+/* ---- Comandas ---- */
+.pdv-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  margin: -4px 0 14px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--primary, #4f46e5) 35%, transparent);
+  border-radius: var(--brand-radius-sm, 8px);
+  background: color-mix(in srgb, var(--primary, #4f46e5) 6%, white);
+}
+.pdv-tabbar-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm, 6px);
+  background: color-mix(in srgb, var(--primary, #4f46e5) 14%, transparent);
+  color: var(--primary, #4f46e5);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.pdv-tabbar-info {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.pdv-tabbar-info strong {
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.pdv-tabbar-identification {
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pdv-tabbar-sync {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary, #4f46e5);
+  white-space: nowrap;
+}
+.pdv-tabbar-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.pdv-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.pdv-open-tab {
+  border: 1px solid var(--border, #d1d5db);
+  color: var(--text, #111827);
+  white-space: nowrap;
+}
+.pdv-open-tab:hover:not(:disabled) {
+  border-color: var(--primary, #4f46e5);
+  color: var(--primary, #4f46e5);
+}
+.pdv-open-tab:disabled {
+  opacity: 0.5;
+}
+.pdv-tabs-count {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  margin-left: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary, #4f46e5) 14%, transparent);
+  color: var(--primary, #4f46e5);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+.pdv-tabs-btn.is-highlighted {
+  color: var(--primary, #4f46e5);
 }
 </style>
