@@ -27,6 +27,7 @@ services:
       BILLFLUX_AUTH__USERNAME: ${BILLFLUX_AUTH__USERNAME:-coqueiral}
       BILLFLUX_AUTH__PASSWORD_HASH: ${BILLFLUX_AUTH__PASSWORD_HASH:-}
       BILLFLUX_SESSION_COOKIE_SECURE: ${BILLFLUX_SESSION_COOKIE_SECURE:-true}
+      TZ: America/Sao_Paulo
     depends_on:
       postgres:
         condition: service_healthy
