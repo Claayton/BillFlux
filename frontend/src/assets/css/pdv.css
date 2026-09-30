@@ -117,9 +117,17 @@ body.pdv-screen {
   cursor: pointer;
 }
 
-.pdv-suggestion:hover,
+.pdv-suggestion:hover {
+  background: #f3f4f6;
+}
+
 .pdv-suggestion.is-highlighted {
-  background: #eef2ff;
+  background: color-mix(in srgb, var(--primary) 14%, white);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.pdv-suggestion.is-highlighted .pdv-suggestion-name {
+  color: var(--primary);
 }
 
 .pdv-suggestion-info {

@@ -479,7 +479,7 @@ function tryAdd(product, unit) {
 
 function showSuggestions() {
   suggestions.value = buildSuggestions(search.value.trim())
-  highlighted.value = suggestions.value.length ? 0 : -1
+  highlighted.value = -1
 }
 
 function setHighlight(index) {
@@ -606,12 +606,18 @@ function onSearchKeydown(event) {
   } else if (event.key === 'ArrowDown') {
     event.preventDefault()
     if (suggestions.value.length) {
-      setHighlight((highlighted.value + 1) % suggestions.value.length)
+      setHighlight(
+        highlighted.value < 0 ? 0 : (highlighted.value + 1) % suggestions.value.length
+      )
     }
   } else if (event.key === 'ArrowUp') {
     event.preventDefault()
     if (suggestions.value.length) {
-      setHighlight((highlighted.value - 1 + suggestions.value.length) % suggestions.value.length)
+      setHighlight(
+        highlighted.value < 0
+          ? suggestions.value.length - 1
+          : (highlighted.value - 1 + suggestions.value.length) % suggestions.value.length
+      )
     }
   } else if (event.key === 'Escape') {
     suggestions.value = []
