@@ -1230,12 +1230,21 @@ onBeforeUnmount(() => {
                 />
               </div>
             </div>
-            <div class="pdv-paystatus" v-if="paymentsEntered.length">
-              <span v-if="paymentDiff > 0" class="is-troco">Troco {{ formatBRL(paymentDiff) }}</span>
-              <span v-else-if="paymentDiff < 0" class="is-missing">
-                Falta {{ formatBRL(Math.abs(paymentDiff)) }}
-              </span>
-              <span v-else class="is-ok"><i class="fas fa-check"></i> Valor fechado</span>
+            <div class="pdv-paystatus">
+              <template v-if="paymentsEntered.length">
+                <div v-if="paymentDiff > 0" class="pay-troco">
+                  <span class="pay-troco-label"><i class="fas fa-coins"></i> Troco</span>
+                  <strong>{{ formatBRL(paymentDiff) }}</strong>
+                </div>
+                <div v-else-if="paymentDiff < 0" class="pay-missing">
+                  <i class="fas fa-exclamation-circle"></i>
+                  <span>Falta</span>
+                  <strong>{{ formatBRL(Math.abs(paymentDiff)) }}</strong>
+                </div>
+                <div v-else class="pay-ok">
+                  <i class="fas fa-check-circle"></i> Valor fechado
+                </div>
+              </template>
             </div>
             <p class="pdv-payhint">
               <i class="fas fa-arrow-down"></i> Seta para baixo pula para a próxima forma.
@@ -1471,23 +1480,83 @@ onBeforeUnmount(() => {
 }
 .pdv-paystatus {
   display: flex;
-  justify-content: flex-start;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  min-height: 66px;
+}
+.pdv-paystatus .pay-troco,
+.pdv-paystatus .pay-missing,
+.pdv-paystatus .pay-ok {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-weight: 700;
+  animation: paystatus-in 0.18s ease-out;
+}
+.pdv-paystatus .pay-troco {
+  justify-content: space-between;
+  background: color-mix(in srgb, var(--success, #16a34a) 12%, white);
+  border: 1px solid color-mix(in srgb, var(--success, #16a34a) 35%, transparent);
+}
+.pdv-paystatus .pay-troco-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
-  font-weight: 600;
-  padding: 10px 2px 0;
-  border-top: 1px solid var(--border, #e5e7eb);
-}
-.pdv-paystatus .is-troco {
-  color: var(--primary, #4f46e5);
-}
-.pdv-paystatus .is-missing {
-  color: var(--danger, #dc2626);
-}
-.pdv-paystatus .is-ok {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--success, #16a34a);
 }
-.pdv-paystatus .is-ok i {
-  margin-right: 4px;
+.pdv-paystatus .pay-troco-label i {
+  font-size: 16px;
+}
+.pdv-paystatus .pay-troco strong {
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--success, #16a34a);
+  font-variant-numeric: tabular-nums;
+}
+.pdv-paystatus .pay-missing {
+  background: color-mix(in srgb, var(--danger, #dc2626) 10%, white);
+  border: 1px solid color-mix(in srgb, var(--danger, #dc2626) 30%, transparent);
+  color: var(--danger, #dc2626);
+}
+.pdv-paystatus .pay-missing i {
+  font-size: 16px;
+}
+.pdv-paystatus .pay-missing strong {
+  margin-left: auto;
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.pdv-paystatus .pay-ok {
+  justify-content: center;
+  background: color-mix(in srgb, var(--success, #16a34a) 10%, white);
+  border: 1px solid color-mix(in srgb, var(--success, #16a34a) 30%, transparent);
+  color: var(--success, #16a34a);
+  font-size: 14px;
+}
+.pdv-paystatus .pay-ok i {
+  font-size: 16px;
+}
+@keyframes paystatus-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .pdv-payhint {
   display: flex;
