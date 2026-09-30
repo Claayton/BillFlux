@@ -2,6 +2,12 @@ let csrfToken = null
 let unauthorizedHandler = null
 
 export const SESSION_EXPIRED_MESSAGE = 'Sua sessão expirou. Entre novamente.'
+export const OFFLINE_MESSAGE =
+  'Você está sem conexão com a internet. Verifique sua rede e tente novamente.'
+export const SERVER_UNREACHABLE_MESSAGE =
+  'Não conseguimos conectar ao servidor. Tente novamente em instantes.'
+export const SERVER_ERROR_MESSAGE =
+  'O servidor está indisponível no momento. Tente novamente em instantes.'
 
 /** Registra o callback global de sessão expirada (main.js: redirect p/ login). */
 export function setUnauthorizedHandler(fn) {
@@ -13,10 +19,25 @@ export function resetCsrf() {
   csrfToken = null
 }
 
+/**
+ * Erro amigável quando a requisição nem completa (rede/servidor).
+ * Usa `navigator.onLine` como pista pra diferenciar "cliente sem internet"
+ * de "servidor inacessível" — é heurístico, mas acerta no caso comum.
+ */
+function connectionError() {
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false
+  return new Error(offline ? OFFLINE_MESSAGE : SERVER_UNREACHABLE_MESSAGE)
+}
+
 async function ensureCsrf() {
   if (csrfToken) return csrfToken
-  const res = await fetch('/api/auth/csrf', { credentials: 'same-origin' })
-  if (!res.ok) throw new Error('Falha ao obter token de segurança.')
+  let res
+  try {
+    res = await fetch('/api/auth/csrf', { credentials: 'same-origin' })
+  } catch {
+    throw connectionError()
+  }
+  if (!res.ok) throw new Error(SERVER_ERROR_MESSAGE)
   const data = await res.json()
   csrfToken = data.csrf_token
   return csrfToken
@@ -43,8 +64,14 @@ async function doFetch(method, path, body, csrf) {
   const options = { method, headers, credentials: 'same-origin' }
   if (body !== undefined) options.body = JSON.stringify(body)
 
-  const res = await fetch(`/api${path}`, options)
-  const text = await res.text()
+  let res
+  let text
+  try {
+    res = await fetch(`/api${path}`, options)
+    text = await res.text()
+  } catch {
+    throw connectionError()
+  }
   let data = null
   if (text) {
     try {
@@ -57,7 +84,10 @@ async function doFetch(method, path, body, csrf) {
 }
 
 function toError(res, data) {
-  const error = new Error((data && data.error) || `Erro ${res.status}`)
+  const message =
+    (data && data.error) ||
+    (res.status >= 500 ? SERVER_ERROR_MESSAGE : `Erro ${res.status}`)
+  const error = new Error(message)
   error.status = res.status
   error.data = data
   return error
