@@ -37,9 +37,11 @@ class OrderRepository:
         (venda sem estoque é permitida). O desconto (em R$) é abatido do total.
         `payments` é uma lista de (payment_method_id, valor); se não informada,
         usa um único pagamento na forma indicada pelo total.
-        Cada item é (product_id, quantidade_base) ou, opcionalmente,
-        (product_id, quantidade_base, preço_unitário_snapshot) — o terceiro
-        elemento grava o preço do momento (usado pelas comandas)."""
+        Cada item é (product_id, quantidade) ou, opcionalmente,
+        (product_id, quantidade, preço_unitário, fator). A quantidade/preço são
+        da apresentação vendida e o fator converte pra unidades-base no estoque
+        (ex.: 1 caixa a R$ 45,99 com fator 15). Sem o preço, usa o preço base do
+        produto; sem o fator, assume 1."""
 
         session = get_session()
         try:
@@ -84,8 +86,11 @@ class OrderRepository:
             product_id = entry[0]
             quantity = entry[1]
             price_override = entry[2] if len(entry) > 2 else None
+            factor = int(entry[3]) if len(entry) > 3 and entry[3] else 1
             if quantity <= 0:
                 raise ValueError("Quantidade inválida.")
+            if factor < 1:
+                factor = 1
             product = session.get(ProductModel, product_id)
             if not product or (not allow_inactive and not product.active):
                 raise ValueError("Produto não encontrado.")
@@ -94,7 +99,7 @@ class OrderRepository:
                 if price_override is not None
                 else product.price
             )
-            products.append((product, quantity, unit_price))
+            products.append((product, quantity, unit_price, factor))
             subtotal += unit_price * quantity
 
         discount = discount or Decimal("0")
@@ -118,23 +123,25 @@ class OrderRepository:
 
         OrderRepository._insert_payments(session, order.id, payments)
 
-        for product, quantity, unit_price in products:
+        for product, quantity, unit_price, factor in products:
             session.add(
                 OrderItemModel(
                     order_id=order.id,
                     product_id=product.id,
                     quantity=quantity,
                     unit_price=unit_price,
+                    factor=factor,
                 )
             )
             if decrement_stock:
-                product.stock_quantity -= quantity
+                base_quantity = quantity * factor
+                product.stock_quantity -= base_quantity
                 session.add(product)
                 session.add(
                     ProductMovementModel(
                         product_id=product.id,
                         movement_type="saida",
-                        quantity=quantity,
+                        quantity=base_quantity,
                         obs=f"Venda #{order.id}",
                     )
                 )
@@ -293,13 +300,14 @@ class OrderRepository:
                 for item in order_items:
                     product = session.get(ProductModel, item.product_id)
                     if product:
-                        product.stock_quantity += item.quantity
+                        base_quantity = item.quantity * (item.factor or 1)
+                        product.stock_quantity += base_quantity
                         session.add(product)
                         session.add(
                             ProductMovementModel(
                                 product_id=item.product_id,
                                 movement_type="entrada",
-                                quantity=item.quantity,
+                                quantity=base_quantity,
                                 obs=f"Venda #{order_id} cancelada",
                             )
                         )
@@ -334,7 +342,7 @@ class OrderRepository:
                 if order.cancelled:
                     raise ValueError("Venda cancelada não pode ser editada.")
 
-                new_products = []
+                new_items = []
                 subtotal = Decimal("0")
                 for product_id, quantity in items:
                     if quantity <= 0:
@@ -342,28 +350,56 @@ class OrderRepository:
                     product = session.get(ProductModel, product_id)
                     if not product or not product.active:
                         raise ValueError("Produto não encontrado.")
-                    new_products.append((product, quantity))
-                    subtotal += product.price * quantity
+                    new_items.append((product, quantity))
 
                 old_items = session.exec(
                     select(OrderItemModel).where(OrderItemModel.order_id == order_id)
                 ).all()
                 old_by_product = {item.product_id: item for item in old_items}
 
+                # Resolve preço/fator: mantém o snapshot de quem já estava no
+                # pedido (apresentação vendida) e usa o preço base do produto
+                # para itens adicionados agora na edição.
+                resolved = []
+                for product, quantity in new_items:
+                    old_item = old_by_product.get(product.id)
+                    if old_item:
+                        unit_price = old_item.unit_price
+                        factor = old_item.factor or 1
+                        old_base = old_item.quantity * factor
+                    else:
+                        unit_price = product.price
+                        factor = 1
+                        old_base = 0
+                    resolved.append(
+                        (
+                            product,
+                            quantity,
+                            unit_price,
+                            factor,
+                            old_base,
+                            quantity * factor,
+                        )
+                    )
+                    subtotal += unit_price * quantity
+
                 # Estoque suficiente considerando o delta (o que já estava no
                 # pedido será devolvido antes da nova baixa).
-                for product, quantity in new_products:
-                    old_item = old_by_product.get(product.id)
-                    old_qty = old_item.quantity if old_item else 0
-                    needed = quantity - old_qty
+                for product, _q, _p, _f, old_base, new_base in resolved:
+                    needed = new_base - old_base
                     if needed > product.stock_quantity:
                         raise ValueError(f"Estoque insuficiente para {product.name}.")
 
                 new_product_ids = set()
-                for product, quantity in new_products:
-                    old_item = old_by_product.get(product.id)
-                    old_qty = old_item.quantity if old_item else 0
-                    delta = quantity - old_qty
+                for (
+                    product,
+                    quantity,
+                    unit_price,
+                    factor,
+                    old_base,
+                    new_base,
+                ) in resolved:
+                    delta = new_base - old_base
                     if delta:
                         product.stock_quantity -= delta
                         session.add(product)
@@ -375,9 +411,11 @@ class OrderRepository:
                                 obs=f"Venda #{order_id} editada",
                             )
                         )
+                    old_item = old_by_product.get(product.id)
                     if old_item:
                         old_item.quantity = quantity
-                        old_item.unit_price = product.price
+                        old_item.unit_price = unit_price
+                        old_item.factor = factor
                         session.add(old_item)
                     else:
                         session.add(
@@ -385,7 +423,8 @@ class OrderRepository:
                                 order_id=order_id,
                                 product_id=product.id,
                                 quantity=quantity,
-                                unit_price=product.price,
+                                unit_price=unit_price,
+                                factor=factor,
                             )
                         )
                     new_product_ids.add(product.id)
@@ -395,13 +434,14 @@ class OrderRepository:
                     if old_item.product_id not in new_product_ids:
                         product = session.get(ProductModel, old_item.product_id)
                         if product:
-                            product.stock_quantity += old_item.quantity
+                            base_quantity = old_item.quantity * (old_item.factor or 1)
+                            product.stock_quantity += base_quantity
                             session.add(product)
                             session.add(
                                 ProductMovementModel(
                                     product_id=old_item.product_id,
                                     movement_type="entrada",
-                                    quantity=old_item.quantity,
+                                    quantity=base_quantity,
                                     obs=f"Venda #{order_id} editada",
                                 )
                             )

@@ -153,6 +153,54 @@ def test_edit_order_keeps_id_and_adjusts_stock(logged_client):
     assert updated.stock_quantity == 5  # 10 - (5 - 2)
 
 
+def test_edit_order_preserves_unit_presentation(logged_client):
+    """Editar item de apresentação mantém o preço/fator originais."""
+
+    from billflux.infra.repository.product_unit_repository import (
+        ProductUnitRepository,
+    )
+
+    token = _csrf(logged_client)
+    product = ProductRepository().insert_product(
+        name="Pack Edit", price=Decimal("3.99"), stock_quantity=100
+    )
+    ProductUnitRepository().upsert(
+        product_id=product.id,
+        name="Caixa c/ 15",
+        factor=15,
+        price=Decimal("45.99"),
+        is_default=False,
+    )
+    method = PaymentMethodRepository().get_active_methods()[0]
+    order = OrderRepository().create_order(
+        [(product.id, 1, Decimal("45.99"), 15)], method.id
+    )
+    assert ProductRepository().get_product(product.id).stock_quantity == 85
+
+    detail = logged_client.get(f"/api/sales/orders/{order.id}").get_json()["order"]
+    assert detail["items"][0]["factor"] == 15
+    assert detail["items"][0]["unit_price"] == 45.99
+
+    response = logged_client.put(
+        f"/api/sales/orders/{order.id}",
+        json={
+            "method_id": method.id,
+            "items": [{"product_id": product.id, "quantity": 2}],
+        },
+        headers={"X-CSRFToken": token},
+    )
+
+    assert response.status_code == 200
+    edited = next(
+        s
+        for s in response.get_json()["sales"]
+        if s["kind"] == "pdv" and s["id"] == order.id
+    )
+    assert edited["total"] == 91.98  # 2 x 45,99 (mantém o preço da apresentação)
+    updated = ProductRepository().get_product(product.id)
+    assert updated.stock_quantity == 70  # 85 - 15
+
+
 def test_edit_order_validation(logged_client):
     """PUT sem forma de pagamento, sem itens ou sem estoque devolve 400."""
 

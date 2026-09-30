@@ -147,7 +147,11 @@ def _avg_daily_sales(product_id: int, days: int = 28) -> Decimal:
         with session:
             cutoff = date.today() - timedelta(days=days)
             stmt = (
-                select(func.coalesce(func.sum(OrderItemModel.quantity), 0))
+                select(
+                    func.coalesce(
+                        func.sum(OrderItemModel.quantity * OrderItemModel.factor), 0
+                    )
+                )
                 .join(OrderModel, OrderItemModel.order_id == OrderModel.id)
                 .where(
                     OrderItemModel.product_id == product_id,

@@ -131,7 +131,9 @@ def _gross_profit(orders, cost_map):
     for order in orders:
         for item in repository.get_order_items(order.id):
             cost = cost_map.get(item.product_id, Decimal("0"))
-            profit += (item.unit_price - cost) * item.quantity
+            factor = item.factor or 1
+            # unit_price/quantity são da apresentação; custo é por unidade-base.
+            profit += (item.unit_price - cost * factor) * item.quantity
     return profit
 
 

@@ -319,6 +319,7 @@ def order_detail(order_id):
                         ),
                         "quantity": item.quantity,
                         "unit_price": float(item.unit_price),
+                        "factor": item.factor or 1,
                     }
                     for item in items
                 ],

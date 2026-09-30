@@ -10,5 +10,7 @@ OrderItem = namedtuple(
         "product_id",
         "quantity",
         "unit_price",
+        "factor",
     ],
+    defaults=[1],
 )

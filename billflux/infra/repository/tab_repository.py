@@ -6,7 +6,7 @@ ao fechar (o pedido final usa `decrement_stock=False`, evitando duplicidade).
 """
 
 from datetime import datetime
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import List, Optional, Tuple
 
 from sqlalchemy.exc import IntegrityError
@@ -368,15 +368,12 @@ class TabRepository:
                 if not rows:
                     raise ValueError("A comanda não possui itens.")
 
-                cart = []
-                for row in rows:
-                    factor = row.factor or 1
-                    # preço base do snapshot (por unidade), p/ o pedido gravar
-                    # o mesmo valor da comanda mesmo se o produto mudar de preço
-                    base_price = (row.unit_price / factor).quantize(
-                        Decimal("0.01"), rounding=ROUND_HALF_UP
-                    )
-                    cart.append((row.product_id, row.quantity * factor, base_price))
+                # os itens da comanda já estão na apresentação (quantidade e
+                # preço); o fator converte pra unidades-base no estoque.
+                cart = [
+                    (row.product_id, row.quantity, row.unit_price, row.factor or 1)
+                    for row in rows
+                ]
 
                 order = OrderRepository._create_order_in_session(
                     session,

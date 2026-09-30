@@ -210,17 +210,24 @@ def complete():
             quantity = int(item.get("quantity"))
         except (TypeError, ValueError):
             continue
-        if quantity > 0:
-            raw_unit_id = item.get("unit_id")
-            factor = 1
-            if raw_unit_id:
-                try:
-                    unit = unit_repo.get_unit(int(raw_unit_id))
-                    if unit:
-                        factor = unit.factor
-                except (TypeError, ValueError):
-                    pass
-            cart.append((product_id, quantity * factor))
+        if quantity <= 0:
+            continue
+        factor = 1
+        unit_price = None
+        raw_unit_id = item.get("unit_id")
+        if raw_unit_id:
+            try:
+                unit = unit_repo.get_unit(int(raw_unit_id))
+            except (TypeError, ValueError):
+                unit = None
+            # a apresentação precisa pertencer ao produto (preço autoritativo)
+            if unit and unit.product_id == product_id:
+                factor = unit.factor or 1
+                unit_price = unit.price
+        if unit_price is not None:
+            cart.append((product_id, quantity, unit_price, factor))
+        else:
+            cart.append((product_id, quantity))
 
     if not cart:
         return api_error("Adicione ao menos um item ao carrinho.", 400)
