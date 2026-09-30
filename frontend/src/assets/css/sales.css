@@ -647,6 +647,16 @@
   flex-wrap: wrap;
 }
 
+.filter-segmented button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.filter-segmented button:disabled:hover {
+  color: var(--text-secondary);
+  background: transparent;
+}
+
 .search-box {
   position: relative;
   display: inline-flex;

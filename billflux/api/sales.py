@@ -14,6 +14,7 @@ from billflux.infra.repository.product_repository import ProductRepository
 from billflux.infra.repository.receivable_repository import ReceivableRepository
 from billflux.infra.repository.sale_repository import SaleRepository
 from billflux.infra.repository.customer_repository import CustomerRepository
+from billflux.infra.repository.cash_register_repository import CashRegisterRepository
 from billflux.services.audit import audit
 from billflux.services.credit import fiado_amount_for_order, get_fiado_method_ids
 
@@ -92,8 +93,11 @@ def _order_detail(order):
     }
 
 
-def _combine_sales(sales, orders, payment_names):
-    """Junta vendas avulsas (manuais) e pedidos do PDV numa única lista."""
+def _combine_sales(sales, orders, payment_names, caixa_opened_at=None):
+    """Junta vendas avulsas (manuais) e pedidos do PDV numa única lista.
+
+    `caixa_opened_at` (datetime ou None) marca o início do caixa aberto e
+    permite sinalizar quais vendas pertencem ao caixa atual (`in_caixa`)."""
 
     combined = []
     for sale in sales:
@@ -108,6 +112,9 @@ def _combine_sales(sales, orders, payment_names):
                 "items": [],
                 "payment": None,
                 "cancelled": sale.cancelled,
+                "in_caixa": (
+                    caixa_opened_at is not None and sale.date >= caixa_opened_at.date()
+                ),
             }
         )
     for order in orders:
@@ -123,6 +130,9 @@ def _combine_sales(sales, orders, payment_names):
                 "items": detail["items"],
                 "payment": payment_names.get(order.payment_method_id, "—"),
                 "cancelled": order.cancelled,
+                "in_caixa": (
+                    caixa_opened_at is not None and order.created_at >= caixa_opened_at
+                ),
             }
         )
     return sorted(combined, key=lambda item: item["date"], reverse=True)
@@ -132,6 +142,16 @@ def _sales_payload():
     """Dados completos da página de vendas (períodos + lista combinada)."""
     list_sales = SaleRepository().get_sales()
     orders = OrderRepository().get_orders()
+    open_register = CashRegisterRepository().get_open()
+    caixa_opened_at = None
+    if open_register:
+        try:
+            caixa_opened_at = datetime.strptime(
+                open_register.opened_at, "%Y-%m-%d %H:%M:%S"
+            )
+        except (TypeError, ValueError):
+            caixa_opened_at = None
+
     today = date.today()
     periods = {
         key: {**p, "total": float(p["total"]), "avg": float(p["avg"])}
@@ -141,10 +161,14 @@ def _sales_payload():
     payment_names = {
         method.id: method.name for method in PaymentMethodRepository().get_methods()
     }
-    combined = _combine_sales(list_sales, orders, payment_names)
+    combined = _combine_sales(list_sales, orders, payment_names, caixa_opened_at)
 
     return {
         "today": today.isoformat(),
+        "caixa": {
+            "open": open_register is not None,
+            "opened_at": open_register.opened_at if open_register else None,
+        },
         "periods": periods,
         "sales": [
             {
@@ -157,6 +181,7 @@ def _sales_payload():
                 "items": item["items"],
                 "payment": item["payment"],
                 "cancelled": item["cancelled"],
+                "in_caixa": item["in_caixa"],
             }
             for item in combined
         ],

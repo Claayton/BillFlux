@@ -1,5 +1,6 @@
 """Tests for sales actions: edit manual, cancel/edit PDV and manual receipt."""
 
+from datetime import date
 from decimal import Decimal
 
 from billflux.infra.repository.payment_method_repository import (
@@ -8,6 +9,7 @@ from billflux.infra.repository.payment_method_repository import (
 from billflux.infra.repository.product_repository import ProductRepository
 from billflux.infra.repository.order_repository import OrderRepository
 from billflux.infra.repository.sale_repository import SaleRepository
+from billflux.infra.repository.cash_register_repository import CashRegisterRepository
 
 
 def _csrf(client):
@@ -23,6 +25,64 @@ def _make_order(name="Item PDV", price="10.00", qty=3, stock=10):
     method = PaymentMethodRepository().get_active_methods()[0]
     order = OrderRepository().create_order([(product.id, qty)], method.id)
     return product, method, order
+
+
+def test_sales_payload_marks_current_caixa(logged_client):
+    """GET /api/sales traz caixa.open e a flag in_caixa por venda."""
+
+    repository = CashRegisterRepository()
+    open_reg = repository.get_open()
+    if open_reg:
+        repository.close_register(
+            register_id=open_reg.id,
+            closed_by="test",
+            closed_at="2020-01-01 00:00:00",
+            closing_amount=0,
+            expected_amount=0,
+        )
+    repository.open_register(
+        opened_by="test",
+        opened_at="2020-01-01 00:00:00",
+        opening_amount=0,
+    )
+
+    SaleRepository().insert_sale(date(2019, 1, 1), Decimal("10.00"), "antes")
+    SaleRepository().insert_sale(date(2021, 1, 1), Decimal("20.00"), "depois")
+    _make_order(name="PDV no caixa", price="5.00", qty=1, stock=10)
+
+    payload = logged_client.get("/api/sales").get_json()
+    assert payload["caixa"]["open"] is True
+    assert payload["caixa"]["opened_at"] == "2020-01-01 00:00:00"
+
+    manual_antes = next(
+        s
+        for s in payload["sales"]
+        if s["kind"] == "manual" and s["date"] == "2019-01-01"
+    )
+    manual_depois = next(
+        s
+        for s in payload["sales"]
+        if s["kind"] == "manual" and s["date"] == "2021-01-01"
+    )
+    pdv = next(
+        s
+        for s in payload["sales"]
+        if s["kind"] == "pdv" and any(i["name"] == "PDV no caixa" for i in s["items"])
+    )
+    assert manual_antes["in_caixa"] is False
+    assert manual_depois["in_caixa"] is True
+    assert pdv["in_caixa"] is True
+
+    repository.close_register(
+        register_id=repository.get_open().id,
+        closed_by="test",
+        closed_at="2021-06-01 00:00:00",
+        closing_amount=0,
+        expected_amount=0,
+    )
+    closed = logged_client.get("/api/sales").get_json()
+    assert closed["caixa"]["open"] is False
+    assert all(not s["in_caixa"] for s in closed["sales"])
 
 
 def test_edit_manual_sale(logged_client):
