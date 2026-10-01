@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl, brdateShort, maskMoney, moneyToDecimal } from '@/utils/format'
@@ -17,10 +17,15 @@ const periods = [
   { key: 'mes_anterior', label: 'Mês passado', icon: 'fas fa-calendar-minus' },
 ]
 
+/** Segundos que os valores do topo ficam visíveis antes de esconder sozinho. */
+const EYE_TIMEOUT_MS = 10000
+
 const active = ref('hoje')
 const showValues = ref(false)
 const saleFilter = ref('todas')
 const onlyCaixa = ref(false)
+/** Usuário escolheu o filtro na mão → o padrão não deve sobrescrever. */
+const filterTouched = ref(false)
 const search = ref('')
 const showAvulsa = ref(false)
 const data = ref(null)
@@ -189,10 +194,22 @@ function toggleExpand(sale) {
   expandedIds.value = new Set(expandedIds.value)
 }
 
+/** Padrão de visualização: "Caixa atual" se houver caixa aberto, senão "Hoje". */
+function applyDefault() {
+  if (data.value?.caixa?.open) {
+    onlyCaixa.value = true
+    active.value = ''
+  } else {
+    onlyCaixa.value = false
+    active.value = 'hoje'
+  }
+}
+
 async function load() {
   loading.value = true
   try {
     data.value = await api.get('/sales')
+    if (!filterTouched.value) applyDefault()
   } finally {
     loading.value = false
   }
@@ -295,13 +312,36 @@ function fmt(value) {
   return showValues.value ? brl(value) : 'R$ ••••'
 }
 
+let eyeTimer = null
+
+function clearEyeTimer() {
+  if (eyeTimer) {
+    clearTimeout(eyeTimer)
+    eyeTimer = null
+  }
+}
+
+/** Revela os valores do topo e agenda o ocultamento automático (10s). */
+function toggleEye() {
+  showValues.value = !showValues.value
+  clearEyeTimer()
+  if (showValues.value) {
+    eyeTimer = setTimeout(() => {
+      showValues.value = false
+      eyeTimer = null
+    }, EYE_TIMEOUT_MS)
+  }
+}
+
 function selectPeriod(key) {
+  filterTouched.value = true
   onlyCaixa.value = false
   active.value = key
 }
 
 function toggleCaixa() {
   if (!data.value?.caixa?.open) return
+  filterTouched.value = true
   onlyCaixa.value = !onlyCaixa.value
   active.value = onlyCaixa.value ? '' : 'hoje'
 }
@@ -317,6 +357,7 @@ watch(
 )
 
 onMounted(load)
+onBeforeUnmount(clearEyeTimer)
 </script>
 
 <template>
@@ -359,7 +400,7 @@ onMounted(load)
           class="btn btn-ghost btn-sm eye-toggle"
           :title="showValues ? 'Ocultar valores' : 'Mostrar valores'"
           :aria-pressed="showValues ? 'true' : 'false'"
-          @click="showValues = !showValues"
+          @click="toggleEye"
         >
           <i :class="showValues ? 'fas fa-eye' : 'fas fa-eye-slash'"></i>
           {{ showValues ? 'Ocultar valores' : 'Mostrar valores' }}
