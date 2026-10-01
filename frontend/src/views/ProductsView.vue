@@ -510,6 +510,16 @@ function removeProduct(product) {
   deleteTarget.value = product
 }
 
+async function toggleProductActive(product) {
+  const wasActive = product.active
+  try {
+    data.value = await api.post(`/products/${product.id}/toggle`, {})
+    ElMessage.success(wasActive ? 'Produto desativado.' : 'Produto ativado!')
+  } catch (error) {
+    ElMessage.error(error.message)
+  }
+}
+
 async function confirmDelete() {
   const product = deleteTarget.value
   deleteTarget.value = null
@@ -751,6 +761,10 @@ function onModalKeydown(event) {
         </button>
         <button type="button" role="menuitem" @click="openMovements(menuProduct); closeMenu()">
           <i class="fas fa-history"></i> Movimentações
+        </button>
+        <button type="button" role="menuitem" @click="toggleProductActive(menuProduct); closeMenu()">
+          <i :class="menuProduct.active ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+          {{ menuProduct.active ? 'Desativar' : 'Ativar' }}
         </button>
         <button type="button" role="menuitem" class="is-danger" @click="removeProduct(menuProduct); closeMenu()">
           <i class="fas fa-trash"></i> Excluir
