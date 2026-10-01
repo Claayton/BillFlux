@@ -35,6 +35,7 @@ const deleteTarget = ref(null)
 const searchQuery = ref('')
 const activeCategoryId = ref(null)
 const stockFilter = ref('todos')
+const showInactive = ref(false)
 const openMenuId = ref(null)
 const page = ref(1)
 const PAGE_SIZE = 50
@@ -46,9 +47,16 @@ const productUnits = ref([])
 const productUnitsLoading = ref(false)
 const newUnit = ref({ name: '', barcode: '', factor: 1, price: '' })
 
+/** Produtos considerados antes dos filtros de busca/categoria/estoque.
+ * Por padrão esconde os inativos (mostrados só com o check "Mostrar inativos"). */
+const baseProducts = computed(() => {
+  const products = data.value?.products || []
+  return showInactive.value ? products : products.filter(p => p.active)
+})
+
 const filteredProducts = computed(() => {
   if (!data.value) return []
-  let list = data.value.products || []
+  let list = baseProducts.value
   if (activeCategoryId.value !== null) {
     list = list.filter(p => p.category_id === activeCategoryId.value)
   }
@@ -91,7 +99,7 @@ function statusFor(p) {
 
 /** Categorias ativas com contagem (mesma base do Todos). */
 const catsWithCount = computed(() => {
-  const products = data.value?.products || []
+  const products = baseProducts.value
   return categories.value
     .filter(c => c.active)
     .map(c => ({
@@ -125,7 +133,7 @@ const pageNumbers = computed(() => {
   return [...set].filter(n => n >= 1 && n <= total).sort((a, b) => a - b)
 })
 
-watch([searchQuery, activeCategoryId, stockFilter], () => {
+watch([searchQuery, activeCategoryId, stockFilter, showInactive], () => {
   page.value = 1
 })
 
@@ -510,6 +518,16 @@ function removeProduct(product) {
   deleteTarget.value = product
 }
 
+async function toggleProductActive(product) {
+  const wasActive = product.active
+  try {
+    data.value = await api.post(`/products/${product.id}/toggle`, {})
+    ElMessage.success(wasActive ? 'Produto desativado.' : 'Produto ativado!')
+  } catch (error) {
+    ElMessage.error(error.message)
+  }
+}
+
 async function confirmDelete() {
   const product = deleteTarget.value
   deleteTarget.value = null
@@ -596,7 +614,7 @@ function onModalKeydown(event) {
             class="toolbar-select toolbar-select-cat"
             aria-label="Filtrar por categoria"
           >
-            <option :value="null">Todas as categorias ({{ data.products.length }})</option>
+            <option :value="null">Todas as categorias ({{ baseProducts.length }})</option>
             <option v-for="cat in catsWithCount" :key="cat.id" :value="cat.id">
               {{ cat.name }} ({{ cat.count }})
             </option>
@@ -611,6 +629,10 @@ function onModalKeydown(event) {
             <option value="baixo">Estoque baixo</option>
             <option value="sem">Sem estoque</option>
           </select>
+          <label class="toolbar-check">
+            <input v-model="showInactive" type="checkbox" />
+            Mostrar inativos
+          </label>
           <button type="button" class="btn-brand" @click="openNewProduct">
             <i class="fas fa-plus"></i> Novo produto
           </button>
@@ -751,6 +773,10 @@ function onModalKeydown(event) {
         </button>
         <button type="button" role="menuitem" @click="openMovements(menuProduct); closeMenu()">
           <i class="fas fa-history"></i> Movimentações
+        </button>
+        <button type="button" role="menuitem" @click="toggleProductActive(menuProduct); closeMenu()">
+          <i :class="menuProduct.active ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+          {{ menuProduct.active ? 'Desativar' : 'Ativar' }}
         </button>
         <button type="button" role="menuitem" class="is-danger" @click="removeProduct(menuProduct); closeMenu()">
           <i class="fas fa-trash"></i> Excluir
