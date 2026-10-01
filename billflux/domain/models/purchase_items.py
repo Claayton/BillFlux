@@ -14,5 +14,7 @@ PurchaseItem = namedtuple(
         "total",
         "barcode",
         "unit_com",
+        "factor",
     ],
+    defaults=[1],
 )

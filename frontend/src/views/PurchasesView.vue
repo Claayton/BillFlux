@@ -237,7 +237,7 @@ async function openLaunchModal(purchase) {
           li.existing_cost = res.product.cost
           li.matched = true
           li.units = res.product.units || []
-          if (li.units.length && !li.unit_com) {
+          if (li.units.length) {
             const def = li.units.find(u => u.is_default) || li.units[0]
             li.selected_unit_id = def.id
             li.units_per_case = def.factor
@@ -252,7 +252,7 @@ async function openLaunchModal(purchase) {
           li.existing_stock = res.product.stock_quantity
           li.existing_cost = res.product.cost
           li.units = res.product.units || []
-          if (li.units.length && !li.unit_com && !li.selected_unit_id) {
+          if (li.units.length && !li.selected_unit_id) {
             const def = li.units.find(u => u.is_default) || li.units[0]
             li.selected_unit_id = def.id
             li.units_per_case = def.factor
@@ -426,6 +426,14 @@ async function confirmLaunch() {
     await api.post(`/purchases/${launchTarget.value.id}/confirm`, {
       due_date: launchDate.value || null,
       create_bill: launchCreateBill.value,
+      items: launchItems.value.map(li => ({
+        id: li.id,
+        product_id: li.product_id,
+        quantity: parseInt(li.quantity) || 0,
+        unit_cost: li.unit_cost,
+        factor: parseInt(li.units_per_case) || 1,
+        unit_com: li.unit_com || null,
+      })),
     })
     ElMessage.success('Compra lançada! Estoque atualizado com custo médio ponderado.')
     launchTarget.value = null
