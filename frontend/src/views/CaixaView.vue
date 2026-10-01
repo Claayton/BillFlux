@@ -50,19 +50,34 @@ const closeSystemTotal = computed(() => {
   return Math.round(sum * 100) / 100
 })
 
-/** Resumo do caixa atual (só conceitos que o backend fornece). */
+const movementTotals = computed(() => ({
+  sangria: Number(data.value?.movement_totals?.sangria || 0),
+  suprimento: Number(data.value?.movement_totals?.suprimento || 0),
+  entrada: Number(data.value?.movement_totals?.entrada || 0),
+}))
+
+const movements = computed(() => data.value?.movements || [])
+
+/** Resumo do caixa atual: esperado = abertura + vendas + sup + entradas − sang. */
 const summary = computed(() => {
   const opening = Number(data.value?.open?.opening_amount || 0)
   const sales = closeSystemTotal.value
+  const { sangria, suprimento, entrada } = movementTotals.value
   return {
     opening,
     sales,
-    expected: Math.round((opening + sales) * 100) / 100,
+    suprimento,
+    sangria,
+    entrada,
+    expected:
+      Math.round((opening + sales + suprimento + entrada - sangria) * 100) / 100,
   }
 })
 
+const expectedTotal = computed(() => summary.value.expected)
+
 const totalDiff = computed(() =>
-  Math.round((closeTotalCounted.value - closeSystemTotal.value) * 100) / 100
+  Math.round((closeTotalCounted.value - expectedTotal.value) * 100) / 100
 )
 
 function diffTone(diff) {
@@ -76,10 +91,41 @@ const closeSummary = computed(() => {
   const tone = diffTone(diff)
   return [
     { label: 'Valor contado', value: brl(closeTotalCounted.value) },
-    { label: 'Valor registrado', value: brl(closeSystemTotal.value) },
-    { label: 'Diferença', value: diffLabelText(closeSystemTotal.value, closeTotalCounted.value), tone },
+    { label: 'Valor registrado', value: brl(expectedTotal.value) },
+    { label: 'Diferença', value: diffLabelText(expectedTotal.value, closeTotalCounted.value), tone },
   ]
 })
+
+const movementForm = ref({ kind: 'sangria', amount: '', obs: '' })
+const savingMovement = ref(false)
+
+function onMovementInput(event) {
+  movementForm.value.amount = maskMoney(event.target.value)
+}
+
+async function submitMovement() {
+  const amount = moneyToDecimal(movementForm.value.amount)
+  if (amount === null || amount <= 0) {
+    ElMessage.warning('Informe um valor maior que zero.')
+    return
+  }
+  const kind = movementForm.value.kind
+  savingMovement.value = true
+  try {
+    await api.post('/caixa/movement', {
+      kind,
+      amount: String(amount),
+      obs: movementForm.value.obs,
+    })
+    movementForm.value = { kind, amount: '', obs: '' }
+    await load()
+    ElMessage.success(kind === 'sangria' ? 'Sangria registrada!' : 'Suprimento registrado!')
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    savingMovement.value = false
+  }
+}
 
 const openTotal = computed(() => {
   let sum = 0
@@ -311,12 +357,98 @@ onMounted(() => {
             </div>
             <span class="stat-value">{{ brl(summary.sales) }}</span>
           </div>
+          <div v-if="summary.suprimento > 0" class="stat-card">
+            <div class="stat-top">
+              <span class="icon-tile"><i class="fas fa-arrow-down"></i></span>
+              <span class="stat-label">Entradas</span>
+            </div>
+            <span class="stat-value">{{ brl(summary.suprimento) }}</span>
+          </div>
+          <div v-if="summary.entrada > 0" class="stat-card">
+            <div class="stat-top">
+              <span class="icon-tile"><i class="fas fa-hand-holding-usd"></i></span>
+              <span class="stat-label">Recebimentos</span>
+            </div>
+            <span class="stat-value">{{ brl(summary.entrada) }}</span>
+          </div>
+          <div v-if="summary.sangria > 0" class="stat-card">
+            <div class="stat-top">
+              <span class="icon-tile"><i class="fas fa-arrow-up"></i></span>
+              <span class="stat-label">Saídas</span>
+            </div>
+            <span class="stat-value">{{ brl(summary.sangria) }}</span>
+          </div>
           <div class="stat-card stat-card-highlight">
             <div class="stat-top">
               <span class="icon-tile"><i class="fas fa-balance-scale"></i></span>
               <span class="stat-label">Saldo esperado</span>
             </div>
             <span class="stat-value">{{ brl(summary.expected) }}</span>
+          </div>
+        </div>
+
+        <!-- Sangria / suprimento -->
+        <div v-if="isOpen" class="caixa-action-card">
+          <h3><i class="fas fa-exchange-alt"></i> Movimentações</h3>
+          <p>Registre sangrias (−) e suprimentos (+) com motivo. Entram no saldo esperado.</p>
+
+          <form class="movement-form" @submit.prevent="submitMovement">
+            <div class="filter-segmented" role="group" aria-label="Tipo de movimentação">
+              <button
+                type="button"
+                :class="{ 'is-active': movementForm.kind === 'sangria' }"
+                @click="movementForm.kind = 'sangria'"
+              >
+                <i class="fas fa-arrow-up"></i> Sangria
+              </button>
+              <button
+                type="button"
+                :class="{ 'is-active': movementForm.kind === 'suprimento' }"
+                @click="movementForm.kind = 'suprimento'"
+              >
+                <i class="fas fa-arrow-down"></i> Suprimento
+              </button>
+            </div>
+            <div class="method-input">
+              <span class="input-prefix">R$</span>
+              <input
+                :value="movementForm.amount"
+                type="text"
+                placeholder="0,00"
+                inputmode="decimal"
+                aria-label="Valor da movimentação"
+                @input="onMovementInput"
+              />
+            </div>
+            <input
+              v-model="movementForm.obs"
+              type="text"
+              class="movement-obs"
+              placeholder="Motivo (ex: pagamento fornecedor...)"
+              aria-label="Motivo da movimentação"
+            />
+            <button type="submit" class="btn btn-primary" :disabled="savingMovement">
+              <i class="fas fa-check"></i> {{ savingMovement ? 'Registrando…' : 'Registrar' }}
+            </button>
+          </form>
+
+          <div v-if="movements.length" class="movement-list">
+            <div v-for="m in movements" :key="m.id" class="movement-row">
+              <span
+                class="status-badge"
+                :class="m.kind === 'sangria' ? 'is-off' : 'is-ok'"
+              >{{
+                m.kind === 'sangria'
+                  ? '− Sangria'
+                  : m.kind === 'entrada'
+                    ? '+ Entrada'
+                    : '+ Suprimento'
+              }}</span>
+              <strong>{{ brl(m.amount) }}</strong>
+              <span class="movement-meta">
+                {{ m.obs || 'Sem motivo' }} · {{ m.created_by }}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -388,14 +520,14 @@ onMounted(() => {
                 <strong>Contado: {{ brl(closeTotalCounted) }}</strong>
               </span>
               <span class="system-total" role="cell">
-                <strong>Registrado: {{ brl(closeSystemTotal) }}</strong>
+                <strong>Registrado: {{ brl(expectedTotal) }}</strong>
               </span>
               <span
                 class="method-diff"
                 role="cell"
                 :class="diffTone(totalDiff) === 'ok' ? 'diff-ok' : diffTone(totalDiff) === 'warn' ? 'diff-sobra' : 'diff-falta'"
               >
-                <strong>Diferença: {{ diffLabelText(closeSystemTotal, closeTotalCounted) }}</strong>
+                <strong>Diferença: {{ diffLabelText(expectedTotal, closeTotalCounted) }}</strong>
               </span>
             </div>
           </div>
@@ -741,6 +873,70 @@ onMounted(() => {
 }
 .caixa-form .btn {
   align-self: flex-start;
+}
+
+/* Sangria / suprimento */
+.movement-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.movement-form .method-input input {
+  width: 140px;
+}
+
+.movement-obs {
+  flex: 1;
+  min-width: 180px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--brand-radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.movement-obs::placeholder {
+  color: var(--text-muted);
+}
+
+.movement-obs:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: var(--brand-input-ring);
+}
+
+.movement-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--brand-radius-md);
+  overflow: hidden;
+}
+
+.movement-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+}
+
+.movement-row + .movement-row {
+  border-top: 1px solid var(--border);
+}
+
+.movement-row strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.movement-meta {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
 }
 .form-field {
   margin-bottom: 4px;

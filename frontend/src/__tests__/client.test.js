@@ -11,9 +11,17 @@ function mockResponse(data, status = 200) {
 }
 
 describe('api client', () => {
+  function setOnLine(value) {
+    Object.defineProperty(navigator, 'onLine', {
+      configurable: true,
+      get: () => value,
+    })
+  }
+
   beforeEach(() => {
     vi.resetModules()
     vi.restoreAllMocks()
+    setOnLine(true)
   })
 
   async function loadClient(fetchImpl) {
@@ -101,11 +109,49 @@ describe('api client', () => {
     expect(calls.filter((c) => c === '/api/sales')).toHaveLength(1)
   })
 
-  it('GET com erro sem corpo usa status como mensagem', async () => {
-    const { api } = await loadClient(async () => mockResponse('', 500))
-    await expect(api.get('/sales')).rejects.toMatchObject({
+  it('GET com erro 500 sem corpo usa mensagem amigável de servidor', async () => {
+    const mod = await loadClient(async () => mockResponse('', 500))
+    await expect(mod.api.get('/sales')).rejects.toMatchObject({
       status: 500,
-      message: 'Erro 500',
+      message: mod.SERVER_ERROR_MESSAGE,
+    })
+  })
+
+  it('GET com erro 4xx sem corpo mantém o status', async () => {
+    const mod = await loadClient(async () => mockResponse('', 404))
+    await expect(mod.api.get('/sales')).rejects.toMatchObject({
+      status: 404,
+      message: 'Erro 404',
+    })
+  })
+
+  it('falha de rede com cliente offline → mensagem de sem conexão', async () => {
+    setOnLine(false)
+    const mod = await loadClient(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    await expect(mod.api.get('/sales')).rejects.toMatchObject({
+      message: mod.OFFLINE_MESSAGE,
+    })
+  })
+
+  it('falha de rede estando online → mensagem de servidor inacessível', async () => {
+    setOnLine(true)
+    const mod = await loadClient(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    await expect(mod.api.get('/sales')).rejects.toMatchObject({
+      message: mod.SERVER_UNREACHABLE_MESSAGE,
+    })
+  })
+
+  it('falha de rede na busca do CSRF também vira mensagem amigável', async () => {
+    setOnLine(false)
+    const mod = await loadClient(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    await expect(mod.api.post('/sales', { total: 1 })).rejects.toMatchObject({
+      message: mod.OFFLINE_MESSAGE,
     })
   })
 

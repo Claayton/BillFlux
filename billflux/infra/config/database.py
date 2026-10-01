@@ -31,6 +31,15 @@ from billflux.infra.entities.product_supplier import (
 from billflux.infra.entities.product_unit import (
     ProductUnit as ProductUnitModel,
 )  # noqa: F401
+from billflux.infra.entities.cash_movement import CashMovement  # noqa: F401
+from billflux.infra.entities.audit_event import AuditEvent  # noqa: F401
+from billflux.infra.entities.setting import Setting  # noqa: F401
+from billflux.infra.entities.receivable import Receivable  # noqa: F401
+from billflux.infra.entities.receivable_payment import (  # noqa: F401
+    ReceivablePayment,
+)
+from billflux.infra.entities.tab import Tab  # noqa: F401
+from billflux.infra.entities.tab_item import TabItem  # noqa: F401
 
 _database_url = settings.database.url
 
@@ -62,6 +71,10 @@ def create_db():
     """Criando bancos de dados"""
 
     base = SQLModel.metadata.create_all(engine)
+    # Itens do pedido passaram a guardar a apresentação (fator base). Roda em
+    # SQLite e Postgres: em banco novo a coluna já vem do create_all (vira
+    # no-op) e em banco antigo é adicionada com default 1 (linhas antigas).
+    _add_column_if_missing("order_items", "factor", "INTEGER DEFAULT 1")
     if _is_sqlite:
         _add_column_if_missing("bill", "pix_key")
         _add_column_if_missing("bill", "pix_payload")

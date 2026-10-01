@@ -35,6 +35,7 @@ import SalesView from '@/views/SalesView.vue'
 
 const payload = {
   today: '2026-08-21',
+  caixa: { open: true, opened_at: '2026-08-21 08:00:00' },
   periods: {
     hoje: { total: 150, count: 2, days: 1, avg: 150 },
     '7d': { total: 150, count: 2, days: 1, avg: 150 },
@@ -57,6 +58,7 @@ const payload = {
       ],
       payment: 'Dinheiro',
       cancelled: false,
+      in_caixa: true,
     },
     {
       kind: 'manual',
@@ -68,6 +70,7 @@ const payload = {
       items: [],
       payment: null,
       cancelled: false,
+      in_caixa: false,
     },
     {
       kind: 'pdv',
@@ -79,6 +82,7 @@ const payload = {
       items: [{ name: 'Cancelado', quantity: 1 }],
       payment: 'PIX',
       cancelled: true,
+      in_caixa: true,
     },
   ],
 }
@@ -284,5 +288,57 @@ describe('SalesView', () => {
     await flushPromises()
     expect(wrapper.find('.sale-items-expanded').exists()).toBe(true)
     expect(wrapper.findAll('.sale-item-expanded').length).toBe(4)
+  })
+
+  it('"Caixa atual" filtra os KPIs do topo e é exclusivo com os períodos', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('.eye-toggle').trigger('click')
+    await flushPromises()
+
+    const toggle = wrapper.find('.caixa-filter')
+    expect(toggle.exists()).toBe(true)
+    expect(toggle.element.disabled).toBe(false)
+
+    let cards = wrapper.findAll('.stat-card .stat-value')
+    expect(cards[0].text()).toContain('150,00') // total do período hoje
+    expect(cards[1].text()).toBe('2')
+
+    await toggle.trigger('click')
+    await flushPromises()
+
+    // exclusivo: nenhum período fica ativo quando caixa está ligado
+    const segmented = wrapper.findAll('.stats-toolbar .filter-segmented button')
+    const activeButtons = segmented.filter((b) => b.classes().includes('is-active'))
+    expect(activeButtons.length).toBe(1)
+    expect(activeButtons[0].text()).toContain('Caixa atual')
+
+    // in_caixa e não cancelado: só o pdv #10 (50,00)
+    cards = wrapper.findAll('.stat-card .stat-value')
+    expect(cards[0].text()).toContain('50,00') // total vendido no caixa
+    expect(cards[1].text()).toBe('1') // nº de vendas
+    expect(cards[3].text()).toContain('50,00') // média por dia
+
+    const daysHint = wrapper.findAll('.stat-card .stat-hint')[2]
+    expect(daysHint.text()).toContain('desde 2026-08-21')
+
+    // clicar em um período desliga o caixa
+    const hoje = segmented.find((b) => b.text().includes('Hoje'))
+    await hoje.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.caixa-filter').classes()).not.toContain('is-active')
+    cards = wrapper.findAll('.stat-card .stat-value')
+    expect(cards[0].text()).toContain('150,00')
+  })
+
+  it('sem caixa aberto o botão fica desabilitado', async () => {
+    apiMock.get.mockResolvedValue({ ...payload, caixa: { open: false, opened_at: null } })
+    const wrapper = mountView()
+    await flushPromises()
+
+    const toggle = wrapper.find('.caixa-filter')
+    expect(toggle.element.disabled).toBe(true)
+    expect(toggle.attributes('title')).toContain('Nenhum caixa aberto')
   })
 })

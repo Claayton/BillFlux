@@ -8,7 +8,11 @@ from sqlmodel import SQLModel, Field
 
 
 class OrderItem(SQLModel, table=True):
-    """Itens de um pedido do PDV"""
+    """Itens de um pedido do PDV
+
+    `quantity`/`unit_price` são da apresentação vendida (ex.: 1 caixa a
+    R$ 45,99). `factor` é quantas unidades-base a apresentação representa
+    (ex.: 15), usado pra baixar estoque e calcular lucro."""
 
     __tablename__ = "order_items"
 
@@ -21,3 +25,4 @@ class OrderItem(SQLModel, table=True):
     )
     quantity: int = Field(nullable=False)
     unit_price: Decimal = Field(sa_column=Column(Numeric(10, 2), nullable=False))
+    factor: int = Field(nullable=False, default=1)

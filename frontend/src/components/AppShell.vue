@@ -19,6 +19,7 @@ const navSections = [
   {
     items: [
       { name: 'products', label: 'Produtos', icon: 'fas fa-box-open', to: '/products' },
+      { name: 'reports', label: 'Relatórios', icon: 'fas fa-chart-bar', to: '/reports' },
       { name: 'suppliers', label: 'Fornecedores', icon: 'fas fa-truck', to: '/suppliers' },
       { name: 'purchases', label: 'Compras', icon: 'fas fa-truck-loading', to: '/purchases' },
       { name: 'schedule', label: 'Agenda de pedidos', icon: 'fas fa-calendar-alt', to: '/schedule' },
@@ -27,6 +28,7 @@ const navSections = [
   {
     items: [
       { name: 'customers', label: 'Clientes', icon: 'fas fa-users', to: '/customers' },
+      { name: 'fiado', label: 'Fiado', icon: 'fas fa-hand-holding-usd', to: '/fiado' },
       { name: 'categories', label: 'Categorias', icon: 'fas fa-tags', to: '/categories' },
       { name: 'payments', label: 'Formas de pagamento', icon: 'fas fa-credit-card', to: '/payments' },
       { name: 'bills', label: 'Contas', icon: 'fas fa-file-invoice', to: '/bills' },
@@ -36,6 +38,7 @@ const navSections = [
   {
     items: [
       { name: 'home', label: 'Visão geral', icon: 'fas fa-th-large', to: '/home' },
+      { name: 'config', label: 'Configurações', icon: 'fas fa-cog', to: '/config' },
     ]
   },
 ]

@@ -269,6 +269,89 @@ def test_pdv_complete_split_payments_validation(logged_client):
     assert zero_amount.status_code == 400
 
 
+def test_pdv_complete_uses_unit_price(logged_client):
+    """Venda de apresentação cobra o preço da apresentação, não o base."""
+
+    from billflux.infra.repository.product_unit_repository import (
+        ProductUnitRepository,
+    )
+
+    _open_caixa(logged_client)
+    product = ProductRepository().insert_product(
+        name="Caixa Teste", price=Decimal("3.99"), stock_quantity=30
+    )
+    unit = ProductUnitRepository().upsert(
+        product_id=product.id,
+        name="Caixa c/ 15",
+        factor=15,
+        price=Decimal("45.99"),
+        is_default=False,
+    )
+    method = PaymentMethodRepository().get_active_methods()[0]
+    token = _csrf(logged_client)
+
+    response = logged_client.post(
+        "/api/pdv/complete",
+        json={
+            "method_id": method.id,
+            "items": [{"product_id": product.id, "quantity": 1, "unit_id": unit.id}],
+        },
+        headers={"X-CSRFToken": token},
+    )
+
+    assert response.status_code == 201
+    order = response.get_json()["order"]
+    assert order["total"] == 45.99  # preço da apresentação (não 3,99 x 15)
+    assert order["items"][0]["unit_price"] == 45.99
+    assert order["items"][0]["quantity"] == 1
+    assert order["items"][0]["subtotal"] == 45.99
+
+    updated = ProductRepository().get_product(product.id)
+    assert updated.stock_quantity == 15  # 30 - (1 x 15)
+
+
+def test_pdv_complete_ignores_foreign_unit(logged_client):
+    """Apresentação de outro produto é ignorada (usa o preço base)."""
+
+    from billflux.infra.repository.product_unit_repository import (
+        ProductUnitRepository,
+    )
+
+    _open_caixa(logged_client)
+    product = ProductRepository().insert_product(
+        name="Refri", price=Decimal("5.00"), stock_quantity=10
+    )
+    other = ProductRepository().insert_product(
+        name="Outro", price=Decimal("1.00"), stock_quantity=10
+    )
+    foreign_unit = ProductUnitRepository().upsert(
+        product_id=other.id,
+        name="Fardo",
+        factor=6,
+        price=Decimal("0.50"),
+        is_default=False,
+    )
+    method = PaymentMethodRepository().get_active_methods()[0]
+    token = _csrf(logged_client)
+
+    response = logged_client.post(
+        "/api/pdv/complete",
+        json={
+            "method_id": method.id,
+            "items": [
+                {"product_id": product.id, "quantity": 2, "unit_id": foreign_unit.id}
+            ],
+        },
+        headers={"X-CSRFToken": token},
+    )
+
+    assert response.status_code == 201
+    order = response.get_json()["order"]
+    assert order["total"] == 10.0  # 2 x 5,00 (preço base do produto)
+    updated = ProductRepository().get_product(product.id)
+    assert updated.stock_quantity == 8
+
+
 def test_pdv_complete_with_change(logged_client):
     """Recibo informa quanto foi pago em cada forma e o troco."""
 

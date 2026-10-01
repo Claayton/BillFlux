@@ -7,9 +7,22 @@ from flask import session, request
 
 from billflux.api import bp, api_error, api_login_required, api_response
 from billflux.infra.repository.cash_register_repository import CashRegisterRepository
+from billflux.infra.repository.cash_movement_repository import CashMovementRepository
 from billflux.infra.repository.payment_method_repository import (
     PaymentMethodRepository,
 )
+from billflux.services.audit import audit
+from billflux.services.credit import get_fiado_method_ids
+
+
+def _without_fiado(system_totals):
+    """Remove pagamentos na forma fiado: dívida não é dinheiro esperado no caixa."""
+    fiado_ids = get_fiado_method_ids()
+    if not fiado_ids:
+        return system_totals
+    return {
+        mid: total for mid, total in system_totals.items() if int(mid) not in fiado_ids
+    }
 
 
 def _serialize(cr):
@@ -32,10 +45,7 @@ def _serialize(cr):
 
 def _payment_methods_map():
     """Dict id -> name das formas de pagamento ativas."""
-    return {
-        m.id: m.name
-        for m in PaymentMethodRepository().get_active_methods()
-    }
+    return {m.id: m.name for m in PaymentMethodRepository().get_active_methods()}
 
 
 def _caixa_payload():
@@ -48,8 +58,8 @@ def _caixa_payload():
     system_totals_named = {}
     if open_register:
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        system_totals = repository.compute_system_totals(
-            open_register.opened_at, now_str
+        system_totals = _without_fiado(
+            repository.compute_system_totals(open_register.opened_at, now_str)
         )
         methods = _payment_methods_map()
         for mid, total in system_totals.items():
@@ -59,6 +69,26 @@ def _caixa_payload():
                 "total": total,
             }
 
+    movements = []
+    movement_totals = {"sangria": 0.0, "suprimento": 0.0}
+    if open_register:
+        movements = [
+            {
+                "id": m.id,
+                "kind": m.kind,
+                "amount": m.amount,
+                "obs": m.obs,
+                "created_by": m.created_by,
+                "created_at": (
+                    m.created_at.isoformat()
+                    if hasattr(m.created_at, "isoformat")
+                    else m.created_at
+                ),
+            }
+            for m in CashMovementRepository().list_for_register(open_register.id)
+        ]
+        movement_totals = CashMovementRepository().totals_by_kind(open_register.id)
+
     return {
         "open": _serialize(open_register) if open_register else None,
         "last_closed": _serialize(last_closed) if last_closed else None,
@@ -66,6 +96,8 @@ def _caixa_payload():
         "system_totals": system_totals,
         "system_totals_named": system_totals_named,
         "payment_methods": _payment_methods_map(),
+        "movements": movements,
+        "movement_totals": movement_totals,
     }
 
 
@@ -111,13 +143,9 @@ def caixa_open():
             try:
                 v = round(float(val), 2)
             except (TypeError, ValueError):
-                return api_error(
-                    f"Valor inválido para a forma {mid}.", 400
-                )
+                return api_error(f"Valor inválido para a forma {mid}.", 400)
             if v < 0:
-                return api_error(
-                    f"Valor da forma {mid} não pode ser negativo.", 400
-                )
+                return api_error(f"Valor da forma {mid} não pode ser negativo.", 400)
             opening_details[str(mid)] = v
             opening_amount += v
         opening_amount = round(opening_amount, 2)
@@ -130,6 +158,11 @@ def caixa_open():
         opened_at=now.strftime("%Y-%m-%d %H:%M:%S"),
         opening_amount=opening_amount,
         opening_details=opening_details,
+    )
+    audit(
+        "caixa.open",
+        entity="cash_register",
+        details={"opening_amount": opening_amount},
     )
     return api_response(_caixa_payload(), status=201)
 
@@ -147,8 +180,8 @@ def caixa_close():
 
     # calcula totais do sistema
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    system_totals = repository.compute_system_totals(
-        open_register.opened_at, now_str
+    system_totals = _without_fiado(
+        repository.compute_system_totals(open_register.opened_at, now_str)
     )
 
     # closing_details: {"1": 150.00, "2": 75.00} (method_id -> counted amount)
@@ -174,20 +207,24 @@ def caixa_close():
             try:
                 v = round(float(val), 2)
             except (TypeError, ValueError):
-                return api_error(
-                    f"Valor inválido para a forma {mid}.", 400
-                )
+                return api_error(f"Valor inválido para a forma {mid}.", 400)
             if v < 0:
-                return api_error(
-                    f"Valor da forma {mid} não pode ser negativo.", 400
-                )
+                return api_error(f"Valor da forma {mid} não pode ser negativo.", 400)
             closing_details[str(mid)] = v
             closing_amount += v
         closing_amount = round(closing_amount, 2)
         closing_details = json.dumps(closing_details)
 
-    # soma dos opening_details
-    expected_amount = open_register.opening_amount + sum(system_totals.values())
+    # esperado = abertura + vendas + suprimentos + entradas − sangrias
+    # (entradas incluem recebimentos de fiado no caixa aberto)
+    movement_totals = CashMovementRepository().totals_by_kind(open_register.id)
+    expected_amount = (
+        open_register.opening_amount
+        + sum(system_totals.values())
+        + movement_totals.get("suprimento", 0.0)
+        + movement_totals.get("entrada", 0.0)
+        - movement_totals.get("sangria", 0.0)
+    )
     expected_amount = round(expected_amount, 2)
 
     now = datetime.now()
@@ -203,4 +240,61 @@ def caixa_close():
         system_totals=json.dumps(system_totals),
         closing_details=closing_details,
     )
+    audit(
+        "caixa.close",
+        entity="cash_register",
+        entity_id=open_register.id,
+        details={
+            "closing_amount": closing_amount,
+            "expected_amount": expected_amount,
+            "difference": round(closing_amount - expected_amount, 2),
+        },
+    )
     return api_response(_caixa_payload())
+
+
+@bp.route("/caixa/movement", methods=["POST"])
+@api_login_required
+def caixa_movement():
+    """Registra sangria (-) ou suprimento (+) no caixa aberto."""
+    repository = CashRegisterRepository()
+    open_register = repository.get_open()
+    if not open_register:
+        return api_error("Nenhum caixa aberto para movimentar.", 400)
+
+    data = request.get_json(silent=True) or {}
+    kind = (data.get("kind") or "").strip().lower()
+    if kind not in ("sangria", "suprimento"):
+        return api_error("Tipo deve ser 'sangria' ou 'suprimento'.", 400)
+    try:
+        amount = round(float(data.get("amount")), 2)
+    except (TypeError, ValueError):
+        return api_error("Informe um valor válido.", 400)
+    if amount <= 0:
+        return api_error("O valor deve ser maior que zero.", 400)
+    obs = (data.get("obs") or "").strip() or None
+
+    movement = CashMovementRepository().create(
+        cash_register_id=open_register.id,
+        kind=kind,
+        amount=amount,
+        created_by=session.get("user", "operador"),
+        obs=obs,
+    )
+    audit(
+        f"caixa.{kind}",
+        entity="cash_register",
+        entity_id=open_register.id,
+        details={"amount": amount, "obs": obs},
+    )
+    return api_response(
+        {
+            "movement": {
+                "id": movement.id,
+                "kind": movement.kind,
+                "amount": movement.amount,
+                "obs": movement.obs,
+            }
+        },
+        status=201,
+    )

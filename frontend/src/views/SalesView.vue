@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl, brdateShort, maskMoney, moneyToDecimal } from '@/utils/format'
@@ -20,6 +20,7 @@ const periods = [
 const active = ref('hoje')
 const showValues = ref(false)
 const saleFilter = ref('todas')
+const onlyCaixa = ref(false)
 const search = ref('')
 const showAvulsa = ref(false)
 const data = ref(null)
@@ -48,6 +49,21 @@ const editForm = ref({ date: '', total: '', obs: '' })
 
 const currentPeriod = computed(() => (data.value?.periods || {})[active.value])
 
+/** Resumo das vendas do caixa aberto (flag in_caixa vinda do backend). */
+const caixaSummary = computed(() => {
+  const sales = (data.value?.sales || []).filter((s) => s.in_caixa && !s.cancelled)
+  const total = sales.reduce((sum, s) => sum + Number(s.total || 0), 0)
+  const count = sales.length
+  const days = new Set(sales.map((s) => s.date)).size
+  const avg = days > 0 ? total / days : 0
+  return { total, count, days, avg }
+})
+
+const caixaOpenedDate = computed(() => {
+  const raw = data.value?.caixa?.opened_at
+  return raw ? raw.slice(0, 10) : ''
+})
+
 /** Dias cobertos por cada período (para "X de Y dias"). */
 const periodDays = computed(() => {
   const now = new Date()
@@ -64,7 +80,7 @@ function brNum(value, digits = 1) {
 
 /** Cards de indicadores (valor + dica secundária derivada dos dados). */
 const kpis = computed(() => {
-  const p = currentPeriod.value || {}
+  const p = onlyCaixa.value ? caixaSummary.value : (currentPeriod.value || {})
   const total = Number(p.total || 0)
   const count = Number(p.count || 0)
   const days = Number(p.days || 0)
@@ -88,7 +104,9 @@ const kpis = computed(() => {
       label: 'Dias com venda',
       icon: 'fas fa-calendar-check',
       value: showValues.value ? String(days) : '•••',
-      hint: `${days} de ${periodDays.value} dia${periodDays.value === 1 ? '' : 's'}`,
+      hint: onlyCaixa.value
+        ? (caixaOpenedDate.value ? `desde ${caixaOpenedDate.value}` : null)
+        : `${days} de ${periodDays.value} dia${periodDays.value === 1 ? '' : 's'}`,
     },
     {
       key: 'avg',
@@ -255,16 +273,17 @@ function askCancel(sale) {
   cancelTarget.value = sale
 }
 
-async function confirmCancel() {
+async function confirmCancel(reason) {
   const sale = cancelTarget.value
   cancelTarget.value = null
   if (!sale) return
+  const body = reason && String(reason).trim() ? { reason: String(reason).trim() } : {}
   try {
     if (sale.kind === 'pdv') {
-      data.value = await api.post(`/sales/orders/${sale.id}/cancel`, {})
+      data.value = await api.post(`/sales/orders/${sale.id}/cancel`, body)
       ElMessage.success('Venda cancelada e estoque restaurado.')
     } else {
-      data.value = await api.post(`/sales/${sale.id}/cancel`, {})
+      data.value = await api.post(`/sales/${sale.id}/cancel`, body)
       ElMessage.success('Venda cancelada.')
     }
   } catch (error) {
@@ -275,6 +294,27 @@ async function confirmCancel() {
 function fmt(value) {
   return showValues.value ? brl(value) : 'R$ ••••'
 }
+
+function selectPeriod(key) {
+  onlyCaixa.value = false
+  active.value = key
+}
+
+function toggleCaixa() {
+  if (!data.value?.caixa?.open) return
+  onlyCaixa.value = !onlyCaixa.value
+  active.value = onlyCaixa.value ? '' : 'hoje'
+}
+
+watch(
+  () => data.value?.caixa?.open,
+  (open) => {
+    if (!open) {
+      onlyCaixa.value = false
+      if (!active.value) active.value = 'hoje'
+    }
+  }
+)
 
 onMounted(load)
 </script>
@@ -295,11 +335,21 @@ onMounted(load)
       <div class="stats-toolbar">
         <div class="filter-segmented" role="group" aria-label="Período das métricas">
           <button
+            type="button"
+            class="caixa-filter"
+            :class="{ 'is-active': onlyCaixa }"
+            :disabled="!data?.caixa?.open"
+            :title="data?.caixa?.open ? 'Mostrar apenas vendas do caixa aberto' : 'Nenhum caixa aberto'"
+            @click="toggleCaixa"
+          >
+            <i class="fas fa-cash-register"></i> Caixa atual
+          </button>
+          <button
             v-for="p in periods"
             :key="p.key"
             type="button"
-            :class="{ 'is-active': active === p.key }"
-            @click="active = p.key"
+            :class="{ 'is-active': !onlyCaixa && active === p.key }"
+            @click="selectPeriod(p.key)"
           >
             <i :class="p.icon"></i> {{ p.label }}
           </button>
@@ -567,7 +617,9 @@ onMounted(load)
         : `Excluir a venda #${cancelTarget.id}?`"
       confirm-label="Cancelar venda"
       danger
-      @confirm="confirmCancel"
+      input-label="Motivo (opcional)"
+      input-placeholder="Ex: erro de lançamento, desistência..."
+      @confirm="confirmCancel($event)"
       @cancel="cancelTarget = null"
     />
   </AppShell>

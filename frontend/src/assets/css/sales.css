@@ -596,6 +596,18 @@
     box-shadow: none;
     border: none;
   }
+
+  /* Impressão via clone: some com o app inteiro, sobra só o recibo
+     (1 folha do tamanho certo, sem duplicar). */
+  body.printing-receipt #app {
+    display: none !important;
+  }
+  .receipt-print-clone {
+    position: static;
+    visibility: visible;
+    margin: 0;
+    box-shadow: none;
+  }
 }
 
 /* ---------- Tabela ---------- */
@@ -633,6 +645,16 @@
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.filter-segmented button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.filter-segmented button:disabled:hover {
+  color: var(--text-secondary);
+  background: transparent;
 }
 
 .search-box {

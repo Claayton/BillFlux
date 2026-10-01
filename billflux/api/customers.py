@@ -8,6 +8,7 @@ from billflux.infra.repository.order_repository import OrderRepository
 from billflux.infra.repository.payment_method_repository import (
     PaymentMethodRepository,
 )
+from billflux.infra.repository.receivable_repository import ReceivableRepository
 
 
 def _serialize(c):
@@ -33,8 +34,14 @@ def _customers_payload():
     repository = CustomerRepository()
     search = request.args.get("search", "").strip() or None
     customers = repository.get_customers(search=search)
+    balances = ReceivableRepository().customer_balances()
+    items = []
+    for customer in customers:
+        data = _serialize(customer)
+        data["credit_balance"] = round(balances.get(customer.id, 0.0), 2)
+        items.append(data)
     return {
-        "customers": [_serialize(c) for c in customers],
+        "customers": items,
     }
 
 
@@ -160,18 +167,22 @@ def customer_orders(customer_id):
     result = []
     for order in orders:
         method = method_repo.get_method(order.payment_method_id)
-        result.append({
-            "order_id": order.id,
-            "date": order.created_at.isoformat(),
-            "total": float(order.total),
-            "discount": float(order.discount or 0),
-            "payment_method": method.name if method else "—",
-            "cancelled": order.cancelled,
-        })
+        result.append(
+            {
+                "order_id": order.id,
+                "date": order.created_at.isoformat(),
+                "total": float(order.total),
+                "discount": float(order.discount or 0),
+                "payment_method": method.name if method else "—",
+                "cancelled": order.cancelled,
+            }
+        )
 
-    return api_response({
-        "customer": _serialize(customer),
-        "orders": result,
-        "total_spent": sum(o["total"] for o in result if not o["cancelled"]),
-        "order_count": len([o for o in result if not o["cancelled"]]),
-    })
+    return api_response(
+        {
+            "customer": _serialize(customer),
+            "orders": result,
+            "total_spent": sum(o["total"] for o in result if not o["cancelled"]),
+            "order_count": len([o for o in result if not o["cancelled"]]),
+        }
+    )

@@ -102,6 +102,7 @@ def main():
     print(f"  {ws.nrows - 1} produtos encontrados")
 
     from billflux.infra.config.database import create_db
+
     create_db()
 
     xls_categories = set()

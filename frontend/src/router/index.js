@@ -105,6 +105,24 @@ const routes = [
     meta: { auth: true },
   },
   {
+    path: '/config',
+    name: 'config',
+    component: () => import('@/views/ConfigView.vue'),
+    meta: { auth: true },
+  },
+  {
+    path: '/reports',
+    name: 'reports',
+    component: () => import('@/views/ReportsView.vue'),
+    meta: { auth: true },
+  },
+  {
+    path: '/fiado',
+    name: 'fiado',
+    component: () => import('@/views/FiadoView.vue'),
+    meta: { auth: true },
+  },
+  {
     path: '/:pathMatch(.*)*',
     redirect: '/sales',
   },

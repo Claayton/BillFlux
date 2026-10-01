@@ -11,7 +11,12 @@ from billflux.infra.repository.payment_method_repository import (
     PaymentMethodRepository,
 )
 from billflux.infra.repository.product_repository import ProductRepository
+from billflux.infra.repository.receivable_repository import ReceivableRepository
 from billflux.infra.repository.sale_repository import SaleRepository
+from billflux.infra.repository.customer_repository import CustomerRepository
+from billflux.infra.repository.cash_register_repository import CashRegisterRepository
+from billflux.services.audit import audit
+from billflux.services.credit import fiado_amount_for_order, get_fiado_method_ids
 
 
 def _build_range_summary(sales, orders, start, end):
@@ -88,8 +93,11 @@ def _order_detail(order):
     }
 
 
-def _combine_sales(sales, orders, payment_names):
-    """Junta vendas avulsas (manuais) e pedidos do PDV numa única lista."""
+def _combine_sales(sales, orders, payment_names, caixa_opened_at=None):
+    """Junta vendas avulsas (manuais) e pedidos do PDV numa única lista.
+
+    `caixa_opened_at` (datetime ou None) marca o início do caixa aberto e
+    permite sinalizar quais vendas pertencem ao caixa atual (`in_caixa`)."""
 
     combined = []
     for sale in sales:
@@ -104,6 +112,9 @@ def _combine_sales(sales, orders, payment_names):
                 "items": [],
                 "payment": None,
                 "cancelled": sale.cancelled,
+                "in_caixa": (
+                    caixa_opened_at is not None and sale.date >= caixa_opened_at.date()
+                ),
             }
         )
     for order in orders:
@@ -119,6 +130,9 @@ def _combine_sales(sales, orders, payment_names):
                 "items": detail["items"],
                 "payment": payment_names.get(order.payment_method_id, "—"),
                 "cancelled": order.cancelled,
+                "in_caixa": (
+                    caixa_opened_at is not None and order.created_at >= caixa_opened_at
+                ),
             }
         )
     return sorted(combined, key=lambda item: item["date"], reverse=True)
@@ -128,6 +142,16 @@ def _sales_payload():
     """Dados completos da página de vendas (períodos + lista combinada)."""
     list_sales = SaleRepository().get_sales()
     orders = OrderRepository().get_orders()
+    open_register = CashRegisterRepository().get_open()
+    caixa_opened_at = None
+    if open_register:
+        try:
+            caixa_opened_at = datetime.strptime(
+                open_register.opened_at, "%Y-%m-%d %H:%M:%S"
+            )
+        except (TypeError, ValueError):
+            caixa_opened_at = None
+
     today = date.today()
     periods = {
         key: {**p, "total": float(p["total"]), "avg": float(p["avg"])}
@@ -137,10 +161,14 @@ def _sales_payload():
     payment_names = {
         method.id: method.name for method in PaymentMethodRepository().get_methods()
     }
-    combined = _combine_sales(list_sales, orders, payment_names)
+    combined = _combine_sales(list_sales, orders, payment_names, caixa_opened_at)
 
     return {
         "today": today.isoformat(),
+        "caixa": {
+            "open": open_register is not None,
+            "opened_at": open_register.opened_at if open_register else None,
+        },
         "periods": periods,
         "sales": [
             {
@@ -153,6 +181,7 @@ def _sales_payload():
                 "items": item["items"],
                 "payment": item["payment"],
                 "cancelled": item["cancelled"],
+                "in_caixa": item["in_caixa"],
             }
             for item in combined
         ],
@@ -202,10 +231,21 @@ def sales_delete(sale_id):
 def sales_cancel(sale_id):
     """Cancela uma venda avulsa mantendo-a na lista (marca como cancelada)."""
     repository = SaleRepository()
-    if not repository.get_sale(sale_id):
+    sale = repository.get_sale(sale_id)
+    if not sale:
         return api_error("Venda não encontrada.", 404)
     if not repository.cancel_sale(sale_id):
         return api_error("Venda já cancelada.", 400)
+    data = request.get_json(silent=True) or {}
+    audit(
+        "sale.cancel",
+        entity="sale",
+        entity_id=sale_id,
+        details={
+            "total": str(sale.total),
+            "reason": (data.get("reason") or "").strip() or None,
+        },
+    )
     return api_response(_sales_payload())
 
 
@@ -304,6 +344,7 @@ def order_detail(order_id):
                         ),
                         "quantity": item.quantity,
                         "unit_price": float(item.unit_price),
+                        "factor": item.factor or 1,
                     }
                     for item in items
                 ],
@@ -315,9 +356,27 @@ def order_detail(order_id):
 @bp.route("/sales/orders/<int:order_id>/cancel", methods=["POST"])
 @api_login_required
 def order_cancel(order_id):
-    """Cancela uma venda do PDV mantendo-a na lista: marca como cancelada e
-    restaura o estoque dos itens."""
+    """Cancela uma venda do PDV mantendo-a na lista: marca como cancelada,
+    restaura o estoque dos itens e cancela o débito fiado (se houver)."""
     if OrderRepository().cancel_order(order_id):
+        data = request.get_json(silent=True) or {}
+        details = {
+            "reason": (data.get("reason") or "").strip() or None,
+        }
+        receivable = ReceivableRepository().cancel_by_order(order_id)
+        if receivable:
+            details["credit_cancelled"] = round(float(receivable.amount or 0), 2)
+            audit(
+                "credit.cancel",
+                entity="receivable",
+                entity_id=receivable.id,
+                details={
+                    "order_id": order_id,
+                    "reason": "venda cancelada",
+                    "paid": round(float(receivable.paid_amount or 0), 2),
+                },
+            )
+        audit("order.cancel", entity="order", entity_id=order_id, details=details)
         return api_response(_sales_payload())
     return api_error("Pedido não encontrado ou já cancelado.", 400)
 
@@ -337,6 +396,21 @@ def order_edit(order_id):
     if not method or not method.active:
         return api_error("Selecione a forma de pagamento.", 400)
 
+    is_fiado = method.id in get_fiado_method_ids()
+    order_repo = OrderRepository()
+    order = order_repo.get_order(order_id)
+    if not order:
+        return api_error("Pedido não encontrado.", 404)
+    if is_fiado:
+        if not order.customer_id:
+            return api_error(
+                "Venda fiada: vincule um cliente à venda antes de usar 'Fiado'.",
+                400,
+            )
+        customer = CustomerRepository().get_customer(order.customer_id)
+        if not customer or not customer.active:
+            return api_error("Cliente da venda inválido para fiado.", 400)
+
     cart, error = _parse_order_items(data)
     if error:
         return api_error(error, 400)
@@ -344,9 +418,45 @@ def order_edit(order_id):
     obs = (data.get("obs") or "").strip() or None
 
     try:
-        OrderRepository().update_order(order_id, cart, method.id, obs=obs)
+        order_repo.update_order(order_id, cart, method.id, obs=obs)
     except ValueError as error_message:
         return api_error(str(error_message), 400)
+
+    # Reconcilia o débito fiado após a edição (forma pode ter mudado)
+    receivable_repo = ReceivableRepository()
+    cancelled_receivable = receivable_repo.cancel_by_order(
+        order_id, reason="venda editada"
+    )
+    if cancelled_receivable:
+        audit(
+            "credit.cancel",
+            entity="receivable",
+            entity_id=cancelled_receivable.id,
+            details={
+                "order_id": order_id,
+                "reason": "venda editada",
+                "paid": round(float(cancelled_receivable.paid_amount or 0), 2),
+            },
+        )
+    if is_fiado:
+        fiado_total = float(fiado_amount_for_order(order_id))
+        if fiado_total > 0:
+            receivable_repo.create(
+                order_id=order_id,
+                customer_id=order.customer_id,
+                amount=fiado_total,
+                obs=f"Venda #{order_id} (editada)",
+            )
+            audit(
+                "credit.sale",
+                entity="order",
+                entity_id=order_id,
+                details={
+                    "customer_id": order.customer_id,
+                    "amount": round(fiado_total, 2),
+                    "source": "edit",
+                },
+            )
     return api_response(_sales_payload())
 
 

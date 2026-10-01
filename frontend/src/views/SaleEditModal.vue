@@ -34,7 +34,9 @@ function byProductId(productId) {
 
 function itemMaxQty(item) {
   const product = byProductId(item.product_id)
-  return product ? product.stock + item.oldQty : item.qty
+  if (!product) return item.qty
+  const factor = item.factor || 1
+  return Math.floor((product.stock + item.oldQty * factor) / factor)
 }
 
 function incQty(item) {
@@ -61,6 +63,7 @@ function addProduct(product) {
       price: product.price,
       qty: 1,
       oldQty: 0,
+      factor: 1,
     })
   }
   search.value = ''
@@ -112,6 +115,7 @@ async function load() {
       price: item.unit_price,
       qty: item.quantity,
       oldQty: item.quantity,
+      factor: item.factor || 1,
     }))
     methodId.value = order.method_id
     obs.value = order.obs || ''

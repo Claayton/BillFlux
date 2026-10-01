@@ -67,6 +67,37 @@ const payloadClosed = {
   payment_methods: { 1: 'Dinheiro', 2: 'PIX' },
 }
 
+const payloadWithMovements = {
+  ...payloadOpen,
+  movement_totals: { sangria: 20, suprimento: 50, entrada: 15 },
+  movements: [
+    {
+      id: 7,
+      kind: 'sangria',
+      amount: 20,
+      obs: 'Pagamento fornecedor',
+      created_by: 'coqueiral',
+      created_at: '2026-08-24 19:00:00',
+    },
+    {
+      id: 8,
+      kind: 'suprimento',
+      amount: 50,
+      obs: '',
+      created_by: 'coqueiral',
+      created_at: '2026-08-24 19:10:00',
+    },
+    {
+      id: 9,
+      kind: 'entrada',
+      amount: 15,
+      obs: 'Recebimento fiado: João (débito #4)',
+      created_by: 'coqueiral',
+      created_at: '2026-08-24 19:20:00',
+    },
+  ],
+}
+
 function mountView() {
   return mount(CaixaView, {
     global: {
@@ -180,5 +211,68 @@ describe('CaixaView', () => {
     expect(wrapper.find('.caixa-summary').exists()).toBe(false)
     expect(wrapper.text()).toContain('Abrir caixa')
     expect(ElMessage.warning).not.toHaveBeenCalled()
+  })
+
+  it('resumo considera entradas/saídas e lista movimentos', async () => {
+    apiMock.get.mockResolvedValue(payloadWithMovements)
+    const wrapper = mountView()
+    await flushPromises()
+
+    const summary = wrapper.find('.caixa-summary')
+    expect(summary.text()).toContain('Entradas')
+    expect(summary.text()).toContain('Saídas')
+    expect(summary.text()).toContain('Recebimentos')
+    // 100 abertura + 420,50 vendas + 50 suprimento + 15 entrada − 20 sangria = 565,50
+    expect(summary.text()).toContain('565,50')
+
+    const rows = wrapper.findAll('.movement-row')
+    expect(rows).toHaveLength(3)
+    expect(rows[0].text()).toContain('− Sangria')
+    expect(rows[0].text()).toContain('20,00')
+    expect(rows[0].text()).toContain('Pagamento fornecedor')
+    expect(rows[1].text()).toContain('+ Suprimento')
+    expect(rows[1].text()).toContain('50,00')
+    expect(rows[1].text()).toContain('Sem motivo')
+    expect(rows[2].text()).toContain('+ Entrada')
+    expect(rows[2].text()).toContain('15,00')
+    expect(rows[2].text()).toContain('Recebimento fiado')
+  })
+
+  it('registra movimentação com valor e motivo', async () => {
+    apiMock.get.mockResolvedValue(payloadWithMovements)
+    apiMock.post.mockResolvedValue({ ok: true })
+    const wrapper = mountView()
+    await flushPromises()
+
+    const form = wrapper.find('.movement-form')
+    expect(form.exists()).toBe(true)
+
+    await form
+      .findAll('.filter-segmented button')[1]
+      .trigger('click')
+    await form.find('.method-input input').setValue('75,00')
+    await form.find('.movement-obs').setValue('Troco do dia')
+    await form.trigger('submit')
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith('/caixa/movement', {
+      kind: 'suprimento',
+      amount: '75',
+      obs: 'Troco do dia',
+    })
+    expect(ElMessage.success).toHaveBeenCalled()
+    expect(apiMock.get).toHaveBeenCalledTimes(2)
+  })
+
+  it('bloqueia movimentação sem valor', async () => {
+    apiMock.get.mockResolvedValue(payloadOpen)
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('.movement-form').trigger('submit')
+    await flushPromises()
+
+    expect(ElMessage.warning).toHaveBeenCalledWith('Informe um valor maior que zero.')
+    expect(apiMock.post).not.toHaveBeenCalled()
   })
 })
