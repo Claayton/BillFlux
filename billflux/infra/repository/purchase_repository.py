@@ -209,6 +209,7 @@ class PurchaseRepository:
         create_bill=True,
         account_id=None,
         items=None,
+        paid=False,
     ):
         """Confirma a compra: persiste os vínculos/quantidades recebidos em
         ``items`` (id, product_id, quantity, unit_cost, factor), dá entrada no
@@ -255,8 +256,9 @@ class PurchaseRepository:
 
                 bill_id = None
                 if create_bill and po.net_total > 0:
+                    now = datetime.now()
                     bill = BillModel(
-                        status=False,
+                        status=bool(paid),
                         due_date=due_date,
                         value=po.net_total,
                         reference=f"Compra #{po.id}"
@@ -265,7 +267,9 @@ class PurchaseRepository:
                         bill_type="compra",
                         obs=f"Compra de mercadorias #{po.id}",
                         account_id=account_id,
-                        date_from_add=datetime.now(),
+                        payday=now if paid else None,
+                        value_from_payment=po.net_total if paid else None,
+                        date_from_add=now,
                     )
                     session.add(bill)
                     session.flush()

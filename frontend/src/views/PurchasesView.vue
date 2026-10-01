@@ -25,6 +25,7 @@ const launchTarget = ref(null)
 const launchItems = ref([])
 const launchDate = ref('')
 const launchCreateBill = ref(true)
+const launchPaid = ref(false)
 const launchSearchIdx = ref(null)
 const launchSearchQuery = ref('')
 const launchSearchResults = ref([])
@@ -215,6 +216,7 @@ async function openLaunchModal(purchase) {
   launchTarget.value = purchase
   launchDate.value = ''
   launchCreateBill.value = true
+  launchPaid.value = false
   const data = await api.get(`/purchases/${purchase.id}`)
   launchItems.value = data.items.map(item => ({
     ...item,
@@ -426,6 +428,7 @@ async function confirmLaunch() {
     await api.post(`/purchases/${launchTarget.value.id}/confirm`, {
       due_date: launchDate.value || null,
       create_bill: launchCreateBill.value,
+      paid: launchCreateBill.value && launchPaid.value,
       items: launchItems.value.map(li => ({
         id: li.id,
         product_id: li.product_id,
@@ -1011,13 +1014,23 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="launch-footer-options">
-            <div class="form-field" style="flex:1">
+            <div class="form-field launch-due">
               <label>Vencimento da conta</label>
-              <input v-model="launchDate" type="date" />
+              <input v-model="launchDate" type="date" :disabled="!launchCreateBill" />
             </div>
-            <div class="form-field" style="display:flex;align-items:center;gap:8px;margin-top:20px">
-              <input v-model="launchCreateBill" type="checkbox" id="launchBill" />
-              <label for="launchBill" style="margin:0">Criar conta a pagar</label>
+            <div class="launch-checks">
+              <label class="launch-check">
+                <input v-model="launchCreateBill" type="checkbox" />
+                <span>Criar conta a pagar</span>
+              </label>
+              <label class="launch-check" :class="{ 'is-disabled': !launchCreateBill }">
+                <input
+                  v-model="launchPaid"
+                  type="checkbox"
+                  :disabled="!launchCreateBill"
+                />
+                <span>Conta já paga</span>
+              </label>
             </div>
           </div>
         </div>
@@ -1370,14 +1383,15 @@ onBeforeUnmount(() => {
   }
 }
 .btn-launch-confirm { background: var(--primary, #2563eb); min-width: 200px; }
-.form-row { display: flex; gap: 12px; }
-.form-field { margin-bottom: 4px; }
-.form-field label { display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary, #666); margin-bottom: 4px; }
-.form-field input, .form-field select, .form-field textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border, #d1d5db); border-radius: 6px; font-size: 14px; }
+.form-row { display: flex; gap: 16px; }
+.form-field { margin-bottom: 14px; }
+.form-field label { display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary, #666); margin-bottom: 6px; }
+.form-field input, .form-field select, .form-field textarea { width: 100%; padding: 9px 12px; border: 1px solid var(--border, #d1d5db); border-radius: 6px; font-size: 14px; }
 .form-field input:focus, .form-field select:focus, .form-field textarea:focus { outline: none; border-color: var(--primary, #2563eb); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15); }
+.form-field input:disabled { background: var(--surface-hover, #f3f4f6); color: var(--text-muted, #9ca3af); cursor: not-allowed; }
 .form-field textarea { resize: vertical; }
 .flex-1 { flex: 1; } .flex-2 { flex: 2; } .flex-3 { flex: 3; }
-.items-section { margin: 12px 0; border: 1px solid var(--border, #e5e7eb); border-radius: 8px; padding: 12px; }
+.items-section { margin: 12px 0; border: 1px solid var(--border, #e5e7eb); border-radius: 8px; padding: 14px 16px; }
 .items-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .items-header h3 { margin: 0; font-size: 14px; }
 .item-row { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 8px; }
@@ -1420,5 +1434,11 @@ onBeforeUnmount(() => {
 .launch-search-result:hover { background: var(--bg-secondary, #f3f4f6); }
 .sr-info { font-size: 12px; color: var(--text-muted, #999); }
 .launch-totals { display: flex; justify-content: flex-end; gap: 24px; font-size: 14px; margin: 12px 0 8px; padding-top: 8px; border-top: 1px solid var(--border, #e5e7eb); }
-.launch-footer-options { display: flex; gap: 12px; align-items: flex-end; }
+.launch-footer-options { display: flex; gap: 20px; align-items: flex-start; margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--border, #e5e7eb); }
+.launch-due { flex: 1; margin-bottom: 0; }
+.launch-checks { display: flex; flex-direction: column; gap: 10px; padding-top: 24px; }
+.launch-check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text, #111827); cursor: pointer; white-space: nowrap; }
+.launch-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--primary, #2563eb); cursor: pointer; }
+.launch-check.is-disabled { opacity: 0.5; cursor: not-allowed; }
+.launch-check.is-disabled input { cursor: not-allowed; }
 </style>

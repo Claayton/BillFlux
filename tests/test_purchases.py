@@ -256,6 +256,42 @@ class TestPurchaseRepository:
             repo.confirm_purchase(po.id)
         assert repo.get_purchase(po.id).status == "rascunho"
 
+    def test_confirm_creates_paid_bill(self):
+        """confirm com paid=True cria a conta já quitada."""
+
+        _open_register()
+        supplier_id = _make_supplier()
+        product_id = _make_product()
+        from billflux.infra.repository.purchase_repository import PurchaseRepository
+
+        repo = PurchaseRepository()
+        po = repo.insert_purchase(
+            supplier_id=supplier_id,
+            items=[
+                {
+                    "product_id": product_id,
+                    "quantity": 1,
+                    "unit_cost": Decimal("10"),
+                    "total": Decimal("10"),
+                    "product_name": "X",
+                }
+            ],
+            total=Decimal("10"),
+            net_total=Decimal("10"),
+        )
+        result = repo.confirm_purchase(po.id, paid=True)
+        assert result.bill_id is not None
+
+        from billflux.infra.config.database import get_session
+        from billflux.infra.entities.bill import Bill
+
+        session = get_session()
+        bill = session.get(Bill, result.bill_id)
+        assert bill.status is True
+        assert bill.payday is not None
+        assert bill.value_from_payment == Decimal("10")
+        session.close()
+
     def test_cancel_reverts_stock(self):
         _open_register()
         supplier_id = _make_supplier()
