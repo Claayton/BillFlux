@@ -1441,4 +1441,11 @@ onBeforeUnmount(() => {
 .launch-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--primary, #2563eb); cursor: pointer; }
 .launch-check.is-disabled { opacity: 0.5; cursor: not-allowed; }
 .launch-check.is-disabled input { cursor: not-allowed; }
+
+/* Footer como filho direto do .modal-content (ex.: Lançar Compra): o
+   .modal-footer global não tem padding horizontal/inferior; aqui garante. */
+.modal-content > .modal-footer {
+  margin-top: 0;
+  padding: 18px 24px;
+}
 </style>
