@@ -29,6 +29,7 @@ const openDetails = ref({})
 
 // fechamento: dict methodId -> "150,00" (o que o operador contou)
 const closeDetails = ref({})
+const closeInputs = ref({})
 const closeObs = ref('')
 
 const systemTotals = computed(() => data.value?.system_totals_named || {})
@@ -174,21 +175,28 @@ function onCloseInput(mid, event) {
   closeDetails.value[mid] = maskMoney(event.target.value)
 }
 
+/** Enter pula para o próximo campo de valor do fechamento (na última, vai p/ obs). */
+function focusNextClose(mid) {
+  const order = Object.keys(methods.value)
+  const nextKey = order[order.indexOf(String(mid)) + 1]
+  if (nextKey && closeInputs.value[nextKey]) {
+    closeInputs.value[nextKey].focus()
+    return
+  }
+  document.getElementById('close_obs')?.focus()
+}
+
 async function openRegister() {
   const details = {}
-  let total = 0
   for (const [mid, raw] of Object.entries(openDetails.value)) {
-    const v = moneyToDecimal(raw)
-    if (v === null || v < 0) {
+    // campo vazio conta como 0 → permite abrir o caixa com 00,00
+    const parsed = moneyToDecimal(raw)
+    const value = parsed === null ? 0 : parsed
+    if (value < 0) {
       ElMessage.warning(`Informe um valor válido para ${openMethods.value[mid]}.`)
       return
     }
-    details[mid] = String(v)
-    total += v
-  }
-  if (total <= 0) {
-    ElMessage.warning('O valor total de abertura deve ser maior que zero.')
-    return
+    details[mid] = String(value)
   }
   saving.value = true
   try {
@@ -500,11 +508,13 @@ onMounted(() => {
                 <span class="input-prefix">R$</span>
                 <input
                   :value="closeDetails[mid] || ''"
+                  :ref="(el) => (closeInputs[mid] = el)"
                   type="text"
                   placeholder="0,00"
                   inputmode="decimal"
                   :aria-label="`Valor contado em ${name}`"
                   @input="onCloseInput(mid, $event)"
+                  @keydown.enter.prevent="focusNextClose(mid)"
                 />
               </div>
               <span class="system-total" role="cell">{{ brl(systemTotals[mid]?.total || 0) }}</span>
