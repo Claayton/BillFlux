@@ -344,4 +344,25 @@ describe('ProductsView', () => {
     expect(wrapper.findAll('tbody tr:not(.empty-row)').length).toBe(0)
     expect(wrapper.text()).toContain('Nenhum produto encontrado')
   })
+
+  it('esconde inativos por padrão; o check "Mostrar inativos" exibe', async () => {
+    const inativo = { ...products[0], id: 9, name: 'Inativo X', active: false }
+    apiMock.get.mockImplementation((url) => {
+      if (String(url).includes('/categories')) return Promise.resolve({ categories })
+      return Promise.resolve({ products: [...products, inativo], suppliers: [] })
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    // por padrão só o ativo aparece
+    expect(wrapper.findAll('tbody tr:not(.empty-row)').length).toBe(1)
+    expect(wrapper.text()).not.toContain('Inativo X')
+    expect(wrapper.find('.toolbar-check input').exists()).toBe(true)
+
+    // marcando o check, o inativo aparece
+    await wrapper.find('.toolbar-check input').setValue(true)
+    await flushPromises()
+    expect(wrapper.findAll('tbody tr:not(.empty-row)').length).toBe(2)
+    expect(wrapper.text()).toContain('Inativo X')
+  })
 })

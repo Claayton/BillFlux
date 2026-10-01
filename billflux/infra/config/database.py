@@ -2,7 +2,7 @@
 
 # flake8: noqa: F405
 
-from sqlalchemy import inspect, text
+from sqlalchemy import event, inspect, text
 from sqlalchemy.pool import StaticPool
 from sqlmodel import create_engine, Session
 from billflux.config import settings
@@ -52,6 +52,15 @@ if _database_url.startswith("sqlite"):
 engine = create_engine(_database_url, **_engine_kwargs)
 
 _is_sqlite = engine.dialect.name == "sqlite"
+
+if _is_sqlite:
+    # O SQLite não aplica FKs por padrão. Ativar garante que dev/testes
+    # peguem violações de chave estrangeira (como acontece no Postgres).
+    @event.listens_for(engine, "connect")
+    def _sqlite_enable_foreign_keys(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 
 def _add_column_if_missing(table: str, column: str, column_type: str = "VARCHAR"):

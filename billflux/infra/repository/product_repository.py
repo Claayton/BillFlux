@@ -3,12 +3,21 @@
 from decimal import Decimal
 from typing import List, Optional
 
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 from billflux.infra.config.database import get_session
 from billflux.infra.entities.product import Product as ProductModel
 from billflux.infra.entities.product_movement import (
     ProductMovement as ProductMovementModel,
 )
+from billflux.infra.entities.product_unit import ProductUnit as ProductUnitModel
+from billflux.infra.entities.product_supplier import (
+    ProductSupplier as ProductSupplierModel,
+)
+from billflux.infra.entities.order_item import OrderItem as OrderItemModel
+from billflux.infra.entities.purchase_item import PurchaseItem as PurchaseItemModel
+from billflux.infra.entities.tab_item import TabItem as TabItemModel
 from billflux.infra.entities.category import Category as CategoryModel
 from billflux.infra.entities.supplier import Supplier as SupplierModel
 from billflux.domain.models.products import Product
@@ -200,8 +209,52 @@ class ProductRepository:
         finally:
             session.close()
 
+    def deletion_block_reason(self, product_id: int) -> Optional[str]:
+        """Motivo pelo qual o produto NÃO pode ser excluído, ou None se puder.
+
+        Produtos com histórico transacional (vendas, compras, comandas ou
+        movimentações de estoque) não são apagados — devem ser desativados."""
+
+        session = get_session()
+        try:
+            with session:
+                simple_checks = (
+                    (OrderItemModel, "o produto já foi vendido no PDV"),
+                    (PurchaseItemModel, "o produto está vinculado a compras"),
+                    (TabItemModel, "o produto está em comandas"),
+                )
+                for model, reason in simple_checks:
+                    found = session.exec(
+                        select(model.id).where(model.product_id == product_id).limit(1)
+                    ).first()
+                    if found is not None:
+                        return reason
+                # Movimentos "reais" bloqueiam; o 'Estoque inicial' criado junto
+                # com o produto (inclusive a importação) não conta como histórico.
+                real_movement = session.exec(
+                    select(ProductMovementModel.id)
+                    .where(
+                        ProductMovementModel.product_id == product_id,
+                        func.coalesce(ProductMovementModel.obs, "").notlike(
+                            "Estoque inicial%"
+                        ),
+                    )
+                    .limit(1)
+                ).first()
+                if real_movement is not None:
+                    return "o produto tem movimentações de estoque"
+                return None
+        finally:
+            session.close()
+
     def delete_product(self, product_id: int) -> bool:
-        """Deletes a product by its id."""
+        """Exclui o produto e a configuração própria (apresentações e vínculos
+        com fornecedores). Levanta ValueError se houver histórico — nesse caso
+        o produto deve ser desativado em vez de excluído."""
+
+        reason = self.deletion_block_reason(product_id)
+        if reason:
+            raise ValueError(f"Não é possível excluir: {reason}. Desative-o no menu.")
 
         session = get_session()
         try:
@@ -209,9 +262,56 @@ class ProductRepository:
                 product = session.get(ProductModel, product_id)
                 if not product:
                     return False
+                units = session.exec(
+                    select(ProductUnitModel).where(
+                        ProductUnitModel.product_id == product_id
+                    )
+                ).all()
+                for unit in units:
+                    session.delete(unit)
+                links = session.exec(
+                    select(ProductSupplierModel).where(
+                        ProductSupplierModel.product_id == product_id
+                    )
+                ).all()
+                for link in links:
+                    session.delete(link)
+                movements = session.exec(
+                    select(ProductMovementModel).where(
+                        ProductMovementModel.product_id == product_id
+                    )
+                ).all()
+                for movement in movements:
+                    session.delete(movement)
+                # Flush garante que os filhos (FK ON) saiam antes do produto.
+                session.flush()
                 session.delete(product)
-                session.commit()
+                try:
+                    session.commit()
+                except IntegrityError:
+                    session.rollback()
+                    raise ValueError(
+                        "Não é possível excluir: o produto tem registros "
+                        "vinculados. Desative-o no menu."
+                    ) from None
                 return True
+        finally:
+            session.close()
+
+    def toggle_active(self, product_id: int) -> Optional[Product]:
+        """Alterna o campo ``active`` do produto (ativo <-> inativo)."""
+
+        session = get_session()
+        try:
+            with session:
+                product = session.get(ProductModel, product_id)
+                if not product:
+                    return None
+                product.active = not product.active
+                session.add(product)
+                session.commit()
+                session.refresh(product)
+                return _to_domain(product)
         finally:
             session.close()
 
@@ -256,12 +356,12 @@ class ProductRepository:
     def count_orders(self, product_id: int) -> int:
         """Counts order items linked to a product."""
 
-        from billflux.infra.entities.order_item import OrderItem
-
         session = get_session()
         try:
             with session:
-                sql = select(OrderItem).where(OrderItem.product_id == product_id)
+                sql = select(OrderItemModel).where(
+                    OrderItemModel.product_id == product_id
+                )
                 return len(session.exec(sql).all())
         finally:
             session.close()

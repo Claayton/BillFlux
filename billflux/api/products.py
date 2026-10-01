@@ -7,6 +7,7 @@ from billflux.infra.repository.category_repository import CategoryRepository
 from billflux.infra.repository.product_repository import ProductRepository
 from billflux.infra.repository.supplier_repository import SupplierRepository
 from billflux.infra.repository.product_unit_repository import ProductUnitRepository
+from billflux.services.audit import audit
 
 
 def _parse_category_id(data):
@@ -335,13 +336,31 @@ def products_movements(product_id):
 @bp.route("/products/<int:product_id>", methods=["DELETE"])
 @api_login_required
 def products_delete(product_id):
-    """Exclui um produto que ainda não foi vendido."""
+    """Exclui um produto sem histórico; com histórico, orienta a desativar."""
     repository = ProductRepository()
     if not repository.get_product(product_id):
         return api_error("Produto não encontrado.", 404)
-    if repository.count_orders(product_id) > 0:
-        return api_error(
-            "Não é possível excluir: o produto já foi vendido no PDV.", 400
-        )
-    repository.delete_product(product_id)
+    try:
+        deleted = repository.delete_product(product_id)
+    except ValueError as error:
+        return api_error(str(error), 400)
+    if not deleted:
+        return api_error("Produto não encontrado.", 404)
+    return api_response(_products_payload())
+
+
+@bp.route("/products/<int:product_id>/toggle", methods=["POST"])
+@api_login_required
+def products_toggle(product_id):
+    """Ativa/desativa um produto (alterna ``active``)."""
+    repository = ProductRepository()
+    product = repository.toggle_active(product_id)
+    if not product:
+        return api_error("Produto não encontrado.", 404)
+    audit(
+        "product.toggle",
+        entity="product",
+        entity_id=product_id,
+        details={"active": product.active},
+    )
     return api_response(_products_payload())
