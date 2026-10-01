@@ -275,4 +275,32 @@ describe('CaixaView', () => {
     expect(ElMessage.warning).toHaveBeenCalledWith('Informe um valor maior que zero.')
     expect(apiMock.post).not.toHaveBeenCalled()
   })
+
+  it('abre o caixa com 00,00 (campos vazios contam como 0)', async () => {
+    ElMessage.warning.mockClear()
+    apiMock.get.mockResolvedValue(payloadClosed)
+    apiMock.post.mockResolvedValue({ ...payloadClosed, open: { id: 1, status: 'open' } })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('.caixa-form').trigger('submit')
+    await flushPromises()
+
+    expect(ElMessage.warning).not.toHaveBeenCalled()
+    const [url, body] = apiMock.post.mock.calls[0]
+    expect(url).toBe('/caixa/open')
+    expect(Object.values(body.opening_details).every((v) => v === '0')).toBe(true)
+  })
+
+  it('Enter no fechamento pula para o próximo campo', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    const inputs = wrapper.findAll('.close-table-row .method-input input')
+    expect(inputs.length).toBeGreaterThan(1)
+    const focusSpy = vi.spyOn(inputs[1].element, 'focus')
+    await inputs[0].trigger('keydown', { key: 'Enter' })
+    expect(focusSpy).toHaveBeenCalled()
+    focusSpy.mockRestore()
+  })
 })
