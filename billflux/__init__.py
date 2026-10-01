@@ -6,7 +6,6 @@ from flask import Flask
 from dynaconf import FlaskDynaconf
 from flask_wtf import CSRFProtect
 from billflux.config import settings
-from billflux.infra.config.database import create_db
 from billflux.api import bp as api_bp
 from billflux.api import auth as api_auth
 from billflux.api import dashboard as api_dashboard
@@ -115,7 +114,6 @@ def create_app():
         settings.get("session_cookie_secure", False)
     )
     csrf.init_app(app)
-    create_db()
     _seed_default_user()
     _seed_default_accounts()
     _seed_default_payment_methods()

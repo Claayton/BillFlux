@@ -2,7 +2,7 @@
 
 # flake8: noqa: F405
 
-from sqlalchemy import event, inspect, text
+from sqlalchemy import event
 from sqlalchemy.pool import StaticPool
 from sqlmodel import create_engine, Session
 from billflux.config import settings
@@ -63,110 +63,13 @@ if _is_sqlite:
         cursor.close()
 
 
-def _add_column_if_missing(table: str, column: str, column_type: str = "VARCHAR"):
-    """Adds a column to an existing table without dropping data."""
-    if not table.isidentifier() or not column.isidentifier():
-        return
-    with engine.connect() as connection:
-        existing = [col["name"] for col in inspect(connection).get_columns(table)]
-        if column not in existing:
-            connection.execute(
-                text(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
-            )
-            connection.commit()
-
-
 def create_db():
-    """Criando bancos de dados"""
+    """Cria o schema a partir dos models.
 
-    base = SQLModel.metadata.create_all(engine)
-    # Itens do pedido passaram a guardar a apresentação (fator base). Roda em
-    # SQLite e Postgres: em banco novo a coluna já vem do create_all (vira
-    # no-op) e em banco antigo é adicionada com default 1 (linhas antigas).
-    _add_column_if_missing("order_items", "factor", "INTEGER DEFAULT 1")
-    if _is_sqlite:
-        _add_column_if_missing("bill", "pix_key")
-        _add_column_if_missing("bill", "pix_payload")
-        _add_column_if_missing("bill", "pix_image")
-        _add_column_if_missing("bill", "account_id", "INTEGER")
-        _add_column_if_missing("orders", "cancelled", "BOOLEAN DEFAULT 0")
-        _add_column_if_missing("orders", "discount", "NUMERIC(10,2)")
-        _add_column_if_missing("sale", "cancelled", "BOOLEAN DEFAULT 0")
-        _add_column_if_missing("product", "secondary_code", "VARCHAR")
-        _add_column_if_missing("product", "category", "VARCHAR")
-        _add_column_if_missing("product", "suppliers", "VARCHAR")
-        _add_column_if_missing("product", "category_id", "INTEGER")
-        _add_column_if_missing("cashregister", "opening_details", "VARCHAR")
-        _add_column_if_missing("cashregister", "system_totals", "VARCHAR")
-        _add_column_if_missing("cashregister", "closing_details", "VARCHAR")
-        _add_column_if_missing("orders", "customer_id", "INTEGER")
-        _add_column_if_missing("product", "supplier_id", "INTEGER")
-        _add_column_if_missing("bill", "supplier_id", "INTEGER")
-        _add_column_if_missing("purchase_item", "unit_com", "VARCHAR")
-        _add_column_if_missing("product", "ideal_stock", "INTEGER DEFAULT 0")
-        _add_column_if_missing(
-            "productsupplier", "frequency", "VARCHAR DEFAULT 'semanal'"
-        )
-        _add_column_if_missing("productsupplier", "week_parity", "INTEGER DEFAULT 0")
+    Usado por testes e bootstrap; em dev/produção o schema é gerenciado pelo
+    Alembic (``alembic upgrade head``)."""
 
-        _migrate_category_text()
-        _migrate_product_units()
-
-    return base
-
-
-def _migrate_category_text():
-    """Converte o texto de categoria dos produtos em registros de categoria."""
-    with engine.connect() as connection:
-        rows = connection.execute(
-            text(
-                "SELECT id, category FROM product "
-                "WHERE category_id IS NULL AND category IS NOT NULL AND category != ''"
-            )
-        ).fetchall()
-        if not rows:
-            return
-        for product_id, name in rows:
-            existing = connection.execute(
-                text("SELECT id FROM category WHERE name = :name"), {"name": name}
-            ).fetchone()
-            if existing:
-                category_id = existing[0]
-            else:
-                result = connection.execute(
-                    text("INSERT INTO category (name, active) VALUES (:name, 1)"),
-                    {"name": name},
-                )
-                category_id = result.lastrowid
-            connection.execute(
-                text("UPDATE product SET category_id = :cid WHERE id = :pid"),
-                {"cid": category_id, "pid": product_id},
-            )
-        connection.commit()
-
-
-def _migrate_product_units():
-    """Cria apresentação padrão 'Unidade' para produtos que não possuem nenhuma."""
-    with engine.connect() as connection:
-        existing = connection.execute(
-            text("SELECT COUNT(*) FROM product_unit")
-        ).fetchone()[0]
-        if existing > 0:
-            return
-        rows = connection.execute(
-            text("SELECT id, price FROM product WHERE active = 1")
-        ).fetchall()
-        if not rows:
-            return
-        for product_id, price in rows:
-            connection.execute(
-                text(
-                    "INSERT INTO product_unit (product_id, name, barcode, factor, price, is_default) "
-                    "VALUES (:pid, 'Unidade', NULL, 1, :price, 1)"
-                ),
-                {"pid": product_id, "price": float(price or 0)},
-            )
-        connection.commit()
+    return SQLModel.metadata.create_all(engine)
 
 
 def get_session():
