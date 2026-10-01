@@ -173,6 +173,89 @@ class TestPurchaseRepository:
         assert updated.cost == Decimal("8")
         session.close()
 
+    def test_confirm_persists_link_and_applies_factor(self):
+        """Lançamento vincula o produto e a entrada é quantity × factor."""
+
+        _open_register()
+        supplier_id = _make_supplier()
+        product_id = _make_product()
+        from billflux.infra.repository.purchase_repository import PurchaseRepository
+
+        repo = PurchaseRepository()
+        # rascunho com item SEM vínculo (como vem importado da NF-e)
+        po = repo.insert_purchase(
+            supplier_id=supplier_id,
+            items=[
+                {
+                    "product_id": None,
+                    "quantity": 3,
+                    "unit_cost": Decimal("35.40"),
+                    "total": Decimal("106.20"),
+                    "barcode": "789",
+                    "product_name": "CAIXA C/15",
+                    "unit_com": "CX",
+                }
+            ],
+            total=Decimal("106.20"),
+            net_total=Decimal("106.20"),
+        )
+        item_id = repo.get_purchase_items(po.id)[0].id
+
+        result = repo.confirm_purchase(
+            po.id,
+            items=[
+                {
+                    "id": item_id,
+                    "product_id": product_id,
+                    "quantity": 3,
+                    "unit_cost": "35.40",
+                    "factor": 15,
+                    "unit_com": "CX",
+                }
+            ],
+        )
+        assert result.status == "confirmada"
+
+        from billflux.infra.config.database import get_session
+        from billflux.infra.entities.product import Product
+
+        session = get_session()
+        updated = session.get(Product, product_id)
+        assert updated.stock_quantity == 45  # 3 caixas x 15 unidades
+        assert updated.cost == Decimal("2.36")  # 35,40 / 15 por unidade-base
+        session.close()
+
+        saved = repo.get_purchase_items(po.id)[0]
+        assert saved.product_id == product_id
+        assert saved.factor == 15
+
+    def test_confirm_requires_linked_product(self):
+        """Sem nenhum item vinculado, o confirm não dá entrada (ValueError)."""
+
+        _open_register()
+        supplier_id = _make_supplier()
+        from billflux.infra.repository.purchase_repository import PurchaseRepository
+
+        repo = PurchaseRepository()
+        po = repo.insert_purchase(
+            supplier_id=supplier_id,
+            items=[
+                {
+                    "product_id": None,
+                    "quantity": 1,
+                    "unit_cost": Decimal("10"),
+                    "total": Decimal("10"),
+                    "product_name": "SEM VINCULO",
+                }
+            ],
+            total=Decimal("10"),
+            net_total=Decimal("10"),
+        )
+
+        with pytest.raises(ValueError):
+            repo.confirm_purchase(po.id)
+        assert repo.get_purchase(po.id).status == "rascunho"
+
     def test_cancel_reverts_stock(self):
         _open_register()
         supplier_id = _make_supplier()
@@ -235,7 +318,7 @@ class TestPurchaseRepository:
         po2 = repo.insert_purchase(
             items=[
                 {
-                    "product_id": None,
+                    "product_id": _make_product(),
                     "quantity": 1,
                     "unit_cost": Decimal("10"),
                     "total": Decimal("10"),
@@ -346,7 +429,19 @@ class TestPurchaseAPI:
         from billflux.infra.repository.purchase_repository import PurchaseRepository
 
         repo = PurchaseRepository()
-        po = repo.insert_purchase(total=Decimal("100"), net_total=Decimal("100"))
+        po = repo.insert_purchase(
+            total=Decimal("100"),
+            net_total=Decimal("100"),
+            items=[
+                {
+                    "product_id": _make_product(),
+                    "quantity": 1,
+                    "unit_cost": Decimal("100"),
+                    "total": Decimal("100"),
+                    "product_name": "Produto X",
+                }
+            ],
+        )
 
         token = _csrf(logged_client)
         resp = logged_client.post(

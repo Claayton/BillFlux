@@ -129,4 +129,55 @@ describe('PurchasesView', () => {
     const nfModal = modals.find((m) => m.text().includes('XML da NF-e'))
     expect(nfModal).toBeTruthy()
   })
+
+  it('lançar compra envia os itens vinculados (product_id + fator)', async () => {
+    const items = [
+      {
+        id: 10,
+        product_id: null,
+        product_name: 'CERV CX C/15',
+        barcode: '789',
+        quantity: 3,
+        unit_cost: '35.40',
+        unit_com: 'CX',
+        factor: 1,
+      },
+    ]
+    const product = {
+      id: 5,
+      name: 'CERV',
+      stock_quantity: 0,
+      cost: 0,
+      units: [{ id: 50, name: 'Caixa c/ 15', factor: 15, is_default: true, price: 45 }],
+    }
+    apiMock.get.mockImplementation((url) => {
+      const u = String(url)
+      if (u === '/purchases/1') return Promise.resolve({ purchase: purchases[0], items })
+      if (u.startsWith('/products/barcode/')) return Promise.resolve({ product })
+      return Promise.resolve({ purchases })
+    })
+    apiMock.post.mockResolvedValue({ purchase: purchases[0] })
+    const wrapper = mount(PurchasesView)
+    await flushPromises()
+
+    await wrapper.findAll('.row-menu > .icon-btn')[0].trigger('click')
+    await flushPromises()
+    const launchBtn = menuButtons().find((b) =>
+      b.textContent.includes('Lançar no estoque')
+    )
+    launchBtn.click()
+    await flushPromises()
+
+    await wrapper.find('.btn-launch-confirm').trigger('click')
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith(
+      '/purchases/1/confirm',
+      expect.objectContaining({
+        items: [
+          expect.objectContaining({ id: 10, product_id: 5, quantity: 3, factor: 15 }),
+        ],
+      })
+    )
+  })
 })

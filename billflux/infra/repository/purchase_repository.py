@@ -1,7 +1,7 @@
 """Module for repository to PurchaseOrder (compras de produtos)"""
 
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import List, Optional
 
 from sqlmodel import select
@@ -51,7 +51,18 @@ def _item_to_domain(item):
         total=item.total,
         barcode=item.barcode,
         unit_com=item.unit_com,
+        factor=item.factor or 1,
     )
+
+
+def _to_decimal(value):
+    """Converte valor monetário (str BR ou número) para Decimal."""
+    if value is None or value == "":
+        return Decimal("0")
+    try:
+        return Decimal(str(value).replace(",", "."))
+    except (InvalidOperation, ValueError):
+        return Decimal("0")
 
 
 def _resolve_supplier_name(supplier_id):
@@ -116,6 +127,7 @@ class PurchaseRepository:
                                 barcode=d.get("barcode"),
                                 product_name=d.get("product_name"),
                                 unit_com=d.get("unit_com"),
+                                factor=int(d.get("factor") or 1),
                             )
                         )
                 session.commit()
@@ -191,19 +203,55 @@ class PurchaseRepository:
             session.close()
 
     def confirm_purchase(
-        self, purchase_id, due_date=None, create_bill=True, account_id=None
+        self,
+        purchase_id,
+        due_date=None,
+        create_bill=True,
+        account_id=None,
+        items=None,
     ):
+        """Confirma a compra: persiste os vínculos/quantidades recebidos em
+        ``items`` (id, product_id, quantity, unit_cost, factor), dá entrada no
+        estoque por ``quantity × factor`` (unidades-base) e atualiza o custo
+        médio. Levanta ValueError se nenhum item estiver vinculado a produto."""
+
         session = get_session()
         try:
             with session:
                 po = session.get(PurchaseOrderModel, purchase_id)
                 if not po or po.status != "rascunho":
                     return None
-                items = session.exec(
+
+                stored = session.exec(
                     select(PurchaseItemModel).where(
                         PurchaseItemModel.purchase_id == purchase_id
                     )
                 ).all()
+
+                if items:
+                    by_id = {item.id: item for item in stored}
+                    for entry in items:
+                        item = by_id.get(entry.get("id"))
+                        if not item:
+                            continue
+                        item.product_id = entry.get("product_id") or None
+                        if entry.get("quantity") is not None:
+                            item.quantity = int(entry["quantity"])
+                        if entry.get("unit_cost") is not None:
+                            item.unit_cost = _to_decimal(entry["unit_cost"])
+                        if entry.get("factor") is not None:
+                            item.factor = int(entry["factor"]) or 1
+                        if entry.get("unit_com") is not None:
+                            item.unit_com = entry["unit_com"]
+                        item.total = Decimal(str(item.quantity)) * item.unit_cost
+                        session.add(item)
+
+                if not stored:
+                    raise ValueError("A compra não tem itens para lançar.")
+                if any(not item.product_id for item in stored):
+                    raise ValueError(
+                        "Vincule todos os itens a um produto antes de lançar a compra."
+                    )
 
                 bill_id = None
                 if create_bill and po.net_total > 0:
@@ -224,34 +272,34 @@ class PurchaseRepository:
                     bill_id = bill.id
                     po.bill_id = bill_id
 
-                for item in items:
-                    if item.product_id:
-                        product = session.get(ProductModel, item.product_id)
-                        if product:
-                            product.stock_quantity += item.quantity
-                            if item.unit_cost > 0:
-                                current_qty = product.stock_quantity - item.quantity
-                                current_cost = product.cost or Decimal("0")
-                                new_qty = item.quantity
-                                new_cost = item.unit_cost
-                                if current_qty > 0 and current_cost > 0:
-                                    total_qty = current_qty + new_qty
-                                    product.cost = (
-                                        (current_qty * current_cost)
-                                        + (new_qty * new_cost)
-                                    ) / Decimal(str(total_qty))
-                                else:
-                                    product.cost = new_cost
-                            session.add(product)
-                            nf_ref = f" NF {po.nf_number}" if po.nf_number else ""
-                            session.add(
-                                ProductMovementModel(
-                                    product_id=product.id,
-                                    movement_type="entrada",
-                                    quantity=item.quantity,
-                                    obs=f"Compra #{po.id}{nf_ref}",
-                                )
-                            )
+                nf_ref = f" NF {po.nf_number}" if po.nf_number else ""
+                for item in stored:
+                    product = session.get(ProductModel, item.product_id)
+                    if not product:
+                        continue
+                    factor = item.factor or 1
+                    base_qty = item.quantity * factor
+                    base_cost = item.unit_cost / factor if factor else item.unit_cost
+                    current_qty = product.stock_quantity
+                    current_cost = product.cost or Decimal("0")
+                    product.stock_quantity += base_qty
+                    if base_cost > 0:
+                        if current_qty > 0 and current_cost > 0:
+                            total_qty = current_qty + base_qty
+                            product.cost = (
+                                (current_qty * current_cost) + (base_qty * base_cost)
+                            ) / Decimal(str(total_qty))
+                        else:
+                            product.cost = base_cost
+                    session.add(product)
+                    session.add(
+                        ProductMovementModel(
+                            product_id=product.id,
+                            movement_type="entrada",
+                            quantity=base_qty,
+                            obs=f"Compra #{po.id}{nf_ref}",
+                        )
+                    )
 
                 po.status = "confirmada"
                 session.add(po)
@@ -277,15 +325,16 @@ class PurchaseRepository:
                     if item.product_id:
                         product = session.get(ProductModel, item.product_id)
                         if product:
+                            base_qty = item.quantity * (item.factor or 1)
                             product.stock_quantity = max(
-                                product.stock_quantity - item.quantity, 0
+                                product.stock_quantity - base_qty, 0
                             )
                             session.add(product)
                             session.add(
                                 ProductMovementModel(
                                     product_id=product.id,
                                     movement_type="saida",
-                                    quantity=-item.quantity,
+                                    quantity=-base_qty,
                                     obs=f"Cancelamento compra #{po.id}",
                                 )
                             )
