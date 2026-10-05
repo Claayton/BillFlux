@@ -628,6 +628,14 @@
   max-width: 720px;
 }
 
+.modal-content-lg {
+  max-width: 880px;
+}
+
+.modal-content-md {
+  max-width: 640px;
+}
+
 /* Modal de produto: altura fixa, abas com scroll interno e rodapé persistente */
 .product-modal {
   display: flex;

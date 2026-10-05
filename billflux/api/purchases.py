@@ -274,6 +274,7 @@ def purchases_confirm(purchase_id):
             create_bill=data.get("create_bill", True),
             account_id=data.get("account_id"),
             items=data.get("items"),
+            paid=bool(data.get("paid")),
         )
     except ValueError as error:
         return api_error(str(error), 400)
