@@ -37,16 +37,16 @@ const allProducts = ref([])
 const suppliers = ref([])
 const quickSupplierModal = ref(false)
 const quickSupplier = ref({ name: '', cnpj: '', phone: '', email: '' })
+const newItemQuery = ref('')
+const newItemResults = ref([])
+const newItemSearching = ref(false)
+let newItemDebounce = null
 
 function emptyForm() {
   return {
     nf_number: '', nf_serie: '', nf_chave: '', nf_modelo: '',
     supplier_id: null, freight: '', discount: '', due_date: '', obs: '',
   }
-}
-
-function emptyItem() {
-  return { product_id: null, product_name: '', barcode: '', quantity: 1, unit_cost: '', units: [], selected_unit_id: null }
 }
 
 const statusLabel = { rascunho: 'Rascunho', confirmada: 'Confirmada', cancelada: 'Cancelada' }
@@ -96,7 +96,9 @@ async function loadSuppliers() {
 function openNew() {
   editing.value = null
   form.value = emptyForm()
-  items.value = [emptyItem()]
+  items.value = []
+  newItemQuery.value = ''
+  newItemResults.value = []
   showModal.value = true
 }
 
@@ -122,7 +124,7 @@ async function openEdit(purchase) {
       quantity: i.quantity,
       unit_cost: i.unit_cost,
     }))
-    if (!items.value.length) items.value = [emptyItem()]
+    if (!items.value.length) items.value = []
     showModal.value = true
   } catch (error) {
     ElMessage.error('Erro ao carregar compra: ' + error.message)
@@ -137,11 +139,19 @@ async function openDetail(purchase) {
 }
 
 async function savePurchase() {
+  if (!items.value.length) {
+    ElMessage.warning('Adicione ao menos um produto à compra.')
+    return
+  }
+  if (items.value.some(i => !i.product_id)) {
+    ElMessage.warning('Todos os itens precisam estar vinculados a um produto.')
+    return
+  }
   saving.value = true
   try {
     const payload = {
       ...form.value,
-      items: items.value.filter(i => i.product_id || i.barcode || i.product_name),
+      items: items.value,
     }
     if (editing.value) {
       await api.put(`/purchases/${editing.value.id}`, payload)
@@ -159,12 +169,47 @@ async function savePurchase() {
   }
 }
 
-function addItem() {
-  items.value.push(emptyItem())
+function removeItem(index) {
+  items.value.splice(index, 1)
 }
 
-function removeItem(index) {
-  if (items.value.length > 1) items.value.splice(index, 1)
+async function searchNewItem() {
+  const q = newItemQuery.value.trim()
+  if (!q) {
+    newItemResults.value = []
+    return
+  }
+  newItemSearching.value = true
+  try {
+    const data = await api.get(`/products/search?q=${encodeURIComponent(q)}`)
+    newItemResults.value = data.products || []
+  } catch {
+    newItemResults.value = []
+  } finally {
+    newItemSearching.value = false
+  }
+}
+
+function onNewItemInput() {
+  clearTimeout(newItemDebounce)
+  newItemDebounce = setTimeout(searchNewItem, 250)
+}
+
+function addProductItem(product) {
+  const existing = items.value.find(i => i.product_id === product.id)
+  if (existing) {
+    existing.quantity = (parseInt(existing.quantity) || 0) + 1
+  } else {
+    items.value.push({
+      product_id: product.id,
+      product_name: product.name,
+      barcode: product.barcode || '',
+      quantity: 1,
+      unit_cost: product.cost != null ? String(product.cost) : '',
+    })
+  }
+  newItemQuery.value = ''
+  newItemResults.value = []
 }
 
 function calcItemTotal(item) {
@@ -215,8 +260,8 @@ async function importNfe() {
 async function openLaunchModal(purchase) {
   launchTarget.value = purchase
   launchDate.value = ''
-  launchCreateBill.value = true
-  launchPaid.value = false
+  launchCreateBill.value = false
+  launchPaid.value = true
   const data = await api.get(`/purchases/${purchase.id}`)
   launchItems.value = data.items.map(item => ({
     ...item,
@@ -226,6 +271,7 @@ async function openLaunchModal(purchase) {
     units_per_case: 1,
     units: [],
     selected_unit_id: null,
+    product_price: null,
   }))
 
   for (const li of launchItems.value) {
@@ -237,6 +283,7 @@ async function openLaunchModal(purchase) {
           li.product_name_existing = res.product.name
           li.existing_stock = res.product.stock_quantity
           li.existing_cost = res.product.cost
+          li.product_price = res.product.price
           li.matched = true
           li.units = res.product.units || []
           if (li.units.length) {
@@ -253,6 +300,7 @@ async function openLaunchModal(purchase) {
           li.product_name_existing = res.product.name
           li.existing_stock = res.product.stock_quantity
           li.existing_cost = res.product.cost
+          li.product_price = res.product.price
           li.units = res.product.units || []
           if (li.units.length && !li.selected_unit_id) {
             const def = li.units.find(u => u.is_default) || li.units[0]
@@ -304,6 +352,7 @@ function matchProduct(idx, product) {
   li.product_name_existing = product.name
   li.existing_stock = product.stock_quantity
   li.existing_cost = product.cost
+  li.product_price = product.price
   li.matched = true
   li.editing = false
   li.units = product.units || []
@@ -334,11 +383,6 @@ function onLaunchUnitChange(idx) {
   if (unit) {
     li.units_per_case = unit.factor
   }
-}
-
-function launchItemEdit(idx) {
-  const li = launchItems.value[idx]
-  li.editing = !li.editing
 }
 
 function openQuickProduct(idx) {
@@ -410,6 +454,13 @@ async function saveQuickProduct() {
   }
 }
 
+function itemMargin(item) {
+  const price = parseFloat(item.product_price) || 0
+  const cost = calcWeightedCost(item)
+  if (price <= 0) return null
+  return ((price - cost) / price) * 100
+}
+
 function calcLaunchTotal() {
   return launchItems.value.reduce((acc, i) => {
     return acc + (parseInt(i.quantity) || 0) * (parseFloat(i.unit_cost) || 0)
@@ -428,12 +479,13 @@ async function confirmLaunch() {
     await api.post(`/purchases/${launchTarget.value.id}/confirm`, {
       due_date: launchDate.value || null,
       create_bill: launchCreateBill.value,
-      paid: launchCreateBill.value && launchPaid.value,
+      paid: launchPaid.value,
       items: launchItems.value.map(li => ({
         id: li.id,
         product_id: li.product_id,
         quantity: parseInt(li.quantity) || 0,
         unit_cost: li.unit_cost,
+        price: li.product_price,
         factor: parseInt(li.units_per_case) || 1,
         unit_com: li.unit_com || null,
       })),
@@ -750,30 +802,69 @@ onBeforeUnmount(() => {
           <div class="items-section">
             <div class="items-header">
               <h3>Itens da compra</h3>
-              <button type="button" class="btn btn-ghost btn-sm" @click="addItem">
-                <i class="fas fa-plus"></i> Adicionar item
-              </button>
             </div>
-            <div v-for="(item, idx) in items" :key="idx" class="item-row">
-              <div class="form-field flex-3">
-                <label>Produto</label>
-                <input v-model="item.product_name" type="text" placeholder="Descrição do produto" />
+            <div class="item-search">
+              <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input
+                  v-model="newItemQuery"
+                  type="text"
+                  placeholder="Buscar produto para adicionar…"
+                  @input="onNewItemInput"
+                  @keydown.enter.prevent="searchNewItem"
+                />
+                <button
+                  v-if="newItemQuery"
+                  type="button"
+                  class="search-clear"
+                  aria-label="Limpar busca"
+                  @click="newItemQuery = ''; newItemResults = []"
+                >
+                  <i class="fas fa-times"></i>
+                </button>
               </div>
-              <div class="form-field flex-1">
-                <label>Qtd</label>
-                <input v-model.number="item.quantity" type="number" min="1" />
+              <div v-if="newItemResults.length" class="item-search-results">
+                <button
+                  v-for="p in newItemResults"
+                  :key="p.id"
+                  type="button"
+                  class="item-search-result"
+                  @click="addProductItem(p)"
+                >
+                  <span>{{ p.name }}</span>
+                  <span class="sr-info">Estoque: {{ p.stock_quantity }} | Custo: {{ fmtBrl(p.cost) }}</span>
+                </button>
               </div>
-              <div class="form-field flex-1">
-                <label>Custo unit.</label>
-                <input v-model="item.unit_cost" type="text" placeholder="0,00" />
+              <div v-else-if="newItemQuery && !newItemSearching" class="muted-sm">
+                Nenhum produto encontrado.
               </div>
-              <div class="form-field flex-1">
-                <label>Total</label>
-                <input :value="fmtBrl(calcItemTotal(item))" type="text" disabled />
+            </div>
+
+            <p v-if="!items.length" class="muted-sm">
+              Nenhum item. Busque um produto acima para adicionar.
+            </p>
+            <div v-else class="item-list">
+              <div v-for="(item, idx) in items" :key="idx" class="item-row">
+                <div class="form-field flex-3">
+                  <label>Produto</label>
+                  <input :value="item.product_name" type="text" disabled />
+                </div>
+                <div class="form-field flex-1">
+                  <label>Qtd</label>
+                  <input v-model.number="item.quantity" type="number" min="1" />
+                </div>
+                <div class="form-field flex-1">
+                  <label>Custo unit.</label>
+                  <input v-model="item.unit_cost" type="text" placeholder="0,00" />
+                </div>
+                <div class="form-field flex-1">
+                  <label>Total</label>
+                  <input :value="fmtBrl(calcItemTotal(item))" type="text" disabled />
+                </div>
+                <button type="button" class="icon-btn remove-item" @click="removeItem(idx)">
+                  <i class="fas fa-times"></i>
+                </button>
               </div>
-              <button type="button" class="icon-btn remove-item" @click="removeItem(idx)" v-if="items.length > 1">
-                <i class="fas fa-times"></i>
-              </button>
             </div>
           </div>
 
@@ -964,10 +1055,24 @@ onBeforeUnmount(() => {
                 <span class="match-info" v-if="li.existing_stock > 0">
                   Custo médio após entrada: <strong>{{ fmtBrl(calcWeightedCost(li)) }}</strong>
                 </span>
+                <div class="launch-price-row">
+                  <label>Preço de venda</label>
+                  <input
+                    v-model="li.product_price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="inline-input-wide"
+                  />
+                  <span
+                    v-if="itemMargin(li) !== null"
+                    class="margin-badge"
+                    :class="{ 'is-negative': itemMargin(li) < 0 }"
+                  >
+                    <i class="fas fa-percentage"></i> Lucro {{ itemMargin(li).toFixed(1) }}%
+                  </span>
+                </div>
                 <div class="launch-item-actions">
-                  <button type="button" class="btn btn-ghost btn-xs" @click="launchItemEdit(idx)">
-                    <i class="fas fa-pen"></i> Editar
-                  </button>
                   <button type="button" class="btn btn-ghost btn-xs" @click="unmatchProduct(idx)">
                     <i class="fas fa-unlink"></i> Desvincular
                   </button>
@@ -1020,16 +1125,12 @@ onBeforeUnmount(() => {
             </div>
             <div class="launch-checks">
               <label class="launch-check">
+                <input v-model="launchPaid" type="checkbox" />
+                <span>Conta já paga</span>
+              </label>
+              <label class="launch-check">
                 <input v-model="launchCreateBill" type="checkbox" />
                 <span>Criar conta a pagar</span>
-              </label>
-              <label class="launch-check" :class="{ 'is-disabled': !launchCreateBill }">
-                <input
-                  v-model="launchPaid"
-                  type="checkbox"
-                  :disabled="!launchCreateBill"
-                />
-                <span>Conta já paga</span>
               </label>
             </div>
           </div>
@@ -1441,6 +1542,40 @@ onBeforeUnmount(() => {
 .launch-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--primary, #2563eb); cursor: pointer; }
 .launch-check.is-disabled { opacity: 0.5; cursor: not-allowed; }
 .launch-check.is-disabled input { cursor: not-allowed; }
+
+/* Busca de produto na Nova compra */
+.item-search .search-box { margin-bottom: 0; }
+.item-search-results {
+  margin-top: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+}
+.item-search-result {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 12px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text, #111827);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border, #f3f4f6);
+  cursor: pointer;
+}
+.item-search-result:last-child { border-bottom: none; }
+.item-search-result:hover { background: var(--surface-hover, #f3f4f6); }
+.item-list { display: flex; flex-direction: column; gap: 8px; }
+
+/* Preço de venda + indicador de lucro no lançamento */
+.launch-price-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.launch-price-row label { font-size: 13px; font-weight: 600; color: var(--text-secondary, #666); }
+.inline-input-wide { width: 110px; padding: 6px 10px; border: 1px solid var(--border, #d1d5db); border-radius: 6px; font-size: 13px; }
+.margin-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; background: #d1fae5; color: #065f46; }
+.margin-badge.is-negative { background: #fee2e2; color: #991b1b; }
 
 /* Footer como filho direto do .modal-content (ex.: Lançar Compra): o
    .modal-footer global não tem padding horizontal/inferior; aqui garante. */

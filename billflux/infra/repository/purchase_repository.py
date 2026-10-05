@@ -229,6 +229,7 @@ class PurchaseRepository:
                     )
                 ).all()
 
+                prices = {}
                 if items:
                     by_id = {item.id: item for item in stored}
                     for entry in items:
@@ -246,6 +247,10 @@ class PurchaseRepository:
                             item.unit_com = entry["unit_com"]
                         item.total = Decimal(str(item.quantity)) * item.unit_cost
                         session.add(item)
+                        if entry.get("price") is not None:
+                            price_value = _to_decimal(entry["price"])
+                            if price_value > 0:
+                                prices[item.product_id] = price_value
 
                 if not stored:
                     raise ValueError("A compra não tem itens para lançar.")
@@ -255,7 +260,7 @@ class PurchaseRepository:
                     )
 
                 bill_id = None
-                if create_bill and po.net_total > 0:
+                if (create_bill or paid) and po.net_total > 0:
                     now = datetime.now()
                     bill = BillModel(
                         status=bool(paid),
@@ -287,6 +292,8 @@ class PurchaseRepository:
                     current_qty = product.stock_quantity
                     current_cost = product.cost or Decimal("0")
                     product.stock_quantity += base_qty
+                    if product.id in prices:
+                        product.price = prices[product.id]
                     if base_cost > 0:
                         if current_qty > 0 and current_cost > 0:
                             total_qty = current_qty + base_qty

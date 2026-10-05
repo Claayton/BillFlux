@@ -6,6 +6,7 @@ function menuButtons() {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   document.querySelectorAll('.row-menu-panel').forEach((el) => el.remove())
 })
 
@@ -177,6 +178,101 @@ describe('PurchasesView', () => {
         items: [
           expect.objectContaining({ id: 10, product_id: 5, quantity: 3, factor: 15 }),
         ],
+      })
+    )
+  })
+
+  it('nova compra: busca produto e adiciona item vinculado', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const product = { id: 5, name: 'CERV', stock_quantity: 3, cost: 2.5, price: 5, barcode: '789' }
+    apiMock.get.mockImplementation((url) => {
+      const u = String(url)
+      if (u.startsWith('/products/search')) return Promise.resolve({ products: [product] })
+      if (u === '/products') return Promise.resolve({ products: [] })
+      if (u === '/suppliers') return Promise.resolve({ suppliers: [] })
+      return Promise.resolve({ purchases })
+    })
+    apiMock.post.mockResolvedValue({ purchase: purchases[0] })
+
+    const wrapper = mount(PurchasesView)
+    await flushPromises()
+
+    await wrapper.find('.page-header .btn-brand').trigger('click')
+    await flushPromises()
+
+    const input = wrapper.find('.item-search input')
+    await input.setValue('cerveja')
+    vi.advanceTimersByTime(300)
+    await flushPromises()
+
+    const results = wrapper.findAll('.item-search-result')
+    expect(results.length).toBe(1)
+    await results[0].trigger('click')
+    await flushPromises()
+
+    const rows = wrapper.findAll('.item-row')
+    expect(rows.length).toBe(1)
+    expect(rows[0].find('input').element.value).toBe('CERV')
+
+    await wrapper.find('.modal.is-open form').trigger('submit')
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith(
+      '/purchases',
+      expect.objectContaining({
+        items: [expect.objectContaining({ product_id: 5, quantity: 1 })],
+      })
+    )
+  })
+
+  it('lançamento: padrão "Conta já paga" marcado e envia preço de venda com margem', async () => {
+    const items = [
+      {
+        id: 10,
+        product_id: 5,
+        product_name: 'CERV',
+        barcode: '',
+        quantity: 2,
+        unit_cost: '2.00',
+        unit_com: '',
+        factor: 1,
+      },
+    ]
+    const product = { id: 5, name: 'CERV', stock_quantity: 0, cost: 1, price: 5, units: [] }
+    apiMock.get.mockImplementation((url) => {
+      const u = String(url)
+      if (u === '/purchases/1') return Promise.resolve({ purchase: purchases[0], items })
+      if (u === '/products/5') return Promise.resolve({ product })
+      if (u === '/products') return Promise.resolve({ products: [] })
+      if (u === '/suppliers') return Promise.resolve({ suppliers: [] })
+      return Promise.resolve({ purchases })
+    })
+    apiMock.post.mockResolvedValue({ purchase: purchases[0] })
+
+    const wrapper = mount(PurchasesView)
+    await flushPromises()
+
+    await wrapper.findAll('.row-menu > .icon-btn')[0].trigger('click')
+    await flushPromises()
+    menuButtons().find((b) => b.textContent.includes('Lançar no estoque')).click()
+    await flushPromises()
+
+    const checks = wrapper.findAll('.launch-check input')
+    expect(checks[0].element.checked).toBe(true) // Conta já paga
+    expect(checks[1].element.checked).toBe(false) // Criar conta a pagar
+
+    expect(wrapper.find('.launch-price-row input').element.value).toBe('5')
+    expect(wrapper.find('.margin-badge').text()).toContain('Lucro')
+
+    await wrapper.find('.btn-launch-confirm').trigger('click')
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith(
+      '/purchases/1/confirm',
+      expect.objectContaining({
+        paid: true,
+        create_bill: false,
+        items: [expect.objectContaining({ id: 10, price: 5 })],
       })
     )
   })
