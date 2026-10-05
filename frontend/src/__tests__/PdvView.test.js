@@ -135,7 +135,7 @@ describe('PdvView', () => {
     // abre o modal de fechamento com foco pronto e digita o valor em dinheiro
     expect(wrapper.find('.pdv-checkout-modal').exists()).toBe(true)
     const inputs = wrapper.findAll('.pdv-payfield input')
-    expect(inputs).toHaveLength(methods.length)
+    expect(inputs).toHaveLength(1) // só a forma selecionada mostra o campo
     await inputs[0].setValue('500') // máscara -> R$ 5,00
     await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
     await flushPromises()
@@ -164,10 +164,11 @@ describe('PdvView', () => {
     await wrapper.find('#pdv-finish').trigger('click')
     await flushPromises()
 
-    const inputs = wrapper.findAll('.pdv-payfield input')
-    expect(inputs).toHaveLength(3)
-    await inputs[0].setValue('') // limpa o pré-preenchido em dinheiro
-    await inputs[2].setValue('500') // fiado: R$ 5,00
+    // limpa o pré-preenchido e seleciona Fiado (linha 3), que recebe o restante
+    await wrapper.find('.pdv-payfield input').setValue('')
+    await wrapper.findAll('.pdv-payrow')[2].trigger('click')
+    await nextTick()
+    expect(wrapper.find('.pdv-payfield input').element.value).toBe('5,00')
 
     await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
     await flushPromises()
@@ -206,13 +207,14 @@ describe('PdvView', () => {
     await wrapper.find('#pdv-finish').trigger('click')
     await flushPromises()
 
-    const inputs = wrapper.findAll('.pdv-payfield input')
+    const input = () => wrapper.find('.pdv-payfield input')
     // digita 2 reais em dinheiro...
-    await inputs[0].setValue('200')
-    expect(inputs[0].element.value).toBe('2,00')
-    // ...seta para baixo vai para o PIX e digita o restante
-    await inputs[0].trigger('keydown', { key: 'ArrowDown' })
-    await inputs[1].setValue('300')
+    await input().setValue('200')
+    expect(input().element.value).toBe('2,00')
+    // ...seta para baixo seleciona o PIX e completa o restante
+    await input().trigger('keydown', { key: 'ArrowDown' })
+    await nextTick()
+    expect(input().element.value).toBe('3,00')
 
     await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
     await flushPromises()
@@ -260,14 +262,13 @@ describe('PdvView', () => {
     await wrapper.find('#pdv-finish').trigger('click')
     await flushPromises()
 
-    const inputs = wrapper.findAll('.pdv-payfield input')
-    expect(inputs[0].element.value).toBe('5,00')
-    await inputs[0].trigger('keydown', { key: 'ArrowDown' })
+    expect(wrapper.find('.pdv-payfield input').element.value).toBe('5,00')
+    await wrapper.find('.pdv-payfield input').trigger('keydown', { key: 'ArrowDown' })
     await nextTick()
 
-    // o valor pulou para o PIX e o dinheiro ficou vazio
-    expect(inputs[0].element.value).toBe('')
-    expect(inputs[1].element.value).toBe('5,00')
+    // o valor pulou para o PIX (linha 2), que agora é a forma selecionada
+    expect(wrapper.findAll('.pdv-payrow')[1].classes()).toContain('is-selected')
+    expect(wrapper.find('.pdv-payfield input').element.value).toBe('5,00')
 
     await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
     await flushPromises()
@@ -275,6 +276,86 @@ describe('PdvView', () => {
       '/pdv/complete',
       expect.objectContaining({
         payments: [{ method_id: 2, amount: '5.00' }],
+      })
+    )
+  })
+
+  it('clique na linha seleciona a forma e move o total (mouse)', async () => {
+    apiMock.post.mockResolvedValue({ order: { order_id: 13 } })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('arildo')
+    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+    await wrapper.find('#pdv-finish').trigger('click')
+    await flushPromises()
+
+    const rows = wrapper.findAll('.pdv-payrow')
+    await rows[1].trigger('click') // PIX
+    await nextTick()
+
+    expect(rows[1].classes()).toContain('is-selected')
+    expect(wrapper.find('.pdv-payfield input').element.value).toBe('5,00') // PIX com o total
+    expect(rows[0].text()).toContain('Selecionar') // dinheiro sem valor
+
+    await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
+    await flushPromises()
+    expect(apiMock.post).toHaveBeenCalledWith(
+      '/pdv/complete',
+      expect.objectContaining({
+        payments: [{ method_id: 2, amount: '5.00' }],
+      })
+    )
+  })
+
+  it('mostra o campo de valor só na forma selecionada', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('arildo')
+    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+    await wrapper.find('#pdv-finish').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('.pdv-payfield')).toHaveLength(1)
+    expect(wrapper.findAll('.pdv-payrow')[0].find('.pdv-payfield').exists()).toBe(true)
+
+    await wrapper.findAll('.pdv-payrow')[1].trigger('click')
+    await nextTick()
+    expect(wrapper.findAll('.pdv-payfield')).toHaveLength(1)
+    expect(wrapper.findAll('.pdv-payrow')[1].find('.pdv-payfield').exists()).toBe(true)
+    expect(wrapper.findAll('.pdv-payrow')[0].find('.pdv-payfield').exists()).toBe(false)
+  })
+
+  it('clicar na forma completa o restante quando já há valor digitado', async () => {
+    apiMock.post.mockResolvedValue({ order: { order_id: 14 } })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('arildo')
+    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+    await wrapper.find('#pdv-finish').trigger('click')
+    await flushPromises()
+
+    await wrapper.find('.pdv-payfield input').setValue('200') // 2,00 em dinheiro
+    await wrapper.findAll('.pdv-payrow')[1].trigger('click') // PIX completa o restante
+    await nextTick()
+
+    expect(wrapper.find('.pdv-payfield input').element.value).toBe('3,00') // 5,00 - 2,00
+    expect(wrapper.findAll('.pdv-payrow')[0].text()).toContain('2,00') // dinheiro visível
+
+    await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
+    await flushPromises()
+    expect(apiMock.post).toHaveBeenCalledWith(
+      '/pdv/complete',
+      expect.objectContaining({
+        payments: [
+          { method_id: 1, amount: '2.00' },
+          { method_id: 2, amount: '3.00' },
+        ],
       })
     )
   })

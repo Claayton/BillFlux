@@ -9,6 +9,7 @@ from billflux.infra.config.database import get_session
 from billflux.infra.entities.purchase_order import PurchaseOrder as PurchaseOrderModel
 from billflux.infra.entities.purchase_item import PurchaseItem as PurchaseItemModel
 from billflux.infra.entities.product import Product as ProductModel
+from billflux.infra.entities.product_unit import ProductUnit as ProductUnitModel
 from billflux.infra.entities.product_movement import (
     ProductMovement as ProductMovementModel,
 )
@@ -213,8 +214,10 @@ class PurchaseRepository:
     ):
         """Confirma a compra: persiste os vínculos/quantidades recebidos em
         ``items`` (id, product_id, quantity, unit_cost, factor), dá entrada no
-        estoque por ``quantity × factor`` (unidades-base) e atualiza o custo
-        médio. Levanta ValueError se nenhum item estiver vinculado a produto."""
+        estoque por ``quantity × factor`` (unidades-base), atualiza o custo
+        médio e os preços de venda (``price`` avulso e/ou ``unit_prices`` das
+        apresentações). Levanta ValueError se nenhum item estiver vinculado a
+        produto."""
 
         session = get_session()
         try:
@@ -229,6 +232,8 @@ class PurchaseRepository:
                     )
                 ).all()
 
+                prices = {}
+                unit_prices_by_product = {}
                 if items:
                     by_id = {item.id: item for item in stored}
                     for entry in items:
@@ -246,6 +251,18 @@ class PurchaseRepository:
                             item.unit_com = entry["unit_com"]
                         item.total = Decimal(str(item.quantity)) * item.unit_cost
                         session.add(item)
+                        if entry.get("price") is not None:
+                            price_value = _to_decimal(entry["price"])
+                            if price_value > 0:
+                                prices[item.product_id] = price_value
+                        updates = []
+                        for up in entry.get("unit_prices") or []:
+                            unit_id = up.get("unit_id")
+                            unit_price = _to_decimal(up.get("price"))
+                            if unit_id and unit_price > 0:
+                                updates.append((unit_id, unit_price))
+                        if updates:
+                            unit_prices_by_product[item.product_id] = updates
 
                 if not stored:
                     raise ValueError("A compra não tem itens para lançar.")
@@ -255,7 +272,7 @@ class PurchaseRepository:
                     )
 
                 bill_id = None
-                if create_bill and po.net_total > 0:
+                if (create_bill or paid) and po.net_total > 0:
                     now = datetime.now()
                     bill = BillModel(
                         status=bool(paid),
@@ -287,6 +304,20 @@ class PurchaseRepository:
                     current_qty = product.stock_quantity
                     current_cost = product.cost or Decimal("0")
                     product.stock_quantity += base_qty
+                    if product.id in prices:
+                        product.price = prices[product.id]
+                    if product.id in unit_prices_by_product:
+                        default_price = None
+                        for unit_id, unit_price in unit_prices_by_product[product.id]:
+                            unit = session.get(ProductUnitModel, unit_id)
+                            if not unit or unit.product_id != product.id:
+                                continue
+                            unit.price = unit_price
+                            session.add(unit)
+                            if unit.is_default and (unit.factor or 1) == 1:
+                                default_price = unit_price
+                        if default_price is not None:
+                            product.price = default_price
                     if base_cost > 0:
                         if current_qty > 0 and current_cost > 0:
                             total_qty = current_qty + base_qty
