@@ -29,6 +29,7 @@ const caixaOpen = ref(null)
 const checkoutOpen = ref(false)
 const payAmounts = ref({})
 const payInputs = ref([])
+const paySelectedIndex = ref(0)
 
 const discountOpen = ref(false)
 const discountType = ref('percent')
@@ -695,11 +696,13 @@ function finishSale() {
   }
   payAmounts.value = amounts
   payInputs.value = []
+  paySelectedIndex.value = 0
   checkoutOpen.value = true
   nextTick(() => focusPayInput(0))
 }
 
 function focusPayInput(index) {
+  paySelectedIndex.value = index
   const el = payInputs.value[index]
   if (!el) return
   el.focus()
@@ -708,6 +711,35 @@ function focusPayInput(index) {
   if (payAmounts.value[methods.value[index]?.id] === defaultPayAmount.value) {
     el.select()
   }
+}
+
+// Clique na linha de uma forma (uso com mouse): seleciona a forma e o valor.
+// - Se só existe o total pré-preenchido, move o total pra forma clicada.
+// - Se o operador já digitou valores (split), completa o restante na clicada.
+function selectMethod(index) {
+  const method = methods.value[index]
+  if (!method) return
+  const total = cartTotalAfter.value
+  if (total > 0) {
+    const entered = paymentsEntered.value
+    const pristine = entered.length === 1 && entered[0].amount === total
+    if (pristine) {
+      const amounts = {}
+      methods.value.forEach((m) => {
+        amounts[m.id] = ''
+      })
+      amounts[method.id] = defaultPayAmount.value
+      payAmounts.value = amounts
+    } else {
+      const others = entered
+        .filter((p) => p.method_id !== method.id)
+        .reduce((sum, p) => sum + p.amount, 0)
+      const remaining = Math.max(0, Math.round((total - others) * 100) / 100)
+      payAmounts.value[method.id] =
+        remaining > 0 ? maskMoney(String(Math.round(remaining * 100))) : ''
+    }
+  }
+  focusPayInput(index)
 }
 
 function onPayInput(event, methodId) {
@@ -1210,12 +1242,18 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="pdv-paylist" v-if="methods.length">
-            <div v-for="(m, i) in methods" :key="m.id" class="pdv-payrow">
+            <div
+              v-for="(m, i) in methods"
+              :key="m.id"
+              class="pdv-payrow"
+              :class="{ 'is-selected': paySelectedIndex === i }"
+              @click="selectMethod(i)"
+            >
               <span class="pdv-payicon" :class="paymentColor(m.name)">
                 <i :class="paymentIcon(m.name)"></i>
               </span>
               <span class="pdv-payname">{{ m.name }}</span>
-              <div class="pdv-payfield">
+              <div class="pdv-payfield" @click.stop>
                 <span>R$</span>
                 <input
                   :ref="(el) => (payInputs[i] = el)"
@@ -1225,6 +1263,7 @@ onBeforeUnmount(() => {
                   :aria-label="'Valor em ' + m.name"
                   placeholder="0,00"
                   autocomplete="off"
+                  @focus="paySelectedIndex = i"
                   @input="onPayInput($event, m.id)"
                   @keydown="onPayKeydown($event, i)"
                 />
@@ -1247,7 +1286,7 @@ onBeforeUnmount(() => {
               </template>
             </div>
             <p class="pdv-payhint">
-              <i class="fas fa-arrow-down"></i> Seta para baixo pula para a próxima forma.
+              <i class="fas fa-mouse-pointer"></i> Clique numa forma pra pagar; setas ↑/↓ navegam entre elas.
             </p>
           </div>
           <p v-if="!methods.length" class="pdv-panel-note">
@@ -1429,6 +1468,15 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border, #e5e7eb);
   border-radius: var(--brand-radius-sm);
   background: var(--surface, #ffffff);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.pdv-payrow:hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border, #e5e7eb));
+}
+.pdv-payrow.is-selected {
+  border-color: var(--primary);
+  box-shadow: var(--brand-input-ring);
 }
 .pdv-payicon {
   width: 32px;

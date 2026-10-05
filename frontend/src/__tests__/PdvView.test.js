@@ -279,6 +279,86 @@ describe('PdvView', () => {
     )
   })
 
+  it('clique na linha seleciona a forma e move o total (mouse)', async () => {
+    apiMock.post.mockResolvedValue({ order: { order_id: 13 } })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('arildo')
+    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+    await wrapper.find('#pdv-finish').trigger('click')
+    await flushPromises()
+
+    const rows = wrapper.findAll('.pdv-payrow')
+    await rows[1].trigger('click') // PIX
+    await nextTick()
+
+    expect(rows[0].find('input').element.value).toBe('') // dinheiro limpo
+    expect(rows[1].find('input').element.value).toBe('5,00') // PIX com o total
+    expect(rows[1].classes()).toContain('is-selected')
+
+    await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
+    await flushPromises()
+    expect(apiMock.post).toHaveBeenCalledWith(
+      '/pdv/complete',
+      expect.objectContaining({
+        payments: [{ method_id: 2, amount: '5.00' }],
+      })
+    )
+  })
+
+  it('clicar dentro do campo não altera valores (permite split)', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('arildo')
+    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+    await wrapper.find('#pdv-finish').trigger('click')
+    await flushPromises()
+
+    const inputs = wrapper.findAll('.pdv-payfield input')
+    await inputs[0].setValue('200') // 2,00 em dinheiro
+    await wrapper.findAll('.pdv-payfield')[1].trigger('click') // clica no campo do PIX
+    await nextTick()
+
+    expect(inputs[0].element.value).toBe('2,00') // dinheiro intacto
+    expect(inputs[1].element.value).toBe('') // PIX não foi preenchido
+  })
+
+  it('clicar na forma completa o restante quando já há valor digitado', async () => {
+    apiMock.post.mockResolvedValue({ order: { order_id: 14 } })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('arildo')
+    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+    await wrapper.find('#pdv-finish').trigger('click')
+    await flushPromises()
+
+    const inputs = wrapper.findAll('.pdv-payfield input')
+    await inputs[0].setValue('200') // 2,00 em dinheiro
+    await wrapper.findAll('.pdv-payrow')[1].trigger('click') // PIX completa o restante
+    await nextTick()
+
+    expect(inputs[0].element.value).toBe('2,00')
+    expect(inputs[1].element.value).toBe('3,00') // 5,00 - 2,00
+
+    await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
+    await flushPromises()
+    expect(apiMock.post).toHaveBeenCalledWith(
+      '/pdv/complete',
+      expect.objectContaining({
+        payments: [
+          { method_id: 1, amount: '2.00' },
+          { method_id: 2, amount: '3.00' },
+        ],
+      })
+    )
+  })
+
   it('não finaliza sem valor ou com valor menor que o total', async () => {
     const wrapper = mountView()
     await flushPromises()
