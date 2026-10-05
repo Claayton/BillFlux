@@ -5,6 +5,7 @@ import { api } from '@/api/client'
 import { normalizeForSearch } from '@/utils/normalize'
 import AppShell from '@/components/AppShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import ProductSearch from '@/components/ProductSearch.vue'
 
 const purchases = ref([])
 const loading = ref(false)
@@ -26,10 +27,6 @@ const launchItems = ref([])
 const launchDate = ref('')
 const launchCreateBill = ref(true)
 const launchPaid = ref(false)
-const launchSearchIdx = ref(null)
-const launchSearchQuery = ref('')
-const launchSearchResults = ref([])
-const launchSearching = ref(false)
 const quickProductModal = ref(false)
 const quickProductItemIdx = ref(null)
 const quickProduct = ref({ name: '', price: '', cost: '', barcode: '', category_id: null })
@@ -37,10 +34,6 @@ const allProducts = ref([])
 const suppliers = ref([])
 const quickSupplierModal = ref(false)
 const quickSupplier = ref({ name: '', cnpj: '', phone: '', email: '' })
-const newItemQuery = ref('')
-const newItemResults = ref([])
-const newItemSearching = ref(false)
-let newItemDebounce = null
 
 function emptyForm() {
   return {
@@ -97,8 +90,6 @@ function openNew() {
   editing.value = null
   form.value = emptyForm()
   items.value = []
-  newItemQuery.value = ''
-  newItemResults.value = []
   showModal.value = true
 }
 
@@ -173,28 +164,6 @@ function removeItem(index) {
   items.value.splice(index, 1)
 }
 
-async function searchNewItem() {
-  const q = newItemQuery.value.trim()
-  if (!q) {
-    newItemResults.value = []
-    return
-  }
-  newItemSearching.value = true
-  try {
-    const data = await api.get(`/products/search?q=${encodeURIComponent(q)}`)
-    newItemResults.value = data.products || []
-  } catch {
-    newItemResults.value = []
-  } finally {
-    newItemSearching.value = false
-  }
-}
-
-function onNewItemInput() {
-  clearTimeout(newItemDebounce)
-  newItemDebounce = setTimeout(searchNewItem, 250)
-}
-
 function addProductItem(product) {
   const existing = items.value.find(i => i.product_id === product.id)
   if (existing) {
@@ -208,8 +177,6 @@ function addProductItem(product) {
       unit_cost: product.cost != null ? String(product.cost) : '',
     })
   }
-  newItemQuery.value = ''
-  newItemResults.value = []
 }
 
 function calcItemTotal(item) {
@@ -267,7 +234,6 @@ async function openLaunchModal(purchase) {
     ...item,
     product_id: item.product_id || null,
     matched: !!item.product_id,
-    editing: false,
     units_per_case: 1,
     units: [],
     selected_unit_id: null,
@@ -311,7 +277,6 @@ async function openLaunchModal(purchase) {
       } catch { /* ignore */ }
     }
   }
-  launchSearchIdx.value = null
 }
 
 function calcWeightedCost(item) {
@@ -326,26 +291,6 @@ function calcWeightedCost(item) {
   return newCost
 }
 
-function openLaunchSearch(idx) {
-  launchSearchIdx.value = idx
-  launchSearchQuery.value = ''
-  launchSearchResults.value = []
-}
-
-async function searchLaunchProduct() {
-  const q = launchSearchQuery.value.trim()
-  if (!q) { launchSearchResults.value = []; return }
-  launchSearching.value = true
-  try {
-    const data = await api.get(`/products/search?q=${encodeURIComponent(q)}`)
-    launchSearchResults.value = data.products || []
-  } catch {
-    launchSearchResults.value = []
-  } finally {
-    launchSearching.value = false
-  }
-}
-
 function matchProduct(idx, product) {
   const li = launchItems.value[idx]
   li.product_id = product.id
@@ -354,14 +299,12 @@ function matchProduct(idx, product) {
   li.existing_cost = product.cost
   li.product_price = product.price
   li.matched = true
-  li.editing = false
   li.units = product.units || []
   if (li.units.length && !li.unit_com) {
     const def = li.units.find(u => u.is_default) || li.units[0]
     li.selected_unit_id = def.id
     li.units_per_case = def.factor
   }
-  launchSearchIdx.value = null
 }
 
 function unmatchProduct(idx) {
@@ -373,7 +316,6 @@ function unmatchProduct(idx) {
   li.matched = false
   li.units = []
   li.selected_unit_id = null
-  launchSearchIdx.value = null
 }
 
 function onLaunchUnitChange(idx) {
@@ -452,6 +394,10 @@ async function saveQuickProduct() {
   } finally {
     saving.value = false
   }
+}
+
+function entradaUn(item) {
+  return (parseInt(item.quantity) || 0) * (parseInt(item.units_per_case) || 1)
 }
 
 function itemMargin(item) {
@@ -803,42 +749,11 @@ onBeforeUnmount(() => {
             <div class="items-header">
               <h3>Itens da compra</h3>
             </div>
-            <div class="item-search">
-              <div class="search-box">
-                <i class="fas fa-search"></i>
-                <input
-                  v-model="newItemQuery"
-                  type="text"
-                  placeholder="Buscar produto para adicionar…"
-                  @input="onNewItemInput"
-                  @keydown.enter.prevent="searchNewItem"
-                />
-                <button
-                  v-if="newItemQuery"
-                  type="button"
-                  class="search-clear"
-                  aria-label="Limpar busca"
-                  @click="newItemQuery = ''; newItemResults = []"
-                >
-                  <i class="fas fa-times"></i>
-                </button>
-              </div>
-              <div v-if="newItemResults.length" class="item-search-results">
-                <button
-                  v-for="p in newItemResults"
-                  :key="p.id"
-                  type="button"
-                  class="item-search-result"
-                  @click="addProductItem(p)"
-                >
-                  <span>{{ p.name }}</span>
-                  <span class="sr-info">Estoque: {{ p.stock_quantity }} | Custo: {{ fmtBrl(p.cost) }}</span>
-                </button>
-              </div>
-              <div v-else-if="newItemQuery && !newItemSearching" class="muted-sm">
-                Nenhum produto encontrado.
-              </div>
-            </div>
+            <ProductSearch
+              :products="allProducts"
+              placeholder="Buscar produto para adicionar…"
+              @select="addProductItem"
+            />
 
             <p v-if="!items.length" class="muted-sm">
               Nenhum item. Busque um produto acima para adicionar.
@@ -855,7 +770,7 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="form-field flex-1">
                   <label>Custo unit.</label>
-                  <input v-model="item.unit_cost" type="text" placeholder="0,00" />
+                  <input v-model="item.unit_cost" type="number" step="0.01" placeholder="0,00" />
                 </div>
                 <div class="form-field flex-1">
                   <label>Total</label>
@@ -1008,107 +923,100 @@ onBeforeUnmount(() => {
           </p>
 
           <div class="launch-items">
-            <div v-for="(li, idx) in launchItems" :key="idx" class="launch-item"
-              :class="{ 'is-unmatched': !li.matched }">
-
-              <div class="launch-item-header">
-                <span class="launch-item-num">#{{ idx + 1 }}</span>
-                <strong>{{ li.product_name || 'Sem nome' }}</strong>
-                <span class="launch-item-barcode" v-if="li.barcode">EAN: {{ li.barcode }}</span>
-                <span class="launch-item-unit" v-if="li.unit_com">
-                  NF-e: {{ li.quantity }} {{ li.unit_com }}
-                  <span v-if="li.unit_com !== 'UN' && li.unit_com !== 'PC' && li.unit_com !== 'PÇ'">
-                    (= {{ (parseInt(li.quantity) || 0) * (parseInt(li.units_per_case) || 1) }} un.)
-                  </span>
-                </span>
-                <span class="launch-item-qty">{{ li.quantity }}x {{ fmtBrl(li.unit_cost) }}</span>
-              </div>
-
-              <div class="launch-conversion" v-if="li.units && li.units.length > 1 && !li.unit_com">
-                <label>Apresentação:</label>
-                <select v-model.number="li.selected_unit_id" @change="onLaunchUnitChange(idx)" class="inline-input">
-                  <option v-for="u in li.units" :key="u.id" :value="u.id">{{ u.name }} ({{ u.factor }}x)</option>
-                </select>
-                <span class="conversion-info" v-if="li.units_per_case > 1">
-                  → {{ (parseInt(li.quantity) || 0) * (parseInt(li.units_per_case) || 1) }} un.
-                  × {{ fmtBrl((parseFloat(li.unit_cost) || 0) / (parseInt(li.units_per_case) || 1)) }}/un.
-                </span>
-              </div>
-              <div class="launch-conversion" v-else-if="li.unit_com && li.unit_com !== 'UN' && li.unit_com !== 'PC' && li.unit_com !== 'PÇ'">
-                <label>Qtd. unidades por {{ li.unit_com.toLowerCase() }}:</label>
-                <input v-model.number="li.units_per_case" type="number" min="1" class="inline-input" />
-                <span class="conversion-info" v-if="li.units_per_case > 1">
-                  → {{ (parseInt(li.quantity) || 0) * (parseInt(li.units_per_case) || 1) }} un.
-                  × {{ fmtBrl((parseFloat(li.unit_cost) || 0) / (parseInt(li.units_per_case) || 1)) }}/un.
-                </span>
-              </div>
-
-              <div v-if="li.matched" class="launch-item-matched">
-                <span class="match-badge is-matched">
+            <div
+              v-for="(li, idx) in launchItems"
+              :key="idx"
+              class="li-card"
+              :class="{ 'is-unmatched': !li.matched }"
+            >
+              <div class="li-head">
+                <span class="li-num">#{{ idx + 1 }}</span>
+                <strong class="li-name">{{ li.product_name || 'Sem nome' }}</strong>
+                <span v-if="li.matched" class="match-badge is-matched">
                   <i class="fas fa-link"></i> {{ li.product_name_existing }}
                 </span>
-                <span class="match-info">Estoque: {{ li.existing_stock }} | Custo atual: {{ fmtBrl(li.existing_cost) }}</span>
-                <span class="match-info">
-                  Entrada: <strong>{{ li.units_per_case > 1 ? (parseInt(li.quantity) * parseInt(li.units_per_case)) : li.quantity }} un.</strong>
-                  × {{ fmtBrl(calcWeightedCost(li)) }}/un.
-                </span>
-                <span class="match-info" v-if="li.existing_stock > 0">
-                  Custo médio após entrada: <strong>{{ fmtBrl(calcWeightedCost(li)) }}</strong>
-                </span>
-                <div class="launch-price-row">
-                  <label>Preço de venda</label>
+                <span v-else class="match-badge is-unmatched-badge">Não vinculado</span>
+                <button
+                  v-if="li.matched"
+                  type="button"
+                  class="btn btn-ghost btn-xs li-unlink"
+                  @click="unmatchProduct(idx)"
+                >
+                  <i class="fas fa-unlink"></i> Desvincular
+                </button>
+              </div>
+
+              <div class="li-meta">
+                <span v-if="li.barcode">EAN {{ li.barcode }}</span>
+                <span v-if="li.unit_com">NF-e: {{ li.quantity }} {{ li.unit_com }}</span>
+                <span v-if="li.matched">Estoque atual: {{ li.existing_stock }} un.</span>
+                <span v-if="li.matched">Custo atual: {{ fmtBrl(li.existing_cost) }}</span>
+              </div>
+
+              <div v-if="li.matched" class="li-grid">
+                <div class="li-cell">
+                  <label>Qtd (NF)</label>
+                  <span class="li-readonly">{{ li.quantity }}</span>
+                </div>
+                <div class="li-cell">
+                  <label>Apresentação</label>
+                  <select
+                    v-if="li.units && li.units.length > 1 && !li.unit_com"
+                    v-model.number="li.selected_unit_id"
+                    class="li-input"
+                    @change="onLaunchUnitChange(idx)"
+                  >
+                    <option v-for="u in li.units" :key="u.id" :value="u.id">
+                      {{ u.name }} ({{ u.factor }}x)
+                    </option>
+                  </select>
                   <input
-                    v-model="li.product_price"
+                    v-else-if="li.unit_com && !['UN', 'PC', 'PÇ'].includes(li.unit_com)"
+                    v-model.number="li.units_per_case"
                     type="number"
-                    min="0"
-                    step="0.01"
-                    class="inline-input-wide"
+                    min="1"
+                    class="li-input"
                   />
+                  <span v-else class="li-readonly">—</span>
+                </div>
+                <div class="li-cell">
+                  <label>Entrada</label>
+                  <span class="li-readonly"><strong>{{ entradaUn(li) }}</strong> un.</span>
+                </div>
+                <div class="li-cell is-cost">
+                  <label>Custo unit.</label>
+                  <input v-model="li.unit_cost" type="number" step="0.01" min="0" class="li-input" />
+                </div>
+                <div class="li-cell">
+                  <label>Custo médio</label>
+                  <span class="li-readonly">{{ fmtBrl(calcWeightedCost(li)) }}</span>
+                </div>
+                <div class="li-cell is-price">
+                  <label>Preço de venda</label>
+                  <input v-model="li.product_price" type="number" step="0.01" min="0" class="li-input" />
+                </div>
+                <div class="li-cell">
+                  <label>Lucro</label>
                   <span
                     v-if="itemMargin(li) !== null"
                     class="margin-badge"
                     :class="{ 'is-negative': itemMargin(li) < 0 }"
                   >
-                    <i class="fas fa-percentage"></i> Lucro {{ itemMargin(li).toFixed(1) }}%
+                    {{ itemMargin(li).toFixed(0) }}%
                   </span>
-                </div>
-                <div class="launch-item-actions">
-                  <button type="button" class="btn btn-ghost btn-xs" @click="unmatchProduct(idx)">
-                    <i class="fas fa-unlink"></i> Desvincular
-                  </button>
+                  <span v-else class="li-readonly">—</span>
                 </div>
               </div>
 
-              <div v-else class="launch-item-unmatched">
-                <div class="launch-search-row">
-                  <button type="button" class="btn btn-ghost btn-xs"
-                    @click="launchSearchIdx === idx ? (launchSearchIdx = null) : openLaunchSearch(idx)">
-                    <i class="fas fa-search"></i> {{ launchSearchIdx === idx ? 'Fechar busca' : 'Buscar produto' }}
-                  </button>
-                  <button type="button" class="btn btn-ghost btn-xs" @click="openQuickProduct(idx)">
-                    <i class="fas fa-plus"></i> Cadastro rápido
-                  </button>
-                </div>
-
-                <div v-if="launchSearchIdx === idx" class="launch-search-panel">
-                  <div class="launch-search-input">
-                    <input v-model="launchSearchQuery" type="text" placeholder="Buscar por nome ou código…"
-                      @keyup.enter="searchLaunchProduct" autofocus />
-                    <button type="button" class="btn btn-primary btn-xs" @click="searchLaunchProduct" :disabled="launchSearching">
-                      <i class="fas fa-search"></i>
-                    </button>
-                  </div>
-                  <div v-if="launchSearchResults.length" class="launch-search-results">
-                    <div v-for="p in launchSearchResults" :key="p.id" class="launch-search-result"
-                      @click="matchProduct(idx, p)">
-                      <span>{{ p.name }}</span>
-                      <span class="sr-info">Estoque: {{ p.stock_quantity }} | {{ fmtBrl(p.cost) }}</span>
-                    </div>
-                  </div>
-                  <div v-else-if="launchSearchQuery && !launchSearching" class="muted-sm">
-                    Nenhum produto encontrado.
-                  </div>
-                </div>
+              <div v-else class="li-search">
+                <ProductSearch
+                  :products="allProducts"
+                  placeholder="Buscar produto por nome ou código…"
+                  @select="matchProduct(idx, $event)"
+                />
+                <button type="button" class="btn btn-ghost btn-xs" @click="openQuickProduct(idx)">
+                  <i class="fas fa-plus"></i> Cadastro rápido
+                </button>
               </div>
             </div>
           </div>
@@ -1508,32 +1416,44 @@ onBeforeUnmount(() => {
 .launch-info { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; margin-bottom: 8px; padding: 8px 12px; background: var(--bg-secondary, #f9fafb); border-radius: 6px; }
 .launch-hint { font-size: 13px; color: var(--text-secondary, #666); margin-bottom: 12px; }
 .launch-items { display: flex; flex-direction: column; gap: 8px; }
-.launch-item { border: 1px solid var(--border, #e5e7eb); border-radius: 8px; padding: 10px 12px; }
-.launch-item.is-unmatched { border-color: #f59e0b; background: #fffbeb; }
-.launch-item-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.launch-item-num { font-size: 12px; color: var(--text-muted, #999); font-weight: 600; }
-.launch-item-barcode { font-size: 12px; font-family: monospace; color: var(--text-muted, #999); }
-.launch-item-qty { margin-left: auto; font-size: 13px; color: var(--text-secondary, #666); }
-.launch-item-unit { font-size: 12px; color: var(--text-secondary, #666); }
-.launch-conversion { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; }
-.launch-conversion label { color: var(--text-secondary, #666); white-space: nowrap; }
-.inline-input { width: 60px; padding: 4px 8px; border: 1px solid var(--border, #d1d5db); border-radius: 4px; font-size: 13px; text-align: center; }
-.conversion-info { font-size: 12px; color: var(--primary, #2563eb); font-weight: 600; }
-.launch-item-matched { margin-top: 6px; }
+.li-card { border: 1px solid var(--border, #e5e7eb); border-radius: 8px; padding: 12px 14px; }
+.li-card.is-unmatched { border-color: #f59e0b; background: #fffbeb; }
+.li-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.li-num { font-size: 12px; color: var(--text-muted, #999); font-weight: 700; }
+.li-name { font-size: 14px; font-weight: 700; }
+.li-unlink { margin-left: auto; }
+.li-meta { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary, #666); margin-top: 4px; }
 .match-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
 .match-badge.is-matched { background: #d1fae5; color: #065f46; }
-.match-info { display: block; font-size: 12px; color: var(--text-secondary, #666); margin-top: 4px; }
-.launch-item-actions { display: flex; gap: 6px; margin-top: 6px; }
-.launch-item-unmatched { margin-top: 6px; }
-.launch-search-row { display: flex; gap: 6px; }
-.launch-search-panel { margin-top: 8px; }
-.launch-search-input { display: flex; gap: 6px; }
-.launch-search-input input { flex: 1; padding: 6px 10px; border: 1px solid var(--border, #d1d5db); border-radius: 6px; font-size: 13px; }
-.launch-search-results { max-height: 150px; overflow-y: auto; border: 1px solid var(--border, #e5e7eb); border-radius: 6px; margin-top: 6px; }
-.launch-search-result { display: flex; justify-content: space-between; padding: 8px 10px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border, #f3f4f6); }
-.launch-search-result:last-child { border-bottom: none; }
-.launch-search-result:hover { background: var(--bg-secondary, #f3f4f6); }
-.sr-info { font-size: 12px; color: var(--text-muted, #999); }
+.match-badge.is-unmatched-badge { background: #fef3c7; color: #92400e; }
+
+.li-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+  gap: 10px 14px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border, #e5e7eb);
+}
+.li-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.li-cell label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted, #999); }
+.li-readonly { font-size: 14px; color: var(--text, #111827); font-variant-numeric: tabular-nums; }
+.li-cell.is-price .li-input { border-color: var(--primary, #2563eb); }
+.li-input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.li-input:focus { outline: none; border-color: var(--primary, #2563eb); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15); }
+.li-search { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.li-search .product-search { flex: 1; }
+.margin-badge { display: inline-flex; align-self: flex-start; padding: 3px 10px; border-radius: 6px; font-size: 13px; font-weight: 800; background: #d1fae5; color: #065f46; }
+.margin-badge.is-negative { background: #fee2e2; color: #991b1b; }
+.item-list { display: flex; flex-direction: column; gap: 8px; }
 .launch-totals { display: flex; justify-content: flex-end; gap: 24px; font-size: 14px; margin: 12px 0 8px; padding-top: 8px; border-top: 1px solid var(--border, #e5e7eb); }
 .launch-footer-options { display: flex; gap: 20px; align-items: flex-start; margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--border, #e5e7eb); }
 .launch-due { flex: 1; margin-bottom: 0; }
@@ -1542,40 +1462,6 @@ onBeforeUnmount(() => {
 .launch-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--primary, #2563eb); cursor: pointer; }
 .launch-check.is-disabled { opacity: 0.5; cursor: not-allowed; }
 .launch-check.is-disabled input { cursor: not-allowed; }
-
-/* Busca de produto na Nova compra */
-.item-search .search-box { margin-bottom: 0; }
-.item-search-results {
-  margin-top: 6px;
-  max-height: 200px;
-  overflow-y: auto;
-  border: 1px solid var(--border, #e5e7eb);
-  border-radius: 8px;
-}
-.item-search-result {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 9px 12px;
-  text-align: left;
-  font-size: 13px;
-  color: var(--text, #111827);
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--border, #f3f4f6);
-  cursor: pointer;
-}
-.item-search-result:last-child { border-bottom: none; }
-.item-search-result:hover { background: var(--surface-hover, #f3f4f6); }
-.item-list { display: flex; flex-direction: column; gap: 8px; }
-
-/* Preço de venda + indicador de lucro no lançamento */
-.launch-price-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
-.launch-price-row label { font-size: 13px; font-weight: 600; color: var(--text-secondary, #666); }
-.inline-input-wide { width: 110px; padding: 6px 10px; border: 1px solid var(--border, #d1d5db); border-radius: 6px; font-size: 13px; }
-.margin-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; background: #d1fae5; color: #065f46; }
-.margin-badge.is-negative { background: #fee2e2; color: #991b1b; }
 
 /* Footer como filho direto do .modal-content (ex.: Lançar Compra): o
    .modal-footer global não tem padding horizontal/inferior; aqui garante. */

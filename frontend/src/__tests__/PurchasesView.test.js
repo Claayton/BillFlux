@@ -182,13 +182,11 @@ describe('PurchasesView', () => {
     )
   })
 
-  it('nova compra: busca produto e adiciona item vinculado', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const product = { id: 5, name: 'CERV', stock_quantity: 3, cost: 2.5, price: 5, barcode: '789' }
+  it('nova compra: busca produto e adiciona item vinculado (teclado)', async () => {
+    const product = { id: 5, name: 'CERV', stock_quantity: 3, cost: 2.5, price: 5, barcode: '789', active: true }
     apiMock.get.mockImplementation((url) => {
       const u = String(url)
-      if (u.startsWith('/products/search')) return Promise.resolve({ products: [product] })
-      if (u === '/products') return Promise.resolve({ products: [] })
+      if (u === '/products') return Promise.resolve({ products: [product] })
       if (u === '/suppliers') return Promise.resolve({ suppliers: [] })
       return Promise.resolve({ purchases })
     })
@@ -200,14 +198,10 @@ describe('PurchasesView', () => {
     await wrapper.find('.page-header .btn-brand').trigger('click')
     await flushPromises()
 
-    const input = wrapper.find('.item-search input')
-    await input.setValue('cerveja')
-    vi.advanceTimersByTime(300)
-    await flushPromises()
-
-    const results = wrapper.findAll('.item-search-result')
-    expect(results.length).toBe(1)
-    await results[0].trigger('click')
+    const input = wrapper.find('.ps-input')
+    await input.setValue('cer')
+    await input.trigger('keydown', { key: 'ArrowDown' })
+    await input.trigger('keydown', { key: 'Enter' })
     await flushPromises()
 
     const rows = wrapper.findAll('.item-row')
@@ -243,7 +237,7 @@ describe('PurchasesView', () => {
       const u = String(url)
       if (u === '/purchases/1') return Promise.resolve({ purchase: purchases[0], items })
       if (u === '/products/5') return Promise.resolve({ product })
-      if (u === '/products') return Promise.resolve({ products: [] })
+      if (u === '/products') return Promise.resolve({ products: [product] })
       if (u === '/suppliers') return Promise.resolve({ suppliers: [] })
       return Promise.resolve({ purchases })
     })
@@ -261,8 +255,14 @@ describe('PurchasesView', () => {
     expect(checks[0].element.checked).toBe(true) // Conta já paga
     expect(checks[1].element.checked).toBe(false) // Criar conta a pagar
 
-    expect(wrapper.find('.launch-price-row input').element.value).toBe('5')
-    expect(wrapper.find('.margin-badge').text()).toContain('Lucro')
+    const priceInput = wrapper.find('.li-cell.is-price .li-input')
+    expect(priceInput.element.value).toBe('5')
+    expect(wrapper.find('.margin-badge').text()).toContain('%')
+
+    // editar o custo unitário recalcula a margem (5 - 1)/5 = 80%
+    await wrapper.find('.li-cell.is-cost .li-input').setValue('1')
+    await flushPromises()
+    expect(wrapper.find('.margin-badge').text()).toContain('80')
 
     await wrapper.find('.btn-launch-confirm').trigger('click')
     await flushPromises()
