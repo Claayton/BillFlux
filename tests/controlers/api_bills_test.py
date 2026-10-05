@@ -172,3 +172,55 @@ def test_bills_delete(logged_client):
 
     missing = logged_client.delete("/api/bills/999999", headers={"X-CSRFToken": token})
     assert missing.status_code == 404
+
+
+def test_bills_delete_unlinks_purchase(logged_client):
+    """Excluir conta vinculada a uma compra desvincula a compra e remove a conta."""
+
+    from decimal import Decimal
+
+    from billflux.infra.config.database import get_session
+    from billflux.infra.entities.purchase_order import PurchaseOrder
+    from billflux.infra.repository.purchase_repository import PurchaseRepository
+
+    token = _csrf(logged_client)
+    created = logged_client.post(
+        "/api/bills",
+        json={"value": "100,00", "due_date": "2026-12-01", "reference": "Compra #1"},
+        headers={"X-CSRFToken": token},
+    ).get_json()
+    bill_id = next(b["id"] for b in created["bills"] if b["reference"] == "Compra #1")
+
+    purchase = PurchaseRepository().insert_purchase(
+        bill_id=bill_id,
+        total=Decimal("100"),
+        net_total=Decimal("100"),
+        status="confirmada",
+    )
+
+    response = logged_client.delete(
+        f"/api/bills/{bill_id}", headers={"X-CSRFToken": token}
+    )
+
+    assert response.status_code == 200
+    assert not any(b["id"] == bill_id for b in response.get_json()["bills"])
+
+    session = get_session()
+    try:
+        stored = session.get(PurchaseOrder, purchase.id)
+        assert stored is not None
+        assert stored.bill_id is None
+        assert stored.status == "confirmada"
+    finally:
+        session.close()
+
+
+def test_integrity_error_handler_returns_json(app):
+    """Conflito de vínculo (FK) vira JSON amigável 409, não 500 cru."""
+
+    from billflux import _handle_integrity_error
+
+    with app.test_request_context("/api/bills"):
+        response = _handle_integrity_error(Exception("boom"))
+        assert response.status_code == 409
+        assert response.get_json()["error"]
