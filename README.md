@@ -154,6 +154,28 @@ docker compose -f docker-compose-prod.yml run --rm \
   api python scripts/migrate_sqlite_to_postgres.py
 ```
 
+### Migrações do banco (Alembic)
+
+O schema é versionado com [Alembic](https://alembic.sqlalchemy.org/). A URL do
+banco vem de `BILLFLUX_DATABASE__URL` (a mesma da aplicação).
+
+```bash
+# Aplica as migrações pendentes (dev e produção)
+alembic upgrade head
+
+# Cria uma nova migração a partir das mudanças nos models (SQLModel)
+alembic revision --autogenerate -m "descrição"
+
+# Confere se models e migrações estão alinhados (deve dizer "No new ...")
+alembic check
+```
+
+No deploy, o container da API roda `alembic upgrade head` automaticamente
+(`docker-entrypoint.sh`) antes de subir o gunicorn.
+
+> Bancos que já existiam antes do Alembic (ex.: produção) precisam ser marcados
+> uma única vez, sem reexecutar o baseline: `alembic stamp head`.
+
 ### Variáveis de ambiente
 
 Veja `.env.example` — copie para `.env` e preencha os valores reais.

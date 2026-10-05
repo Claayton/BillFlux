@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
 const { apiMock, routerPush } = vi.hoisted(() => ({
@@ -103,6 +103,11 @@ describe('SalesView', () => {
     apiMock.del.mockReset()
     routerPush.mockReset()
     apiMock.get.mockResolvedValue(payload)
+  })
+
+  afterEach(() => {
+    // garante que um teste com timers falsos não contamine os próximos
+    vi.useRealTimers()
   })
 
   it('lista vendas com header, id, valor, itens e ações', async () => {
@@ -290,7 +295,7 @@ describe('SalesView', () => {
     expect(wrapper.findAll('.sale-item-expanded').length).toBe(4)
   })
 
-  it('"Caixa atual" filtra os KPIs do topo e é exclusivo com os períodos', async () => {
+  it('"Caixa atual" é o padrão e filtra os KPIs do topo (exclusivo com períodos)', async () => {
     const wrapper = mountView()
     await flushPromises()
 
@@ -301,30 +306,39 @@ describe('SalesView', () => {
     expect(toggle.exists()).toBe(true)
     expect(toggle.element.disabled).toBe(false)
 
-    let cards = wrapper.findAll('.stat-card .stat-value')
-    expect(cards[0].text()).toContain('150,00') // total do período hoje
-    expect(cards[1].text()).toBe('2')
+    const toolbarButtons = () => wrapper.findAll('.stats-toolbar .filter-segmented button')
+    const activeButtons = () =>
+      toolbarButtons().filter((b) => b.classes().includes('is-active'))
 
-    await toggle.trigger('click')
-    await flushPromises()
-
-    // exclusivo: nenhum período fica ativo quando caixa está ligado
-    const segmented = wrapper.findAll('.stats-toolbar .filter-segmented button')
-    const activeButtons = segmented.filter((b) => b.classes().includes('is-active'))
-    expect(activeButtons.length).toBe(1)
-    expect(activeButtons[0].text()).toContain('Caixa atual')
+    // padrão: já abre com "Caixa atual" ativo
+    expect(activeButtons().length).toBe(1)
+    expect(activeButtons()[0].text()).toContain('Caixa atual')
 
     // in_caixa e não cancelado: só o pdv #10 (50,00)
-    cards = wrapper.findAll('.stat-card .stat-value')
+    let cards = wrapper.findAll('.stat-card .stat-value')
     expect(cards[0].text()).toContain('50,00') // total vendido no caixa
     expect(cards[1].text()).toBe('1') // nº de vendas
     expect(cards[3].text()).toContain('50,00') // média por dia
+    expect(wrapper.findAll('.stat-card .stat-hint')[2].text()).toContain('desde 2026-08-21')
 
-    const daysHint = wrapper.findAll('.stat-card .stat-hint')[2]
-    expect(daysHint.text()).toContain('desde 2026-08-21')
+    // desligar o caixa volta pro período Hoje
+    await toggle.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.caixa-filter').classes()).not.toContain('is-active')
+    expect(activeButtons()[0].text()).toContain('Hoje')
+    cards = wrapper.findAll('.stat-card .stat-value')
+    expect(cards[0].text()).toContain('150,00') // total do período hoje
+    expect(cards[1].text()).toBe('2')
 
-    // clicar em um período desliga o caixa
-    const hoje = segmented.find((b) => b.text().includes('Hoje'))
+    // ligar de novo
+    await toggle.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.caixa-filter').classes()).toContain('is-active')
+    cards = wrapper.findAll('.stat-card .stat-value')
+    expect(cards[0].text()).toContain('50,00')
+
+    // escolher um período desliga o caixa e mantém a escolha
+    const hoje = toolbarButtons().find((b) => b.text().includes('Hoje'))
     await hoje.trigger('click')
     await flushPromises()
     expect(wrapper.find('.caixa-filter').classes()).not.toContain('is-active')
@@ -332,7 +346,7 @@ describe('SalesView', () => {
     expect(cards[0].text()).toContain('150,00')
   })
 
-  it('sem caixa aberto o botão fica desabilitado', async () => {
+  it('sem caixa aberto começa em Hoje e o botão fica desabilitado', async () => {
     apiMock.get.mockResolvedValue({ ...payload, caixa: { open: false, opened_at: null } })
     const wrapper = mountView()
     await flushPromises()
@@ -340,5 +354,40 @@ describe('SalesView', () => {
     const toggle = wrapper.find('.caixa-filter')
     expect(toggle.element.disabled).toBe(true)
     expect(toggle.attributes('title')).toContain('Nenhum caixa aberto')
+
+    const active = wrapper
+      .findAll('.stats-toolbar .filter-segmented button')
+      .filter((b) => b.classes().includes('is-active'))
+    expect(active.length).toBe(1)
+    expect(active[0].text()).toContain('Hoje')
+  })
+
+  it('olho fecha sozinho 10s depois de revelar os valores', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const wrapper = mountView()
+    await flushPromises()
+
+    const firstValue = () => wrapper.findAll('.stat-card .stat-value')[0].text()
+    expect(firstValue()).toBe('R$ ••••')
+
+    await wrapper.find('.eye-toggle').trigger('click')
+    await flushPromises()
+    expect(firstValue()).not.toBe('R$ ••••')
+
+    vi.advanceTimersByTime(9000)
+    await flushPromises()
+    expect(firstValue()).not.toBe('R$ ••••')
+
+    vi.advanceTimersByTime(1500)
+    await flushPromises()
+    expect(firstValue()).toBe('R$ ••••')
+
+    // revelar de novo reinicia a contagem
+    await wrapper.find('.eye-toggle').trigger('click')
+    await flushPromises()
+    expect(firstValue()).not.toBe('R$ ••••')
+    vi.advanceTimersByTime(10000)
+    await flushPromises()
+    expect(firstValue()).toBe('R$ ••••')
   })
 })

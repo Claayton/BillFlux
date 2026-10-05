@@ -43,6 +43,7 @@ def _serialize_item(item):
         "total": str(item.total),
         "barcode": item.barcode or "",
         "unit_com": item.unit_com or "",
+        "factor": item.factor or 1,
     }
 
 
@@ -92,6 +93,8 @@ def purchases_create():
                 "total": line_total,
                 "barcode": (item.get("barcode") or "").strip() or None,
                 "product_name": (item.get("product_name") or "").strip() or None,
+                "unit_com": (item.get("unit_com") or "").strip() or None,
+                "factor": int(item.get("factor") or 1),
             }
         )
         total += line_total
@@ -170,6 +173,8 @@ def purchases_update(purchase_id):
                     "total": line_total,
                     "barcode": (item.get("barcode") or "").strip() or None,
                     "product_name": (item.get("product_name") or "").strip() or None,
+                    "unit_com": (item.get("unit_com") or "").strip() or None,
+                    "factor": int(item.get("factor") or 1),
                 }
             )
             total += line_total
@@ -262,12 +267,17 @@ def purchases_confirm(purchase_id):
             due_date = datetime.fromisoformat(data["due_date"])
         except (ValueError, TypeError):
             pass
-    result = repository.confirm_purchase(
-        purchase_id,
-        due_date=due_date,
-        create_bill=data.get("create_bill", True),
-        account_id=data.get("account_id"),
-    )
+    try:
+        result = repository.confirm_purchase(
+            purchase_id,
+            due_date=due_date,
+            create_bill=data.get("create_bill", True),
+            account_id=data.get("account_id"),
+            items=data.get("items"),
+            paid=bool(data.get("paid")),
+        )
+    except ValueError as error:
+        return api_error(str(error), 400)
     if not result:
         return api_error("Falha ao confirmar compra.", 400)
     return api_response({"purchase": _serialize(result)})

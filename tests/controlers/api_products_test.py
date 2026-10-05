@@ -271,3 +271,117 @@ def test_products_edit_syncs_default_unit_price(logged_client):
     by_name = {u["name"]: u for u in units}
     assert by_name["Unidade"]["price"] == 12.0
     assert by_name["Caixa"]["price"] == 100.0
+
+
+def test_delete_product_removes_presentation(logged_client):
+    """DELETE remove o produto e a apresentação própria (product_unit)."""
+
+    from decimal import Decimal
+
+    from billflux.infra.repository.product_repository import ProductRepository
+    from billflux.infra.repository.product_unit_repository import (
+        ProductUnitRepository,
+    )
+
+    token = _csrf(logged_client)
+    product = ProductRepository().insert_product(
+        name="Com apresentação", price=Decimal("5.00"), stock_quantity=10
+    )
+    ProductUnitRepository().upsert(
+        product_id=product.id,
+        name="Unidade",
+        factor=1,
+        price=Decimal("5.00"),
+        is_default=True,
+    )
+
+    response = logged_client.delete(
+        f"/api/products/{product.id}", headers={"X-CSRFToken": token}
+    )
+
+    assert response.status_code == 200
+    assert ProductRepository().get_product(product.id) is None
+    assert ProductUnitRepository().get_units_for_product(product.id) == []
+
+
+def test_delete_product_blocked_by_sale(logged_client):
+    """Produto vendido não é excluído: 400 com motivo (não mais 500)."""
+
+    from decimal import Decimal
+
+    from billflux.infra.repository.order_repository import OrderRepository
+    from billflux.infra.repository.payment_method_repository import (
+        PaymentMethodRepository,
+    )
+    from billflux.infra.repository.product_repository import ProductRepository
+
+    token = _csrf(logged_client)
+    product = ProductRepository().insert_product(
+        name="Vendido", price=Decimal("5.00"), stock_quantity=10
+    )
+    method = PaymentMethodRepository().get_active_methods()[0]
+    OrderRepository().create_order([(product.id, 1)], method.id)
+
+    response = logged_client.delete(
+        f"/api/products/{product.id}", headers={"X-CSRFToken": token}
+    )
+
+    assert response.status_code == 400
+    assert "vendido" in response.get_json()["error"]
+    assert ProductRepository().get_product(product.id) is not None
+
+
+def test_delete_product_blocked_by_movement(logged_client):
+    """Produto com movimentação de estoque não é excluído (400)."""
+
+    from decimal import Decimal
+
+    from billflux.infra.repository.product_repository import ProductRepository
+
+    token = _csrf(logged_client)
+    product = ProductRepository().insert_product(
+        name="Com movimento", price=Decimal("5.00"), stock_quantity=10
+    )
+    ProductRepository().adjust_stock(product.id, 1, obs="ajuste")
+
+    response = logged_client.delete(
+        f"/api/products/{product.id}", headers={"X-CSRFToken": token}
+    )
+
+    assert response.status_code == 400
+    assert "movimenta" in response.get_json()["error"]
+
+
+def test_toggle_product_active(logged_client):
+    """POST /toggle alterna o active do produto."""
+
+    from decimal import Decimal
+
+    from billflux.infra.repository.product_repository import ProductRepository
+
+    token = _csrf(logged_client)
+    product = ProductRepository().insert_product(
+        name="Liga e desliga", price=Decimal("5.00"), stock_quantity=1
+    )
+
+    first = logged_client.post(
+        f"/api/products/{product.id}/toggle", headers={"X-CSRFToken": token}
+    )
+    assert first.status_code == 200
+    assert ProductRepository().get_product(product.id).active is False
+
+    second = logged_client.post(
+        f"/api/products/{product.id}/toggle", headers={"X-CSRFToken": token}
+    )
+    assert second.status_code == 200
+    assert ProductRepository().get_product(product.id).active is True
+
+
+def test_delete_missing_product(logged_client):
+    """DELETE de produto inexistente devolve 404."""
+
+    token = _csrf(logged_client)
+    response = logged_client.delete(
+        "/api/products/999999", headers={"X-CSRFToken": token}
+    )
+    assert response.status_code == 404

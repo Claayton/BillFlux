@@ -29,3 +29,5 @@ class PurchaseItem(SQLModel, table=True):
     barcode: Optional[str] = Field(nullable=True)
     product_name: Optional[str] = Field(nullable=True)
     unit_com: Optional[str] = Field(nullable=True)
+    # Quantas unidades-base a apresentação comprada representa (ex.: caixa c/ 6).
+    factor: int = Field(default=1, nullable=False)
