@@ -730,7 +730,7 @@ function selectMethod(index) {
       })
       amounts[method.id] = defaultPayAmount.value
       payAmounts.value = amounts
-    } else {
+    } else if (!payAmounts.value[method.id]) {
       const others = entered
         .filter((p) => p.method_id !== method.id)
         .reduce((sum, p) => sum + p.amount, 0)
@@ -739,38 +739,23 @@ function selectMethod(index) {
         remaining > 0 ? maskMoney(String(Math.round(remaining * 100))) : ''
     }
   }
-  focusPayInput(index)
+  paySelectedIndex.value = index
+  nextTick(() => focusPayInput(index))
 }
 
 function onPayInput(event, methodId) {
   payAmounts.value[methodId] = maskMoney(event.target.value)
 }
 
-// Seta para baixo/cima navega entre as formas; se o campo ainda guarda o
-// total padrão, o valor "pula" para a próxima forma.
-function movePayAmount(fromIndex, toIndex) {
-  const from = methods.value[fromIndex]
-  const to = methods.value[toIndex]
-  if (!from || !to) return
-  if (payAmounts.value[from.id] === defaultPayAmount.value) {
-    payAmounts.value[from.id] = ''
-    payAmounts.value[to.id] = defaultPayAmount.value
-  }
-}
-
+// Setas navegam entre as formas; a seleção mostra o campo já preenchido com o
+// restante (ou move o total pré-preenchido), igual ao clique.
 function onPayKeydown(event, index) {
   if (event.key === 'ArrowDown') {
     event.preventDefault()
-    if (index + 1 < methods.value.length) {
-      movePayAmount(index, index + 1)
-      focusPayInput(index + 1)
-    }
+    if (index + 1 < methods.value.length) selectMethod(index + 1)
   } else if (event.key === 'ArrowUp') {
     event.preventDefault()
-    if (index > 0) {
-      movePayAmount(index, index - 1)
-      focusPayInput(index - 1)
-    }
+    if (index > 0) selectMethod(index - 1)
   } else if (event.key === 'Enter') {
     event.preventDefault()
     confirmCheckout()
@@ -1253,7 +1238,7 @@ onBeforeUnmount(() => {
                 <i :class="paymentIcon(m.name)"></i>
               </span>
               <span class="pdv-payname">{{ m.name }}</span>
-              <div class="pdv-payfield" @click.stop>
+              <div v-if="paySelectedIndex === i" class="pdv-payfield" @click.stop>
                 <span>R$</span>
                 <input
                   :ref="(el) => (payInputs[i] = el)"
@@ -1268,6 +1253,8 @@ onBeforeUnmount(() => {
                   @keydown="onPayKeydown($event, i)"
                 />
               </div>
+              <span v-else-if="payAmounts[m.id]" class="pdv-payamount">{{ payAmounts[m.id] }}</span>
+              <span v-else class="pdv-payempty">Selecionar</span>
             </div>
             <div class="pdv-paystatus">
               <template v-if="paymentsEntered.length">
@@ -1492,6 +1479,17 @@ onBeforeUnmount(() => {
   flex: 1;
   font-weight: 600;
   font-size: 14px;
+}
+.pdv-payamount {
+  font-weight: 700;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text, #111827);
+}
+.pdv-payempty {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted, #9ca3af);
 }
 .pdv-payfield {
   display: flex;
