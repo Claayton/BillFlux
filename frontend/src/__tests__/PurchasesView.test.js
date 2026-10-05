@@ -255,11 +255,11 @@ describe('PurchasesView', () => {
     expect(checks[0].element.checked).toBe(true) // Conta já paga
     expect(checks[1].element.checked).toBe(false) // Criar conta a pagar
 
-    const priceInput = wrapper.find('.li-cell.is-price .li-input')
+    const priceInput = wrapper.find('.li-price-input')
     expect(priceInput.element.value).toBe('5')
     expect(wrapper.find('.margin-badge').text()).toContain('%')
 
-    // editar o custo unitário recalcula a margem (5 - 1)/5 = 80%
+    // editar o valor da nota recalcula a margem (5 - 1)/5 = 80%
     await wrapper.find('.li-cell.is-cost .li-input').setValue('1')
     await flushPromises()
     expect(wrapper.find('.margin-badge').text()).toContain('80')
@@ -273,6 +273,74 @@ describe('PurchasesView', () => {
         paid: true,
         create_bill: false,
         items: [expect.objectContaining({ id: 10, price: 5 })],
+      })
+    )
+  })
+
+  it('lançamento: preços por apresentação (unidade e caixa)', async () => {
+    const items = [
+      {
+        id: 10,
+        product_id: 5,
+        product_name: 'CERV',
+        barcode: '',
+        quantity: 1,
+        unit_cost: '30.00',
+        unit_com: 'CX',
+        factor: 12,
+      },
+    ]
+    const product = {
+      id: 5,
+      name: 'CERV',
+      stock_quantity: 0,
+      cost: 2,
+      price: 3,
+      units: [
+        { id: 50, name: 'Unidade', factor: 1, price: 3, is_default: true },
+        { id: 51, name: 'Caixa c/ 12', factor: 12, price: 30, is_default: false },
+      ],
+    }
+    apiMock.get.mockImplementation((url) => {
+      const u = String(url)
+      if (u === '/purchases/1') return Promise.resolve({ purchase: purchases[0], items })
+      if (u === '/products/5') return Promise.resolve({ product })
+      if (u === '/products') return Promise.resolve({ products: [product] })
+      if (u === '/suppliers') return Promise.resolve({ suppliers: [] })
+      return Promise.resolve({ purchases })
+    })
+    apiMock.post.mockResolvedValue({ purchase: purchases[0] })
+
+    const wrapper = mount(PurchasesView)
+    await flushPromises()
+
+    await wrapper.findAll('.row-menu > .icon-btn')[0].trigger('click')
+    await flushPromises()
+    menuButtons().find((b) => b.textContent.includes('Lançar no estoque')).click()
+    await flushPromises()
+
+    const rows = wrapper.findAll('.li-price-row')
+    expect(rows.length).toBe(2)
+    expect(rows[0].text()).toContain('Unidade')
+    expect(rows[1].text()).toContain('Caixa c/ 12')
+
+    await rows[1].find('input').setValue('36')
+    await flushPromises()
+
+    await wrapper.find('.btn-launch-confirm').trigger('click')
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith(
+      '/purchases/1/confirm',
+      expect.objectContaining({
+        items: [
+          expect.objectContaining({
+            id: 10,
+            unit_prices: expect.arrayContaining([
+              expect.objectContaining({ unit_id: 51, price: 36 }),
+            ]),
+          }),
+        ],
       })
     )
   })

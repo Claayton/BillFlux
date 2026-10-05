@@ -251,10 +251,10 @@ async function openLaunchModal(purchase) {
           li.existing_cost = res.product.cost
           li.product_price = res.product.price
           li.matched = true
-          li.units = res.product.units || []
+          li.units = (res.product.units || []).map(u => ({ ...u }))
           if (li.units.length) {
-            const def = li.units.find(u => u.is_default) || li.units[0]
-            li.selected_unit_id = def.id
+            const matched = li.barcode ? li.units.find(u => u.barcode === li.barcode) : null
+            const def = matched || li.units.find(u => u.is_default) || li.units[0]
             li.units_per_case = def.factor
           }
         }
@@ -267,10 +267,9 @@ async function openLaunchModal(purchase) {
           li.existing_stock = res.product.stock_quantity
           li.existing_cost = res.product.cost
           li.product_price = res.product.price
-          li.units = res.product.units || []
-          if (li.units.length && !li.selected_unit_id) {
+          li.units = (res.product.units || []).map(u => ({ ...u }))
+          if (li.units.length) {
             const def = li.units.find(u => u.is_default) || li.units[0]
-            li.selected_unit_id = def.id
             li.units_per_case = def.factor
           }
         }
@@ -279,16 +278,17 @@ async function openLaunchModal(purchase) {
   }
 }
 
-function calcWeightedCost(item) {
-  const currentQty = parseInt(item.existing_stock) || 0
-  const currentCost = parseFloat(item.existing_cost) || 0
+function custoUnitario(item) {
   const factor = parseInt(item.units_per_case) || 1
-  const newQty = (parseInt(item.quantity) || 0) * factor
-  const newCost = factor > 0 ? (parseFloat(item.unit_cost) || 0) / factor : 0
-  if (currentQty > 0 && currentCost > 0 && newQty > 0 && newCost > 0) {
-    return ((currentQty * currentCost) + (newQty * newCost)) / (currentQty + newQty)
-  }
-  return newCost
+  if (factor <= 0) return 0
+  return (parseFloat(item.unit_cost) || 0) / factor
+}
+
+function marginFor(item, price, factor) {
+  const p = parseFloat(price) || 0
+  if (p <= 0) return null
+  const cost = custoUnitario(item) * (parseInt(factor) || 1)
+  return ((p - cost) / p) * 100
 }
 
 function matchProduct(idx, product) {
@@ -299,10 +299,9 @@ function matchProduct(idx, product) {
   li.existing_cost = product.cost
   li.product_price = product.price
   li.matched = true
-  li.units = product.units || []
-  if (li.units.length && !li.unit_com) {
+  li.units = (product.units || []).map(u => ({ ...u }))
+  if (li.units.length) {
     const def = li.units.find(u => u.is_default) || li.units[0]
-    li.selected_unit_id = def.id
     li.units_per_case = def.factor
   }
 }
@@ -315,16 +314,6 @@ function unmatchProduct(idx) {
   li.existing_cost = null
   li.matched = false
   li.units = []
-  li.selected_unit_id = null
-}
-
-function onLaunchUnitChange(idx) {
-  const li = launchItems.value[idx]
-  if (!li.selected_unit_id || !li.units.length) return
-  const unit = li.units.find(u => u.id === li.selected_unit_id)
-  if (unit) {
-    li.units_per_case = unit.factor
-  }
 }
 
 function openQuickProduct(idx) {
@@ -385,6 +374,8 @@ async function saveQuickProduct() {
       li.product_name_existing = newProduct.name
       li.existing_stock = 0
       li.existing_cost = parseFloat(qp.cost) || 0
+      li.units = []
+      li.product_price = qp.price ? parseFloat(qp.price) : null
       li.matched = true
     }
     ElMessage.success('Produto cadastrado!')
@@ -400,17 +391,30 @@ function entradaUn(item) {
   return (parseInt(item.quantity) || 0) * (parseInt(item.units_per_case) || 1)
 }
 
-function itemMargin(item) {
-  const price = parseFloat(item.product_price) || 0
-  const cost = calcWeightedCost(item)
-  if (price <= 0) return null
-  return ((price - cost) / price) * 100
-}
-
 function calcLaunchTotal() {
   return launchItems.value.reduce((acc, i) => {
     return acc + (parseInt(i.quantity) || 0) * (parseFloat(i.unit_cost) || 0)
   }, 0)
+}
+
+function launchItemPayload(li) {
+  const payload = {
+    id: li.id,
+    product_id: li.product_id,
+    quantity: parseInt(li.quantity) || 0,
+    unit_cost: li.unit_cost,
+    factor: parseInt(li.units_per_case) || 1,
+    unit_com: li.unit_com || null,
+  }
+  if (li.units && li.units.length > 1) {
+    payload.unit_prices = li.units.map(u => ({ unit_id: u.id, price: u.price }))
+  } else {
+    payload.price = li.product_price
+    if (li.units && li.units.length === 1) {
+      payload.unit_prices = [{ unit_id: li.units[0].id, price: li.product_price }]
+    }
+  }
+  return payload
 }
 
 async function confirmLaunch() {
@@ -426,15 +430,7 @@ async function confirmLaunch() {
       due_date: launchDate.value || null,
       create_bill: launchCreateBill.value,
       paid: launchPaid.value,
-      items: launchItems.value.map(li => ({
-        id: li.id,
-        product_id: li.product_id,
-        quantity: parseInt(li.quantity) || 0,
-        unit_cost: li.unit_cost,
-        price: li.product_price,
-        factor: parseInt(li.units_per_case) || 1,
-        unit_com: li.unit_com || null,
-      })),
+      items: launchItems.value.map(launchItemPayload),
     })
     ElMessage.success('Compra lançada! Estoque atualizado com custo médio ponderado.')
     launchTarget.value = null
@@ -950,61 +946,56 @@ onBeforeUnmount(() => {
                 <span v-if="li.barcode">EAN {{ li.barcode }}</span>
                 <span v-if="li.unit_com">NF-e: {{ li.quantity }} {{ li.unit_com }}</span>
                 <span v-if="li.matched">Estoque atual: {{ li.existing_stock }} un.</span>
-                <span v-if="li.matched">Custo atual: {{ fmtBrl(li.existing_cost) }}</span>
               </div>
 
               <div v-if="li.matched" class="li-grid">
                 <div class="li-cell">
-                  <label>Qtd (NF)</label>
+                  <label>Qtd (nota)</label>
                   <span class="li-readonly">{{ li.quantity }}</span>
                 </div>
                 <div class="li-cell">
-                  <label>Apresentação</label>
-                  <select
-                    v-if="li.units && li.units.length > 1 && !li.unit_com"
-                    v-model.number="li.selected_unit_id"
-                    class="li-input"
-                    @change="onLaunchUnitChange(idx)"
-                  >
-                    <option v-for="u in li.units" :key="u.id" :value="u.id">
-                      {{ u.name }} ({{ u.factor }}x)
-                    </option>
-                  </select>
-                  <input
-                    v-else-if="li.unit_com && !['UN', 'PC', 'PÇ'].includes(li.unit_com)"
-                    v-model.number="li.units_per_case"
-                    type="number"
-                    min="1"
-                    class="li-input"
-                  />
-                  <span v-else class="li-readonly">—</span>
+                  <label>Un. por caixa</label>
+                  <input v-model.number="li.units_per_case" type="number" min="1" class="li-input" />
+                </div>
+                <div class="li-cell is-cost">
+                  <label>Valor (nota)</label>
+                  <input v-model="li.unit_cost" type="number" step="0.01" min="0" class="li-input" />
+                </div>
+                <div class="li-cell">
+                  <label>Custo por unidade</label>
+                  <span class="li-readonly">{{ fmtBrl(custoUnitario(li)) }}</span>
                 </div>
                 <div class="li-cell">
                   <label>Entrada</label>
                   <span class="li-readonly"><strong>{{ entradaUn(li) }}</strong> un.</span>
                 </div>
-                <div class="li-cell is-cost">
-                  <label>Custo unit.</label>
-                  <input v-model="li.unit_cost" type="number" step="0.01" min="0" class="li-input" />
-                </div>
-                <div class="li-cell">
-                  <label>Custo médio</label>
-                  <span class="li-readonly">{{ fmtBrl(calcWeightedCost(li)) }}</span>
-                </div>
-                <div class="li-cell is-price">
-                  <label>Preço de venda</label>
-                  <input v-model="li.product_price" type="number" step="0.01" min="0" class="li-input" />
-                </div>
-                <div class="li-cell">
-                  <label>Lucro</label>
+              </div>
+
+              <div v-if="li.matched" class="li-prices">
+                <span class="li-prices-title">Preços de venda</span>
+                <template v-if="li.units && li.units.length > 1">
+                  <div v-for="u in li.units" :key="u.id" class="li-price-row">
+                    <span class="li-price-name">{{ u.name }} <small>({{ u.factor }}x)</small></span>
+                    <input v-model="u.price" type="number" step="0.01" min="0" class="li-input li-price-input" />
+                    <span
+                      v-if="marginFor(li, u.price, u.factor) !== null"
+                      class="margin-badge"
+                      :class="{ 'is-negative': marginFor(li, u.price, u.factor) < 0 }"
+                    >
+                      Lucro {{ marginFor(li, u.price, u.factor).toFixed(0) }}%
+                    </span>
+                  </div>
+                </template>
+                <div v-else class="li-price-row">
+                  <span class="li-price-name">Preço de venda</span>
+                  <input v-model="li.product_price" type="number" step="0.01" min="0" class="li-input li-price-input" />
                   <span
-                    v-if="itemMargin(li) !== null"
+                    v-if="marginFor(li, li.product_price, 1) !== null"
                     class="margin-badge"
-                    :class="{ 'is-negative': itemMargin(li) < 0 }"
+                    :class="{ 'is-negative': marginFor(li, li.product_price, 1) < 0 }"
                   >
-                    {{ itemMargin(li).toFixed(0) }}%
+                    Lucro {{ marginFor(li, li.product_price, 1).toFixed(0) }}%
                   </span>
-                  <span v-else class="li-readonly">—</span>
                 </div>
               </div>
 
@@ -1438,7 +1429,6 @@ onBeforeUnmount(() => {
 .li-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .li-cell label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted, #999); }
 .li-readonly { font-size: 14px; color: var(--text, #111827); font-variant-numeric: tabular-nums; }
-.li-cell.is-price .li-input { border-color: var(--primary, #2563eb); }
 .li-input {
   width: 100%;
   padding: 7px 10px;
@@ -1449,6 +1439,12 @@ onBeforeUnmount(() => {
   font-variant-numeric: tabular-nums;
 }
 .li-input:focus { outline: none; border-color: var(--primary, #2563eb); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15); }
+.li-prices { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border, #e5e7eb); display: flex; flex-direction: column; gap: 8px; }
+.li-prices-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted, #999); }
+.li-price-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.li-price-name { flex: 1; min-width: 120px; font-size: 13px; font-weight: 600; color: var(--text, #111827); }
+.li-price-name small { color: var(--text-muted, #999); font-weight: 500; }
+.li-price-input { width: 140px; border-color: var(--primary, #2563eb); }
 .li-search { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .li-search .product-search { flex: 1; }
 .margin-badge { display: inline-flex; align-self: flex-start; padding: 3px 10px; border-radius: 6px; font-size: 13px; font-weight: 800; background: #d1fae5; color: #065f46; }
