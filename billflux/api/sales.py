@@ -93,12 +93,67 @@ def _order_detail(order):
     }
 
 
-def _combine_sales(sales, orders, payment_names, caixa_opened_at=None):
+def _parse_register_dt(value):
+    """Converte 'YYYY-MM-DD HH:MM:SS' (ou datetime) em datetime."""
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    except (TypeError, ValueError):
+        return None
+
+
+def _caixa_sessions():
+    """Sessões de caixa mais recentes (inclusive a aberta), ordenadas."""
+    registers = CashRegisterRepository().get_history(limit=60)
+    sessions = [
+        {
+            "id": cr.id,
+            "opened_at": cr.opened_at,
+            "closed_at": cr.closed_at,
+            "status": cr.status,
+        }
+        for cr in registers
+    ]
+    sessions.sort(key=lambda s: s["opened_at"] or "")
+    return sessions
+
+
+def _caixa_id_for_datetime(when, sessions):
+    """Sessão de caixa que contém o instante informado (ou None)."""
+    for session in sessions:
+        opened = _parse_register_dt(session["opened_at"])
+        closed = _parse_register_dt(session["closed_at"])
+        if opened and opened <= when and (closed is None or when <= closed):
+            return session["id"]
+    return None
+
+
+def _caixa_id_for_day(day, sessions):
+    """Sessão de caixa que cobre o dia (vendas avulsas não têm hora)."""
+    found = None
+    for session in sessions:
+        opened = _parse_register_dt(session["opened_at"])
+        closed = _parse_register_dt(session["closed_at"])
+        if not opened:
+            continue
+        if opened.date() <= day and (closed is None or closed.date() >= day):
+            if found is None or opened > _parse_register_dt(found["opened_at"]):
+                found = session
+    return found["id"] if found else None
+
+
+def _combine_sales(sales, orders, payment_names, caixa_opened_at=None, sessions=None):
     """Junta vendas avulsas (manuais) e pedidos do PDV numa única lista.
 
     `caixa_opened_at` (datetime ou None) marca o início do caixa aberto e
-    permite sinalizar quais vendas pertencem ao caixa atual (`in_caixa`)."""
+    permite sinalizar quais vendas pertencem ao caixa atual (`in_caixa`).
+    `sessions` associa cada venda à sessão de caixa (`caixa_id`), pra separar
+    onde um caixa foi fechado e outro aberto."""
 
+    sessions = sessions or []
     combined = []
     for sale in sales:
         combined.append(
@@ -112,6 +167,7 @@ def _combine_sales(sales, orders, payment_names, caixa_opened_at=None):
                 "items": [],
                 "payment": None,
                 "cancelled": sale.cancelled,
+                "caixa_id": _caixa_id_for_day(sale.date, sessions),
                 "in_caixa": (
                     caixa_opened_at is not None and sale.date >= caixa_opened_at.date()
                 ),
@@ -130,6 +186,7 @@ def _combine_sales(sales, orders, payment_names, caixa_opened_at=None):
                 "items": detail["items"],
                 "payment": payment_names.get(order.payment_method_id, "—"),
                 "cancelled": order.cancelled,
+                "caixa_id": _caixa_id_for_datetime(order.created_at, sessions),
                 "in_caixa": (
                     caixa_opened_at is not None and order.created_at >= caixa_opened_at
                 ),
@@ -161,7 +218,10 @@ def _sales_payload():
     payment_names = {
         method.id: method.name for method in PaymentMethodRepository().get_methods()
     }
-    combined = _combine_sales(list_sales, orders, payment_names, caixa_opened_at)
+    sessions = _caixa_sessions()
+    combined = _combine_sales(
+        list_sales, orders, payment_names, caixa_opened_at, sessions
+    )
 
     return {
         "today": today.isoformat(),
@@ -169,6 +229,7 @@ def _sales_payload():
             "open": open_register is not None,
             "opened_at": open_register.opened_at if open_register else None,
         },
+        "caixa_sessions": sessions,
         "periods": periods,
         "sales": [
             {
@@ -181,6 +242,7 @@ def _sales_payload():
                 "items": item["items"],
                 "payment": item["payment"],
                 "cancelled": item["cancelled"],
+                "caixa_id": item["caixa_id"],
                 "in_caixa": item["in_caixa"],
             }
             for item in combined

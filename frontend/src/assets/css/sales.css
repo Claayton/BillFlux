@@ -341,6 +341,33 @@
   border-bottom: none;
 }
 
+/* Divisor de troca de caixa no histórico */
+.caixa-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.caixa-divider-line {
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+.caixa-divider-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
 .sale-row-main {
   display: grid;
   grid-template-columns: var(--sales-cols);

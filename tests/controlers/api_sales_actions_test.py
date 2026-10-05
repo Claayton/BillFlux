@@ -85,6 +85,48 @@ def test_sales_payload_marks_current_caixa(logged_client):
     assert all(not s["in_caixa"] for s in closed["sales"])
 
 
+def test_sales_payload_assigns_caixa_sessions(logged_client):
+    """Cada venda recebe caixa_id e o payload traz caixa_sessions."""
+
+    repository = CashRegisterRepository()
+    open_reg = repository.get_open()
+    if open_reg:
+        repository.close_register(
+            register_id=open_reg.id,
+            closed_by="test",
+            closed_at="2015-01-01 00:00:00",
+            closing_amount=0,
+            expected_amount=0,
+        )
+    first = repository.open_register(
+        opened_by="test", opened_at="2015-03-01 08:00:00", opening_amount=0
+    )
+    repository.close_register(
+        register_id=first.id,
+        closed_by="test",
+        closed_at="2015-03-01 18:00:00",
+        closing_amount=0,
+        expected_amount=0,
+    )
+    second = repository.open_register(
+        opened_by="test", opened_at="2015-03-02 08:00:00", opening_amount=0
+    )
+
+    SaleRepository().insert_sale(date(2015, 3, 1), Decimal("10.00"), "sessao1")
+    SaleRepository().insert_sale(date(2015, 3, 2), Decimal("20.00"), "sessao2")
+
+    payload = logged_client.get("/api/sales").get_json()
+
+    session_ids = {s["id"] for s in payload["caixa_sessions"]}
+    assert first.id in session_ids
+    assert second.id in session_ids
+
+    sale1 = next(s for s in payload["sales"] if s["obs"] == "sessao1")
+    sale2 = next(s for s in payload["sales"] if s["obs"] == "sessao2")
+    assert sale1["caixa_id"] == first.id
+    assert sale2["caixa_id"] == second.id
+
+
 def test_edit_manual_sale(logged_client):
     """PUT /api/sales/<id> edita valor, data e observações da venda avulsa."""
 
