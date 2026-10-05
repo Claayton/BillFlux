@@ -303,4 +303,44 @@ describe('CaixaView', () => {
     expect(focusSpy).toHaveBeenCalled()
     focusSpy.mockRestore()
   })
+
+  it('avisa sobre comandas abertas ao fechar o caixa (e no resumo)', async () => {
+    apiMock.get.mockResolvedValue({
+      ...payloadOpen,
+      open_tabs: [
+        { id: 42, number: 7, identification: 'Mesa 2' },
+        { id: 43, number: 8, identification: 'Balcão' },
+      ],
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    const warning = wrapper.find('.caixa-tabs-warning')
+    expect(warning.exists()).toBe(true)
+    expect(warning.text()).toContain('2 comanda(s)')
+    expect(warning.text()).toContain('#0007')
+
+    const inputs = wrapper.findAll('.close-table-row .method-input input')
+    await inputs[0].setValue('420,50')
+    await inputs[1].setValue('0,00')
+    await inputs[2].setValue('0,00')
+    await flushPromises()
+
+    await wrapper.find('.close-actions .btn-brand').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.confirm-summary').text()).toContain('Comandas abertas')
+  })
+
+  it('avisa sobre comandas abertas ao abrir o caixa', async () => {
+    apiMock.get.mockResolvedValue({
+      ...payloadClosed,
+      open_tabs: [{ id: 42, number: 7, identification: 'Mesa 2' }],
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.caixa-tabs-warning').text()).toContain('1 comanda(s)')
+    expect(wrapper.text()).toContain('Abrir caixa')
+  })
 })

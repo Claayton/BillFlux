@@ -50,6 +50,7 @@ const tabPrint = ref(null) // detalhe da comanda na tela de impressão
 const tabConfirm = ref(null) // comanda aguardando confirmação de cancelamento
 const tabBusy = ref(false) // abrindo/selecionando/fechando/cancelando
 const tabSyncing = ref(false) // sincronização de itens em andamento
+let minimizeOnPrint = false // imprimir a comanda ativa minimiza depois
 
 const cartItems = computed(() => Array.from(cart.value.values()))
 const cartCount = computed(() => cartItems.value.reduce((sum, item) => sum + item.qty, 0))
@@ -354,6 +355,8 @@ async function leaveTab() {
 async function reprintActiveTab() {
   if (!activeTab.value) return
   await flushTabSync()
+  // ao imprimir a comanda ativa, minimiza depois de imprimir (não fecha)
+  minimizeOnPrint = true
   tabPrint.value = activeTab.value
 }
 
@@ -373,6 +376,12 @@ function onTabPrinted(tabData) {
   }
   const listed = tabsList.value.find((t) => t.id === tabData.id)
   if (listed) listed.print_count = tabData.print_count
+  // Impressão da comanda ativa: fecha o modal e minimiza (comanda segue aberta).
+  if (minimizeOnPrint && activeTab.value && activeTab.value.id === tabData.id) {
+    minimizeOnPrint = false
+    tabPrint.value = null
+    leaveTab()
+  }
 }
 
 function requestCancelTab(tab) {
@@ -968,10 +977,10 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="btn btn-ghost btn-sm"
-              title="Sair da comanda sem fechar"
+              title="Minimizar comanda (sai sem fechar)"
               @click="leaveTab"
             >
-              <i class="fas fa-sign-out-alt"></i> Sair
+              <i class="fas fa-window-minimize"></i> Minimizar
             </button>
           </span>
         </div>
@@ -1785,6 +1794,18 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 .pdv-tabs-btn.is-highlighted {
-  color: var(--primary, #4f46e5);
+  background: var(--primary, #4f46e5);
+  border-color: var(--primary, #4f46e5);
+  color: #fff;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary, #4f46e5) 22%, transparent);
+}
+
+.pdv-tabs-btn.is-highlighted:hover {
+  filter: brightness(1.06);
+}
+
+.pdv-tabs-btn.is-highlighted .pdv-tabs-count {
+  background: rgba(255, 255, 255, 0.24);
+  color: #fff;
 }
 </style>
