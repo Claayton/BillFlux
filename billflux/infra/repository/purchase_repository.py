@@ -15,7 +15,6 @@ from billflux.infra.entities.product_movement import (
 )
 from billflux.infra.entities.supplier import Supplier as SupplierModel
 from billflux.infra.entities.bill import Bill as BillModel
-from billflux.infra.repository.product_unit_repository import ProductUnitRepository
 from billflux.domain.models.purchase_orders import PurchaseOrder
 from billflux.domain.models.purchase_items import PurchaseItem
 from billflux.services.text_normalize import strip_accents
@@ -328,10 +327,17 @@ class PurchaseRepository:
                     product.stock_quantity += base_qty
                     if product.id in prices:
                         product.price = prices[product.id]
-                        # Espelha na apresentação padrão (fator 1) — PDV usa u.price.
-                        ProductUnitRepository().sync_default_price(
-                            product.id, prices[product.id]
-                        )
+                        # Espelha na apresentação padrão (fator 1) — PDV usa
+                        # u.price. Feito na MESMA sessão (evita lock no SQLite).
+                        for default_unit in session.exec(
+                            select(ProductUnitModel).where(
+                                ProductUnitModel.product_id == product.id,
+                                ProductUnitModel.is_default.is_(True),  # noqa: E712
+                                ProductUnitModel.factor == 1,
+                            )
+                        ).all():
+                            default_unit.price = prices[product.id]
+                            session.add(default_unit)
                     if product.id in unit_prices_by_product:
                         default_price = None
                         for unit_id, unit_price in unit_prices_by_product[product.id]:
