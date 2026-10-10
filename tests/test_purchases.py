@@ -777,6 +777,81 @@ class TestPurchaseAPI:
         purchase = resp.get_json()["purchase"]
         assert Decimal(purchase["total"]) == Decimal("30")
 
+    def test_edit_confirmed_purchase_reconciles_stock_and_bill(self, logged_client):
+        """Editar compra confirmada estorna e reaplica o estoque (com fator) e a conta."""
+        from billflux.infra.repository.purchase_repository import PurchaseRepository
+
+        product_id = _make_product()
+        token = _csrf(logged_client)
+        repo = PurchaseRepository()
+        po = repo.insert_purchase(
+            total=Decimal("47.99"),
+            net_total=Decimal("47.99"),
+            items=[
+                {
+                    "product_id": product_id,
+                    "quantity": 1,
+                    "unit_cost": Decimal("47.99"),
+                    "total": Decimal("47.99"),
+                    "product_name": "Pack",
+                }
+            ],
+        )
+        confirmed = logged_client.post(
+            f"/api/purchases/{po.id}/confirm",
+            json={
+                "create_bill": True,
+                "paid": False,
+                "items": [
+                    {
+                        "product_id": product_id,
+                        "quantity": 1,
+                        "unit_cost": "47.99",
+                        "factor": 6,
+                    }
+                ],
+            },
+            headers={"X-CSRFToken": token},
+        ).get_json()["purchase"]
+        assert confirmed["status"] == "confirmada"
+        bill_id = confirmed["bill_id"]
+
+        resp = logged_client.put(
+            f"/api/purchases/{po.id}",
+            json={
+                "items": [
+                    {
+                        "product_id": product_id,
+                        "quantity": 2,
+                        "unit_cost": "47.99",
+                        "factor": 6,
+                        "product_name": "Pack",
+                    }
+                ],
+            },
+            headers={"X-CSRFToken": token},
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["purchase"]["id"] == po.id
+        assert data["purchase"]["status"] == "confirmada"
+        assert Decimal(data["purchase"]["total"]) == Decimal("95.98")  # 2×47.99
+
+        from billflux.infra.config.database import get_session
+        from billflux.infra.entities.bill import Bill
+        from billflux.infra.entities.product import Product
+
+        session = get_session()
+        product = session.get(Product, product_id)
+        # confirm: 1 caixa de 6 → estoque 6; edição: estorna 6 e reaplica 2×6
+        assert product.stock_quantity == 12
+        session.close()
+
+        session = get_session()
+        bill = session.get(Bill, bill_id)
+        assert bill.value == Decimal("95.98")
+        session.close()
+
     def test_nfe_import(self, logged_client):
         token = _csrf(logged_client)
         resp = logged_client.post(

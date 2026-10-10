@@ -703,6 +703,9 @@ onBeforeUnmount(() => {
           </button>
         </template>
         <template v-else-if="menuPurchase.status === 'confirmada'">
+          <button type="button" role="menuitem" @click="openEdit(menuPurchase); closeMenu()">
+            <i class="fas fa-pen"></i> Editar
+          </button>
           <button type="button" role="menuitem" class="is-danger" @click="cancelPurchase(menuPurchase); closeMenu()">
             <i class="fas fa-times"></i> Cancelar compra
           </button>
@@ -717,6 +720,10 @@ onBeforeUnmount(() => {
           <button type="button" class="modal-close" @click="showModal = false">&times;</button>
         </div>
         <form class="modal-form" @submit.prevent="savePurchase">
+          <div v-if="editing && editing.status === 'confirmada'" class="edit-confirmed-warning">
+            <i class="fas fa-triangle-exclamation"></i>
+            <span>Compra já lançada: salvar vai estornar e recalcular o estoque e o custo médio dos itens alterados, e atualizar a conta se o valor mudar.</span>
+          </div>
           <div class="form-row">
             <div class="form-field flex-2">
               <label>Fornecedor</label>
@@ -1139,6 +1146,23 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .muted { color: var(--text-muted); padding: 24px 4px; }
+.edit-confirmed-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+  border-radius: var(--brand-radius-sm, 8px);
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.edit-confirmed-warning i {
+  margin-top: 2px;
+  color: #d97706;
+}
 .muted-sm { color: var(--text-muted); font-size: 13px; padding: 8px 4px; }
 .input-with-btn { display: flex; gap: 4px; align-items: stretch; }
 .input-with-btn select { flex: 1; }

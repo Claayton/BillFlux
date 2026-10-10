@@ -167,8 +167,10 @@ def purchases_update(purchase_id):
     po = repository.get_purchase(purchase_id)
     if not po:
         return api_error("Compra não encontrada.", 404)
-    if po.status != "rascunho":
-        return api_error("Só é possível editar compras em rascunho.", 400)
+    if po.status not in ("rascunho", "confirmada"):
+        return api_error(
+            "Só é possível editar compras em rascunho ou confirmadas.", 400
+        )
 
     data = request.get_json(silent=True) or {}
     items_data = data.get("items")
@@ -200,7 +202,10 @@ def purchases_update(purchase_id):
             "net_total": net_total,
         }
 
-        ok = repository.replace_purchase_items(purchase_id, **updates)
+        if po.status == "confirmada":
+            ok = repository.update_confirmed_purchase(purchase_id, **updates)
+        else:
+            ok = repository.replace_purchase_items(purchase_id, **updates)
         if not ok:
             return api_error("Não foi possível editar a compra.", 400)
         po = repository.get_purchase(purchase_id)

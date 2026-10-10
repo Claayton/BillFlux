@@ -494,6 +494,125 @@ class PurchaseRepository:
         finally:
             session.close()
 
+    def update_confirmed_purchase(self, purchase_id, items=None, **updates):
+        """Edita uma compra CONFIRMADA, reverter e reaplicar.
+
+        Estorna o efeito dos itens antigos no estoque (movimento de saída),
+        substitui os itens no mesmo id e reaplica estoque/custo (média
+        ponderada sobre o estoque corrente) com movimentos de entrada.
+        Atualiza a conta vinculada quando o valor muda. Como o custo não é
+        "desfeito por movimento", a média ponderada é recalculada no estado
+        corrente (aproximação aceita; o custo histórico não é refeito).
+        """
+        session = get_session()
+        try:
+            with session:
+                po = session.get(PurchaseOrderModel, purchase_id)
+                if not po or po.status != "confirmada":
+                    return False
+
+                nf_ref = f" NF {po.nf_number}" if po.nf_number else ""
+                old_items = session.exec(
+                    select(PurchaseItemModel).where(
+                        PurchaseItemModel.purchase_id == purchase_id
+                    )
+                ).all()
+
+                for item in old_items:
+                    if not item.product_id:
+                        continue
+                    product = session.get(ProductModel, item.product_id)
+                    if not product:
+                        continue
+                    base_qty = item.quantity * (item.factor or 1)
+                    product.stock_quantity = max(product.stock_quantity - base_qty, 0)
+                    session.add(product)
+                    session.add(
+                        ProductMovementModel(
+                            product_id=product.id,
+                            movement_type="saida",
+                            quantity=-base_qty,
+                            obs=f"Edição compra #{po.id}{nf_ref} (estorno)",
+                        )
+                    )
+
+                for item in old_items:
+                    session.delete(item)
+                session.flush()
+
+                for d in items or []:
+                    session.add(
+                        PurchaseItemModel(
+                            purchase_id=purchase_id,
+                            product_id=d.get("product_id"),
+                            quantity=d["quantity"],
+                            unit_cost=d.get("unit_cost", Decimal("0")),
+                            total=d.get("total", Decimal("0")),
+                            barcode=d.get("barcode"),
+                            product_name=d.get("product_name"),
+                            unit_com=d.get("unit_com"),
+                            factor=int(d.get("factor") or 1),
+                        )
+                    )
+
+                for key, value in updates.items():
+                    if key in _PO_UPDATABLE_FIELDS:
+                        setattr(po, key, value)
+
+                stored = session.exec(
+                    select(PurchaseItemModel).where(
+                        PurchaseItemModel.purchase_id == purchase_id
+                    )
+                ).all()
+                new_total = Decimal("0")
+                for item in stored:
+                    new_total += item.total
+                po.total = new_total
+                po.net_total = new_total + po.freight - po.discount
+
+                for item in stored:
+                    product = session.get(ProductModel, item.product_id)
+                    if not product:
+                        continue
+                    factor = item.factor or 1
+                    base_qty = item.quantity * factor
+                    base_cost = item.unit_cost / factor if factor else item.unit_cost
+                    current_qty = product.stock_quantity
+                    current_cost = product.cost or Decimal("0")
+                    product.stock_quantity += base_qty
+                    if base_cost > 0:
+                        if current_qty > 0 and current_cost > 0:
+                            total_qty = current_qty + base_qty
+                            product.cost = (
+                                (current_qty * current_cost) + (base_qty * base_cost)
+                            ) / Decimal(str(total_qty))
+                        else:
+                            product.cost = base_cost
+                    session.add(product)
+                    session.add(
+                        ProductMovementModel(
+                            product_id=product.id,
+                            movement_type="entrada",
+                            quantity=base_qty,
+                            obs=f"Compra #{po.id}{nf_ref} (edição)",
+                        )
+                    )
+
+                if po.bill_id:
+                    bill = session.get(BillModel, po.bill_id)
+                    if bill:
+                        bill.value = po.net_total
+                        if bill.status:
+                            bill.value_from_payment = po.net_total
+                        session.add(bill)
+
+                session.add(po)
+                session.commit()
+                session.refresh(po)
+                return True
+        finally:
+            session.close()
+
     def upsert_item(
         self,
         purchase_id,
