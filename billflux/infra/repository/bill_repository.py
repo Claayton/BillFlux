@@ -6,6 +6,9 @@ from decimal import Decimal
 from sqlmodel import select
 from billflux.infra.config.database import get_session
 from billflux.infra.entities.bill import Bill as BillModel
+from billflux.infra.entities.purchase_order import (
+    PurchaseOrder as PurchaseOrderModel,
+)
 from billflux.domain.models.bills import Bill
 
 
@@ -157,7 +160,10 @@ class BillRepository:
     def delete_bill(self, bill_id: int) -> bool:
         """
         Deletes a Bill by its id.
-        :param bill_id: Bill id.
+
+        Compras confirmadas apontam para a conta via ``purchase_order.bill_id``
+        (FK). Antes de excluir, desvincula essas compras — elas seguem
+        confirmadas, só sem o registro financeiro. :param bill_id: Bill id.
         :return: True when deleted, False when not found.
         """
 
@@ -167,6 +173,14 @@ class BillRepository:
                 bill = session.get(BillModel, bill_id)
                 if not bill:
                     return False
+                linked = session.exec(
+                    select(PurchaseOrderModel).where(
+                        PurchaseOrderModel.bill_id == bill_id
+                    )
+                ).all()
+                for purchase in linked:
+                    purchase.bill_id = None
+                    session.add(purchase)
                 session.delete(bill)
                 session.commit()
                 return True
