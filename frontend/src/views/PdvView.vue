@@ -123,10 +123,14 @@ function findUnit(product, unitId) {
 }
 
 function defaultUnit(product) {
-  if (!product || !product.units || !product.units.length) {
-    return { id: 0, name: 'Unidade', factor: 1, price: product?.price || 0, is_default: true }
-  }
-  return product.units.find((u) => u.is_default) || product.units[0]
+  if (!product) return { id: 0, name: 'Unidade', factor: 1, price: 0, is_default: true }
+  const units = product.units || []
+  // Prefere a apresentação de fator 1 (padrão primeiro) — nunca o pack como base.
+  const base =
+    units.find((u) => (u.factor || 1) === 1 && u.is_default) ||
+    units.find((u) => (u.factor || 1) === 1)
+  if (base) return base
+  return { id: 0, name: 'Unidade', factor: 1, price: product.price || 0, is_default: true }
 }
 
 function cartKey(productId, unitId) {
@@ -440,13 +444,15 @@ function buildSuggestions(term) {
   const results = []
   for (const p of products.value) {
     if (normalizeForSearch(p.name).includes(lower) || normalizeForSearch(p.barcode || '').includes(lower)) {
-      if (p.units && p.units.length > 1) {
-        for (const u of p.units) {
+      const units = p.units || []
+      // Unidade-base (fator 1) sempre: das apresentações ou sintetizada do preço.
+      const base = defaultUnit(p)
+      results.push({ ...p, _unit: base, _suggestionKey: p.id + '_base' })
+      // Caixas/packs (fator > 1) aparecem como opções próprias.
+      for (const u of units) {
+        if ((u.factor || 1) > 1) {
           results.push({ ...p, _unit: u, _suggestionKey: p.id + '_' + u.id })
         }
-      } else {
-        const u = defaultUnit(p)
-        results.push({ ...p, _unit: u, _suggestionKey: p.id + '_' + u.id })
       }
     }
   }

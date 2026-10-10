@@ -440,11 +440,11 @@ async function saveProduct() {
       min_stock: Number(productForm.value.min_stock) || 0,
       obs: productForm.value.obs,
       active: productForm.value.active,
+      stock_quantity: Number(productForm.value.stock_quantity) || 0,
     }
     if (editingProduct.value) {
       data.value = await api.put(`/products/${editingProduct.value.id}`, payload)
     } else {
-      payload.stock_quantity = Number(productForm.value.stock_quantity) || 0
       data.value = await api.post('/products', payload)
     }
     showProductModal.value = false
@@ -939,8 +939,10 @@ function onModalKeydown(event) {
                 v-model="productForm.stock_quantity"
                 type="number"
                 min="0"
-                :disabled="!!editingProduct"
               />
+              <small v-if="editingProduct" class="field-hint">
+                Define o estoque absoluto (registra um ajuste).
+              </small>
             </div>
             <div class="form-field">
               <label for="product_min_stock">Estoque mínimo</label>
@@ -1235,6 +1237,12 @@ function onModalKeydown(event) {
 </template>
 
 <style scoped>
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
 .muted {
   color: var(--text-muted);
   padding: 24px 4px;

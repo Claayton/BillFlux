@@ -57,6 +57,13 @@ def create_unit(product_id):
         return api_error("A apresentação padrão precisa ter fator 1.", 400)
 
     repo = ProductUnitRepository()
+    # Uma "Unidade" padrão de fator 1 já existente é ATUALIZADA, não duplicada.
+    existing_base = None
+    if is_default and factor == 1:
+        units = repo.get_units_for_product(product_id)
+        existing_base = next(
+            (u for u in units if u.is_default and (u.factor or 1) == 1), None
+        )
     try:
         unit = repo.upsert(
             product_id=product_id,
@@ -65,6 +72,7 @@ def create_unit(product_id):
             factor=factor,
             price=price,
             is_default=is_default,
+            unit_id=existing_base.id if existing_base else None,
         )
     except ValueError as e:
         return api_error(str(e), 400)

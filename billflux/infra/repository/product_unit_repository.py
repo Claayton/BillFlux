@@ -183,10 +183,14 @@ class ProductUnitRepository:
             session.close()
 
     def ensure_default_unit(self, product_id: int, price=None) -> ProductUnit:
-        """Garante que todo produto tenha ao menos uma apresentação 'Unidade'."""
+        """Garante que todo produto tenha uma apresentação 'Unidade' (fator 1).
+
+        Se já existe uma unidade-base (fator 1), devolve ela; caso contrário
+        cria. Não confunde pack/caixa (fator > 1) com a base."""
         units = self.get_units_for_product(product_id)
-        if units:
-            return units[0]
+        base = next((u for u in units if (u.factor or 1) == 1), None)
+        if base:
+            return base
         return self.upsert(
             product_id=product_id,
             name="Unidade",
