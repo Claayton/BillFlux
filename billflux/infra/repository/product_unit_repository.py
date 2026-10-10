@@ -160,6 +160,28 @@ class ProductUnitRepository:
         finally:
             session.close()
 
+    def sync_product_base_price(self, product_id: int, price) -> int:
+        """Espelha o preço da unidade padrão (fator 1) em product.price.
+
+        Sentido inverso do ``sync_default_price``: ao editar/cadastrar a
+        "Unidade", o preço-base do produto acompanha. Um pack (fator > 1)
+        nunca altera o preço-base. Retorna 1 se atualizou.
+        """
+        from billflux.infra.entities.product import Product as ProductModel
+
+        session = get_session()
+        try:
+            with session:
+                product = session.get(ProductModel, product_id)
+                if not product or product.price == price:
+                    return 0
+                product.price = price
+                session.add(product)
+                session.commit()
+                return 1
+        finally:
+            session.close()
+
     def ensure_default_unit(self, product_id: int, price=None) -> ProductUnit:
         """Garante que todo produto tenha ao menos uma apresentação 'Unidade'."""
         units = self.get_units_for_product(product_id)
