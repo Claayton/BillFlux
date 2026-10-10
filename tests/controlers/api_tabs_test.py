@@ -562,3 +562,21 @@ def test_register_print_counts_reprints(logged_client):
         "/api/tabs/999999/print", headers={"X-CSRFToken": token}
     )
     assert missing.status_code == 404
+
+
+def test_caixa_payload_lists_open_tabs(logged_client):
+    """/api/caixa traz as comandas abertas (aviso ao abrir/fechar o caixa)."""
+
+    _open_caixa()
+    product = _product("Produto aviso", price="5.00", stock=10)
+    tab = _open_tab(logged_client, "Mesa aviso", product, quantity=1)
+
+    payload = logged_client.get("/api/caixa").get_json()
+    assert tab["id"] in [t["id"] for t in payload["open_tabs"]]
+
+    token = _csrf(logged_client)
+    logged_client.post(
+        f"/api/tabs/{tab['id']}/cancel", json={}, headers={"X-CSRFToken": token}
+    )
+    after = logged_client.get("/api/caixa").get_json()
+    assert tab["id"] not in [t["id"] for t in after["open_tabs"]]
