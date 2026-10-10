@@ -15,9 +15,24 @@ from billflux.infra.entities.product_movement import (
 )
 from billflux.infra.entities.supplier import Supplier as SupplierModel
 from billflux.infra.entities.bill import Bill as BillModel
+from billflux.infra.repository.product_unit_repository import ProductUnitRepository
 from billflux.domain.models.purchase_orders import PurchaseOrder
 from billflux.domain.models.purchase_items import PurchaseItem
 from billflux.services.text_normalize import strip_accents
+
+_PO_UPDATABLE_FIELDS = {
+    "supplier_id",
+    "nf_number",
+    "nf_serie",
+    "nf_chave",
+    "nf_modelo",
+    "total",
+    "freight",
+    "discount",
+    "net_total",
+    "due_date",
+    "obs",
+}
 
 
 def _to_domain(po, supplier_name=None):
@@ -271,6 +286,13 @@ class PurchaseRepository:
                         "Vincule todos os itens a um produto antes de lançar a compra."
                     )
 
+                # Recalcula os totais a partir dos itens persistidos (o total é a
+                # soma de Qtd × Valor da nota, nunca multiplicado pelo fator).
+                po.total = Decimal("0")
+                for item in stored:
+                    po.total += item.total
+                po.net_total = po.total + po.freight - po.discount
+
                 bill_id = None
                 if (create_bill or paid) and po.net_total > 0:
                     now = datetime.now()
@@ -306,6 +328,10 @@ class PurchaseRepository:
                     product.stock_quantity += base_qty
                     if product.id in prices:
                         product.price = prices[product.id]
+                        # Espelha na apresentação padrão (fator 1) — PDV usa u.price.
+                        ProductUnitRepository().sync_default_price(
+                            product.id, prices[product.id]
+                        )
                     if product.id in unit_prices_by_product:
                         default_price = None
                         for unit_id, unit_price in unit_prices_by_product[product.id]:
@@ -422,6 +448,49 @@ class PurchaseRepository:
                 session.commit()
                 session.refresh(po)
                 return _to_domain(po, _resolve_supplier_name(po.supplier_id))
+        finally:
+            session.close()
+
+    def replace_purchase_items(self, purchase_id, items=None, **updates):
+        """Substitui os itens de uma compra em RASCUNHO in-place (mesmo id).
+
+        Usado no PUT: apaga os itens atuais e grava a nova lista no mesmo
+        `purchase_order`, atualizando também os totais. Não mexe em estoque
+        (compra em rascunho não deu entrada)."""
+        session = get_session()
+        try:
+            with session:
+                po = session.get(PurchaseOrderModel, purchase_id)
+                if not po or po.status != "rascunho":
+                    return False
+                for old in session.exec(
+                    select(PurchaseItemModel).where(
+                        PurchaseItemModel.purchase_id == purchase_id
+                    )
+                ).all():
+                    session.delete(old)
+                session.flush()
+                for key, value in updates.items():
+                    if key in _PO_UPDATABLE_FIELDS:
+                        setattr(po, key, value)
+                session.add(po)
+                for d in items or []:
+                    session.add(
+                        PurchaseItemModel(
+                            purchase_id=purchase_id,
+                            product_id=d.get("product_id"),
+                            quantity=d["quantity"],
+                            unit_cost=d.get("unit_cost", Decimal("0")),
+                            total=d.get("total", Decimal("0")),
+                            barcode=d.get("barcode"),
+                            product_name=d.get("product_name"),
+                            unit_com=d.get("unit_com"),
+                            factor=int(d.get("factor") or 1),
+                        )
+                    )
+                session.commit()
+                session.refresh(po)
+                return True
         finally:
             session.close()
 

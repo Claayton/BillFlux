@@ -114,6 +114,7 @@ async function openEdit(purchase) {
       barcode: i.barcode || '',
       quantity: i.quantity,
       unit_cost: i.unit_cost,
+      factor: i.factor || 1,
     }))
     if (!items.value.length) items.value = []
     showModal.value = true
@@ -165,6 +166,9 @@ function removeItem(index) {
 }
 
 function addProductItem(product) {
+  const units = product.units || []
+  const defUnit = units.find(u => u.is_default) || units[0]
+  const factor = defUnit && defUnit.factor ? defUnit.factor : 1
   const existing = items.value.find(i => i.product_id === product.id)
   if (existing) {
     existing.quantity = (parseInt(existing.quantity) || 0) + 1
@@ -175,6 +179,7 @@ function addProductItem(product) {
       barcode: product.barcode || '',
       quantity: 1,
       unit_cost: product.cost != null ? String(product.cost) : '',
+      factor,
     })
   }
 }
@@ -756,17 +761,21 @@ onBeforeUnmount(() => {
             </p>
             <div v-else class="item-list">
               <div v-for="(item, idx) in items" :key="idx" class="item-row">
-                <div class="form-field flex-3">
+                <div class="form-field flex-2">
                   <label>Produto</label>
                   <input :value="item.product_name" type="text" disabled />
                 </div>
                 <div class="form-field flex-1">
                   <label>Qtd</label>
-                  <input v-model.number="item.quantity" type="number" min="1" />
+                  <input v-model.number="item.quantity" type="number" min="1" title="Quantidade comprada (caixas/embalagens)" />
                 </div>
                 <div class="form-field flex-1">
-                  <label>Custo unit.</label>
-                  <input v-model="item.unit_cost" type="number" step="0.01" placeholder="0,00" />
+                  <label>Un. / caixa</label>
+                  <input v-model.number="item.factor" type="number" min="1" title="Unidades que vêm em cada embalagem (fator)" />
+                </div>
+                <div class="form-field flex-1">
+                  <label>Valor</label>
+                  <input v-model="item.unit_cost" type="number" step="0.01" placeholder="0,00" title="Valor por unidade comercial da nota" />
                 </div>
                 <div class="form-field flex-1">
                   <label>Total</label>

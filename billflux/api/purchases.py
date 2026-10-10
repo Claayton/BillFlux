@@ -47,6 +47,41 @@ def _serialize_item(item):
     }
 
 
+def _parse_items(items_data):
+    """Converte os itens do payload em dicionários para persistência.
+
+    `line_total = quantity × unit_cost` — o total NUNCA é multiplicado pelo
+    fator (unidades por embalagem); o fator só define a entrada (qtd×fator)
+    e o custo unitário (valor÷fator)."""
+    parsed = []
+    total = Decimal("0")
+    for item in items_data:
+        try:
+            qty = int(item.get("quantity", 1))
+        except (TypeError, ValueError):
+            qty = 1
+        if qty < 0:
+            qty = 1
+        cost = br_to_decimal(item.get("unit_cost")) or Decimal("0")
+        if cost < 0:
+            cost = Decimal("0")
+        line_total = Decimal(str(qty)) * cost
+        parsed.append(
+            {
+                "product_id": item.get("product_id"),
+                "quantity": qty,
+                "unit_cost": cost,
+                "total": line_total,
+                "barcode": (item.get("barcode") or "").strip() or None,
+                "product_name": (item.get("product_name") or "").strip() or None,
+                "unit_com": (item.get("unit_com") or "").strip() or None,
+                "factor": int(item.get("factor") or 1),
+            }
+        )
+        total += line_total
+    return parsed, total
+
+
 def _purchases_payload(search=None, supplier_id=None, status=None):
     repository = PurchaseRepository()
     purchases = repository.get_purchases(
@@ -79,26 +114,7 @@ def purchases_create():
     items_data = data.get("items", [])
     repository = PurchaseRepository()
 
-    total = Decimal("0")
-    parsed_items = []
-    for item in items_data:
-        qty = int(item.get("quantity", 1))
-        cost = br_to_decimal(item.get("unit_cost")) or Decimal("0")
-        line_total = Decimal(str(qty)) * cost
-        parsed_items.append(
-            {
-                "product_id": item.get("product_id"),
-                "quantity": qty,
-                "unit_cost": cost,
-                "total": line_total,
-                "barcode": (item.get("barcode") or "").strip() or None,
-                "product_name": (item.get("product_name") or "").strip() or None,
-                "unit_com": (item.get("unit_com") or "").strip() or None,
-                "factor": int(item.get("factor") or 1),
-            }
-        )
-        total += line_total
-
+    parsed_items, total = _parse_items(items_data)
     freight = br_to_decimal(data.get("freight")) or Decimal("0")
     discount = br_to_decimal(data.get("discount")) or Decimal("0")
     net_total = total + freight - discount
@@ -156,28 +172,9 @@ def purchases_update(purchase_id):
 
     data = request.get_json(silent=True) or {}
     items_data = data.get("items")
-    total = po.total
+
     if items_data is not None:
-        repository.delete_purchase(purchase_id)
-        new_items = []
-        total = Decimal("0")
-        for item in items_data:
-            qty = int(item.get("quantity", 1))
-            cost = br_to_decimal(item.get("unit_cost")) or Decimal("0")
-            line_total = Decimal(str(qty)) * cost
-            new_items.append(
-                {
-                    "product_id": item.get("product_id"),
-                    "quantity": qty,
-                    "unit_cost": cost,
-                    "total": line_total,
-                    "barcode": (item.get("barcode") or "").strip() or None,
-                    "product_name": (item.get("product_name") or "").strip() or None,
-                    "unit_com": (item.get("unit_com") or "").strip() or None,
-                    "factor": int(item.get("factor") or 1),
-                }
-            )
-            total += line_total
+        parsed_items, total = _parse_items(items_data)
         freight = br_to_decimal(data.get("freight")) or Decimal("0")
         discount = br_to_decimal(data.get("discount")) or Decimal("0")
         net_total = total + freight - discount
@@ -187,21 +184,25 @@ def purchases_update(purchase_id):
                 due_date = datetime.fromisoformat(data["due_date"])
             except (ValueError, TypeError):
                 pass
-        repository.insert_purchase(
-            supplier_id=data.get("supplier_id", po.supplier_id),
-            nf_number=(data.get("nf_number") or po.nf_number or "").strip() or None,
-            nf_serie=(data.get("nf_serie") or po.nf_serie or "").strip() or None,
-            nf_chave=(data.get("nf_chave") or po.nf_chave or "").strip() or None,
-            nf_modelo=(data.get("nf_modelo") or po.nf_modelo or "").strip() or None,
-            total=total,
-            freight=freight,
-            discount=discount,
-            net_total=net_total,
-            status="rascunho",
-            due_date=due_date,
-            obs=(data.get("obs") or po.obs or "").strip() or None,
-            items=new_items,
-        )
+
+        updates = {
+            "supplier_id": data.get("supplier_id", po.supplier_id),
+            "nf_number": (data.get("nf_number") or po.nf_number or "").strip() or None,
+            "nf_serie": (data.get("nf_serie") or po.nf_serie or "").strip() or None,
+            "nf_chave": (data.get("nf_chave") or po.nf_chave or "").strip() or None,
+            "nf_modelo": (data.get("nf_modelo") or po.nf_modelo or "").strip() or None,
+            "obs": (data.get("obs") or po.obs or "").strip() or None,
+            "due_date": due_date,
+            "items": parsed_items,
+            "total": total,
+            "freight": freight,
+            "discount": discount,
+            "net_total": net_total,
+        }
+
+        ok = repository.replace_purchase_items(purchase_id, **updates)
+        if not ok:
+            return api_error("Não foi possível editar a compra.", 400)
         po = repository.get_purchase(purchase_id)
         return api_response({"purchase": _serialize(po)})
 
