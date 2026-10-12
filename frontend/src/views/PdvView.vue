@@ -5,6 +5,7 @@ import { api } from '@/api/client'
 import { maskMoney, moneyToDecimal } from '@/utils/format'
 import { normalizeForSearch } from '@/utils/normalize'
 import { paymentIcon, paymentColor } from '@/utils/payment'
+import { readPdvCache, writePdvCache, getPdvStamp } from '@/utils/pdvCache'
 import { TAB_STATUS, tabLabel } from '@/utils/tabs'
 import SaleReceiptModal from '@/views/SaleReceiptModal.vue'
 import TabOpenModal from '@/components/TabOpenModal.vue'
@@ -99,13 +100,35 @@ function formatBRL(value) {
 
 async function load() {
   try {
-    const [pdvData, caixaData] = await Promise.all([
-      api.get('/pdv'),
-      api.get('/caixa').catch(() => ({ open: null })),
-    ])
-    products.value = pdvData.products
-    methods.value = pdvData.methods
-    customers.value = pdvData.customers || []
+    // Cache local del catálogo: si el stamp no cambió, no re-descargamos
+    // productos/presentaciones/clientes (solo precios/stock se invalidan al
+    // cambiar el stamp tras movimientos/ediciones).
+    let stamp = null
+    try {
+      stamp = (await api.get('/pdv/stamp')).stamp
+    } catch {
+      stamp = getPdvStamp()
+    }
+    const cached = stamp ? readPdvCache(stamp) : null
+    if (cached) {
+      products.value = cached.products
+      methods.value = cached.methods
+      customers.value = cached.customers || []
+    } else {
+      const pdvData = await api.get('/pdv')
+      products.value = pdvData.products
+      methods.value = pdvData.methods
+      customers.value = pdvData.customers || []
+      if (stamp) {
+        writePdvCache(stamp, {
+          products: pdvData.products,
+          methods: pdvData.methods,
+          customers: pdvData.customers || [],
+        })
+      }
+    }
+    // El estado del caixa siempre se consulta en vivo (es barato).
+    const caixaData = await api.get('/caixa').catch(() => ({ open: null }))
     caixaOpen.value = !!caixaData.open
     searchInput.value?.focus()
   } catch (error) {

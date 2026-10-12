@@ -42,6 +42,7 @@ describe('PdvView', () => {
     apiMock.put.mockReset()
     routerPush.mockReset()
     sessionStorage.clear()
+    localStorage.clear()
     apiMock.get.mockImplementation((url) => {
       if (String(url).startsWith('/pdv/recibo')) {
         const id = String(url).split('/').pop()
@@ -514,6 +515,31 @@ describe('PdvView', () => {
     expect(wrapper.find('#cart-total').text()).toBe('R$ 4,50')
     expect(wrapper.find('.pdv-footer-discount').exists()).toBe(true)
   })
+
+  it('reutiliza el catálogo del cache cuando el stamp no cambió', async () => {
+    apiMock.get.mockImplementation((url) => {
+      const p = String(url)
+      if (p === '/pdv/stamp') return Promise.resolve({ stamp: 'abc123' })
+      if (p === '/pdv') return Promise.resolve({ products, methods, customers })
+      if (p === '/caixa') {
+        return Promise.resolve({ open: { id: 1, opened_by: 't', status: 'open' } })
+      }
+      return Promise.resolve({ products, methods, customers })
+    })
+
+    const pdvCalls = () => apiMock.get.mock.calls.filter((c) => c[0] === '/pdv').length
+
+    let wrapper = mountView()
+    await flushPromises()
+    expect(pdvCalls()).toBe(1)
+    wrapper.unmount()
+
+    wrapper = mountView()
+    await flushPromises()
+    expect(pdvCalls()).toBe(1) // no re-descargó: usó el cache
+    expect(wrapper.find('#pdv-search').exists()).toBe(true)
+    wrapper.unmount()
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -603,6 +629,7 @@ describe('PdvView — comandas abertas', () => {
     apiMock.put.mockReset()
     routerPush.mockReset()
     sessionStorage.clear()
+    localStorage.clear()
     apiMock.get.mockImplementation((url) => {
       const path = String(url)
       if (path.startsWith('/tabs?')) return Promise.resolve(tabListPayload)

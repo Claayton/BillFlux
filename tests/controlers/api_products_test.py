@@ -358,6 +358,30 @@ def test_pack_cannot_be_default(logged_client):
     assert resp.status_code == 400
 
 
+def test_pdv_stamp_changes_on_product_edit(logged_client):
+    """O stamp do PDV muda ao criar produto e ao editar preço (invalida cache)."""
+    token = _csrf(logged_client)
+    s1 = logged_client.get("/api/pdv/stamp").get_json()["stamp"]
+    assert isinstance(s1, str) and s1
+
+    logged_client.post(
+        "/api/products",
+        json={"name": "Stamp T", "price": "1,00"},
+        headers={"X-CSRFToken": token},
+    )
+    s2 = logged_client.get("/api/pdv/stamp").get_json()["stamp"]
+    assert s2 != s1
+
+    product_id = _product_id_by_name(logged_client, "Stamp T")
+    logged_client.put(
+        f"/api/products/{product_id}",
+        json={"name": "Stamp T", "price": "2,00", "cost": "0,00", "active": True},
+        headers={"X-CSRFToken": token},
+    )
+    s3 = logged_client.get("/api/pdv/stamp").get_json()["stamp"]
+    assert s3 != s2
+
+
 def test_delete_product_removes_presentation(logged_client):
     """DELETE remove o produto e a apresentação própria (product_unit)."""
 

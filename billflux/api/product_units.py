@@ -4,6 +4,7 @@ from flask import request
 
 from billflux.api import bp, api_error, api_login_required, api_response, br_to_decimal
 from billflux.infra.repository.product_unit_repository import ProductUnitRepository
+from billflux.services.pdv_cache import bump_pdv_version
 
 
 def _serialize(pu):
@@ -78,6 +79,7 @@ def create_unit(product_id):
         return api_error(str(e), 400)
 
     _sync_base_price_if_default(repo, product_id, unit)
+    bump_pdv_version()
     return api_response({"unit": _serialize(unit)}, status=201)
 
 
@@ -120,6 +122,7 @@ def update_unit(unit_id):
         return api_error(str(e), 400)
 
     _sync_base_price_if_default(repo, unit.product_id, unit)
+    bump_pdv_version()
     return api_response({"unit": _serialize(unit)})
 
 
@@ -129,5 +132,6 @@ def delete_unit(unit_id):
     """Remove uma apresentação (não pode remover a padrão)."""
     repo = ProductUnitRepository()
     if repo.delete(unit_id):
+        bump_pdv_version()
         return api_response({"ok": True})
     return api_error("Apresentação não encontrada ou é a padrão.", 400)

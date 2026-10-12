@@ -8,6 +8,7 @@ from billflux.infra.repository.product_repository import ProductRepository
 from billflux.infra.repository.supplier_repository import SupplierRepository
 from billflux.infra.repository.product_unit_repository import ProductUnitRepository
 from billflux.services.audit import audit
+from billflux.services.pdv_cache import bump_pdv_version
 
 
 def _parse_category_id(data):
@@ -160,6 +161,7 @@ def products_create():
     # Todo produto nasce com uma apresentação "Unidade" (fator 1) — evita o
     # caso de só existir pack/caixa (que o PDV tratava como a unidade).
     ProductUnitRepository().ensure_default_unit(created.id, price)
+    bump_pdv_version()
     return api_response(_products_payload(), status=201)
 
 
@@ -236,6 +238,7 @@ def products_edit(product_id):
             )
 
     ProductUnitRepository().ensure_default_unit(product_id, price)
+    bump_pdv_version()
     return api_response(_products_payload())
 
 
@@ -265,6 +268,7 @@ def products_adjust(product_id):
         )
 
     repository.adjust_stock(product_id=product_id, delta=delta, obs=obs)
+    bump_pdv_version()
     return api_response(_products_payload())
 
 
