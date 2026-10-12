@@ -256,11 +256,11 @@ describe('PurchasesView', () => {
     expect(checks[1].element.checked).toBe(false) // Criar conta a pagar
 
     const priceInput = wrapper.find('.li-price-input')
-    expect(priceInput.element.value).toBe('5')
+    expect(priceInput.element.value).toBe('5,00')
     expect(wrapper.find('.margin-badge').text()).toContain('%')
 
     // editar o valor da nota recalcula a margem (5 - 1)/5 = 80%
-    await wrapper.find('.li-cell.is-cost .li-input').setValue('1')
+    await wrapper.find('.li-cell.is-cost .li-input').setValue('100') // R$ 1,00
     await flushPromises()
     expect(wrapper.find('.margin-badge').text()).toContain('80')
 
@@ -272,7 +272,7 @@ describe('PurchasesView', () => {
       expect.objectContaining({
         paid: true,
         create_bill: false,
-        items: [expect.objectContaining({ id: 10, price: 5 })],
+        items: [expect.objectContaining({ id: 10, price: '5,00' })],
       })
     )
   })
@@ -324,7 +324,7 @@ describe('PurchasesView', () => {
     expect(rows[0].text()).toContain('Unidade')
     expect(rows[1].text()).toContain('Caixa c/ 12')
 
-    await rows[1].find('input').setValue('36')
+    await rows[1].find('input').setValue('3600') // R$ 36,00
     await flushPromises()
 
     await wrapper.find('.btn-launch-confirm').trigger('click')
@@ -337,7 +337,7 @@ describe('PurchasesView', () => {
           expect.objectContaining({
             id: 10,
             unit_prices: expect.arrayContaining([
-              expect.objectContaining({ unit_id: 51, price: 36 }),
+              expect.objectContaining({ unit_id: 51, price: '36,00' }),
             ]),
           }),
         ],

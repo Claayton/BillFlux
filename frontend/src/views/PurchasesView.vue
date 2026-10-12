@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
+import { maskMoney, toNumber } from '@/utils/format'
 import { normalizeForSearch } from '@/utils/normalize'
 import AppShell from '@/components/AppShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -40,6 +41,23 @@ function emptyForm() {
     nf_number: '', nf_serie: '', nf_chave: '', nf_modelo: '',
     supplier_id: null, freight: '', discount: '', due_date: '', obs: '',
   }
+}
+
+/** Converte valor (número ou "1.234,56") para máscara BR "1.234,56". */
+function defMask(value) {
+  const n = toNumber(value)
+  if (Number.isNaN(n)) return ''
+  return maskMoney(String(Math.round(n * 100)))
+}
+
+/** Handler de input monetário: armazena a string BR mascarada. */
+function moneyInput(target, key, event) {
+  target[key] = maskMoney(event.target.value)
+}
+
+/** Clona as apresentações com preço em máscara BR. */
+function maskedUnits(units) {
+  return (units || []).map((u) => ({ ...u, price: defMask(u.price) }))
 }
 
 const statusLabel = { rascunho: 'Rascunho', confirmada: 'Confirmada', cancelada: 'Cancelada' }
@@ -178,7 +196,7 @@ function addProductItem(product) {
       product_name: product.name,
       barcode: product.barcode || '',
       quantity: 1,
-      unit_cost: product.cost != null ? String(product.cost) : '',
+      unit_cost: defMask(product.cost),
       factor,
     })
   }
@@ -186,7 +204,7 @@ function addProductItem(product) {
 
 function calcItemTotal(item) {
   const qty = parseInt(item.quantity) || 0
-  const cost = parseFloat(item.unit_cost) || 0
+  const cost = toNumber(item.unit_cost)
   return (qty * cost).toFixed(2)
 }
 
@@ -237,6 +255,7 @@ async function openLaunchModal(purchase) {
   const data = await api.get(`/purchases/${purchase.id}`)
   launchItems.value = data.items.map(item => ({
     ...item,
+    unit_cost: defMask(item.unit_cost),
     product_id: item.product_id || null,
     matched: !!item.product_id,
     units_per_case: 1,
@@ -254,9 +273,9 @@ async function openLaunchModal(purchase) {
           li.product_name_existing = res.product.name
           li.existing_stock = res.product.stock_quantity
           li.existing_cost = res.product.cost
-          li.product_price = res.product.price
+          li.product_price = defMask(res.product.price)
           li.matched = true
-          li.units = (res.product.units || []).map(u => ({ ...u }))
+          li.units = maskedUnits(res.product.units)
           if (li.units.length) {
             const matched = li.barcode ? li.units.find(u => u.barcode === li.barcode) : null
             const def = matched || li.units.find(u => u.is_default) || li.units[0]
@@ -271,8 +290,8 @@ async function openLaunchModal(purchase) {
           li.product_name_existing = res.product.name
           li.existing_stock = res.product.stock_quantity
           li.existing_cost = res.product.cost
-          li.product_price = res.product.price
-          li.units = (res.product.units || []).map(u => ({ ...u }))
+          li.product_price = defMask(res.product.price)
+          li.units = maskedUnits(res.product.units)
           if (li.units.length) {
             const def = li.units.find(u => u.is_default) || li.units[0]
             li.units_per_case = def.factor
@@ -286,11 +305,11 @@ async function openLaunchModal(purchase) {
 function custoUnitario(item) {
   const factor = parseInt(item.units_per_case) || 1
   if (factor <= 0) return 0
-  return (parseFloat(item.unit_cost) || 0) / factor
+  return (toNumber(item.unit_cost) || 0) / factor
 }
 
 function marginFor(item, price, factor) {
-  const p = parseFloat(price) || 0
+  const p = toNumber(price) || 0
   if (p <= 0) return null
   const cost = custoUnitario(item) * (parseInt(factor) || 1)
   return ((p - cost) / p) * 100
@@ -302,9 +321,9 @@ function matchProduct(idx, product) {
   li.product_name_existing = product.name
   li.existing_stock = product.stock_quantity
   li.existing_cost = product.cost
-  li.product_price = product.price
+  li.product_price = defMask(product.price)
   li.matched = true
-  li.units = (product.units || []).map(u => ({ ...u }))
+  li.units = maskedUnits(product.units)
   if (li.units.length) {
     const def = li.units.find(u => u.is_default) || li.units[0]
     li.units_per_case = def.factor
@@ -378,9 +397,9 @@ async function saveQuickProduct() {
       li.product_id = newProduct.id
       li.product_name_existing = newProduct.name
       li.existing_stock = 0
-      li.existing_cost = parseFloat(qp.cost) || 0
-      li.units = []
-      li.product_price = qp.price ? parseFloat(qp.price) : null
+      li.existing_cost = toNumber(qp.cost) || 0
+      li.units = maskedUnits(newProduct.units)
+      li.product_price = defMask(qp.price)
       li.matched = true
     }
     ElMessage.success('Produto cadastrado!')
@@ -398,8 +417,35 @@ function entradaUn(item) {
 
 function calcLaunchTotal() {
   return launchItems.value.reduce((acc, i) => {
-    return acc + (parseInt(i.quantity) || 0) * (parseFloat(i.unit_cost) || 0)
+    return acc + (parseInt(i.quantity) || 0) * (toNumber(i.unit_cost) || 0)
   }, 0)
+}
+
+function addLaunchProduct(product) {
+  const units = maskedUnits(product.units)
+  const def = units.find(u => u.is_default) || units[0]
+  launchItems.value.push({
+    id: null,
+    product_id: product.id,
+    product_name: product.name,
+    barcode: product.barcode || '',
+    quantity: 1,
+    unit_cost: '',
+    unit_com: null,
+    factor: 1,
+    units_per_case: def && def.factor ? def.factor : 1,
+    units,
+    selected_unit_id: null,
+    product_price: defMask(product.price),
+    product_name_existing: product.name,
+    existing_stock: product.stock_quantity,
+    existing_cost: product.cost,
+    matched: true,
+  })
+}
+
+function removeLaunchItem(idx) {
+  launchItems.value.splice(idx, 1)
 }
 
 function launchItemPayload(li) {
@@ -782,7 +828,12 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="form-field flex-1">
                   <label>Valor</label>
-                  <input v-model="item.unit_cost" type="number" step="0.01" placeholder="0,00" title="Valor por unidade comercial da nota" />
+                  <input
+                    :value="item.unit_cost"
+                    type="text" inputmode="decimal" placeholder="0,00"
+                    title="Valor por unidade comercial da nota"
+                    @input="moneyInput(item, 'unit_cost', $event)"
+                  />
                 </div>
                 <div class="form-field flex-1">
                   <label>Total</label>
@@ -931,8 +982,16 @@ onBeforeUnmount(() => {
           </div>
 
           <p class="launch-hint">
-            Vincule cada item a um produto do sistema. Itens sem barcode podem ser buscados pelo nome.
+            Vincule cada item a um produto e confira quantidades/valores. Você pode adicionar produtos, editar e remover itens antes de lançar.
           </p>
+
+          <div class="launch-add">
+            <ProductSearch
+              :products="allProducts"
+              placeholder="Adicionar produto a esta compra…"
+              @select="addLaunchProduct"
+            />
+          </div>
 
           <div class="launch-items">
             <div
@@ -948,14 +1007,23 @@ onBeforeUnmount(() => {
                   <i class="fas fa-link"></i> {{ li.product_name_existing }}
                 </span>
                 <span v-else class="match-badge is-unmatched-badge">Não vinculado</span>
-                <button
-                  v-if="li.matched"
-                  type="button"
-                  class="btn btn-ghost btn-xs li-unlink"
-                  @click="unmatchProduct(idx)"
-                >
-                  <i class="fas fa-unlink"></i> Desvincular
-                </button>
+                <span class="li-head-actions">
+                  <button
+                    v-if="li.matched"
+                    type="button"
+                    class="btn btn-ghost btn-xs"
+                    @click="unmatchProduct(idx)"
+                  >
+                    <i class="fas fa-unlink"></i> Desvincular
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-xs is-danger-text"
+                    @click="removeLaunchItem(idx)"
+                  >
+                    <i class="fas fa-trash"></i> Remover
+                  </button>
+                </span>
               </div>
 
               <div class="li-meta">
@@ -975,7 +1043,12 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="li-cell is-cost">
                   <label>Valor (nota)</label>
-                  <input v-model="li.unit_cost" type="number" step="0.01" min="0" class="li-input" />
+                  <input
+                    :value="li.unit_cost"
+                    type="text" inputmode="decimal" placeholder="0,00"
+                    class="li-input"
+                    @input="moneyInput(li, 'unit_cost', $event)"
+                  />
                 </div>
                 <div class="li-cell">
                   <label>Custo por unidade</label>
@@ -992,7 +1065,12 @@ onBeforeUnmount(() => {
                 <template v-if="li.units && li.units.length > 1">
                   <div v-for="u in li.units" :key="u.id" class="li-price-row">
                     <span class="li-price-name">{{ u.name }} <small>({{ u.factor }}x)</small></span>
-                    <input v-model="u.price" type="number" step="0.01" min="0" class="li-input li-price-input" />
+                    <input
+                      :value="u.price"
+                      type="text" inputmode="decimal" placeholder="0,00"
+                      class="li-input li-price-input"
+                      @input="moneyInput(u, 'price', $event)"
+                    />
                     <span
                       v-if="marginFor(li, u.price, u.factor) !== null"
                       class="margin-badge"
@@ -1004,7 +1082,12 @@ onBeforeUnmount(() => {
                 </template>
                 <div v-else class="li-price-row">
                   <span class="li-price-name">Preço de venda</span>
-                  <input v-model="li.product_price" type="number" step="0.01" min="0" class="li-input li-price-input" />
+                  <input
+                    :value="li.product_price"
+                    type="text" inputmode="decimal" placeholder="0,00"
+                    class="li-input li-price-input"
+                    @input="moneyInput(li, 'product_price', $event)"
+                  />
                   <span
                     v-if="marginFor(li, li.product_price, 1) !== null"
                     class="margin-badge"
@@ -1439,10 +1522,13 @@ onBeforeUnmount(() => {
 .launch-body { max-height: 70vh; overflow-y: auto; }
 .launch-info { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; margin-bottom: 8px; padding: 8px 12px; background: var(--bg-secondary, #f9fafb); border-radius: 6px; }
 .launch-hint { font-size: 13px; color: var(--text-secondary, #666); margin-bottom: 12px; }
+.launch-add { margin-bottom: 10px; }
 .launch-items { display: flex; flex-direction: column; gap: 8px; }
 .li-card { border: 1px solid var(--border, #e5e7eb); border-radius: 8px; padding: 12px 14px; }
 .li-card.is-unmatched { border-color: #f59e0b; background: #fffbeb; }
 .li-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.li-head-actions { margin-left: auto; display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.is-danger-text { color: var(--danger, #dc2626); }
 .li-num { font-size: 12px; color: var(--text-muted, #999); font-weight: 700; }
 .li-name { font-size: 14px; font-weight: 700; }
 .li-unlink { margin-left: auto; }

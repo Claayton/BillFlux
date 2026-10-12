@@ -664,6 +664,13 @@ function onModalKeydown(event) {
                 >
                   <td>
                     <span class="cell-title" :title="product.name">{{ product.name }}</span>
+                    <span
+                      v-if="(product.units || []).length > 1"
+                      class="prod-formats"
+                      title="Vendido em mais de um formato (unidade, caixa, etc.)"
+                    >
+                      <i class="fas fa-layer-group"></i> {{ (product.units || []).length }}
+                    </span>
                     <span v-if="product.barcode || product.secondary_code" class="cell-sub cell-barcode">
                       {{ product.barcode || product.secondary_code }}
                     </span>
@@ -1242,6 +1249,16 @@ function onModalKeydown(event) {
   margin-top: 4px;
   font-size: 12px;
   color: var(--text-muted);
+}
+.prod-formats {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary, #4f46e5);
+  background: color-mix(in srgb, var(--primary, #4f46e5) 12%, transparent);
 }
 .muted {
   color: var(--text-muted);

@@ -71,11 +71,14 @@ def _item_to_domain(item):
 
 
 def _to_decimal(value):
-    """Converte valor monetário (str BR ou número) para Decimal."""
-    if value is None or value == "":
+    """Converte valor monetário (str BR '1.234,56' ou número) para Decimal."""
+    if value is None or value == "" or value is False:
         return Decimal("0")
+    raw = str(value).strip()
     try:
-        return Decimal(str(value).replace(",", "."))
+        if "," in raw:
+            return Decimal(raw.replace(".", "").replace(",", "."))
+        return Decimal(raw)
     except (InvalidOperation, ValueError):
         return Decimal("0")
 
@@ -248,12 +251,22 @@ class PurchaseRepository:
 
                 prices = {}
                 unit_prices_by_product = {}
+                final_items = []
+                incoming_ids = set()
                 if items:
                     by_id = {item.id: item for item in stored}
                     for entry in items:
-                        item = by_id.get(entry.get("id"))
-                        if not item:
-                            continue
+                        item_id = entry.get("id")
+                        item = by_id.get(item_id) if item_id is not None else None
+                        if item is None:
+                            # Item ADICIONADO no lançamento (novo, sem id).
+                            item = PurchaseItemModel(purchase_id=purchase_id)
+                            item.factor = 1
+                            item.unit_com = None
+                            item.barcode = None
+                            item.product_name = None
+                        else:
+                            incoming_ids.add(item_id)
                         item.product_id = entry.get("product_id") or None
                         if entry.get("quantity") is not None:
                             item.quantity = int(entry["quantity"])
@@ -265,6 +278,7 @@ class PurchaseRepository:
                             item.unit_com = entry["unit_com"]
                         item.total = Decimal(str(item.quantity)) * item.unit_cost
                         session.add(item)
+                        final_items.append(item)
                         if entry.get("price") is not None:
                             price_value = _to_decimal(entry["price"])
                             if price_value > 0:
@@ -278,9 +292,16 @@ class PurchaseRepository:
                         if updates:
                             unit_prices_by_product[item.product_id] = updates
 
-                if not stored:
+                    # Itens REMOVIDOS no lançamento saem da compra.
+                    for stored_item in stored:
+                        if stored_item.id not in incoming_ids:
+                            session.delete(stored_item)
+                else:
+                    final_items = stored
+
+                if not final_items:
                     raise ValueError("A compra não tem itens para lançar.")
-                if any(not item.product_id for item in stored):
+                if any(not item.product_id for item in final_items):
                     raise ValueError(
                         "Vincule todos os itens a um produto antes de lançar a compra."
                     )
@@ -288,7 +309,7 @@ class PurchaseRepository:
                 # Recalcula os totais a partir dos itens persistidos (o total é a
                 # soma de Qtd × Valor da nota, nunca multiplicado pelo fator).
                 po.total = Decimal("0")
-                for item in stored:
+                for item in final_items:
                     po.total += item.total
                 po.net_total = po.total + po.freight - po.discount
 
@@ -315,10 +336,12 @@ class PurchaseRepository:
                     po.bill_id = bill_id
 
                 nf_ref = f" NF {po.nf_number}" if po.nf_number else ""
-                for item in stored:
+                for item in final_items:
                     product = session.get(ProductModel, item.product_id)
                     if not product:
                         continue
+                    if not item.product_name:
+                        item.product_name = product.name
                     factor = item.factor or 1
                     base_qty = item.quantity * factor
                     base_cost = item.unit_cost / factor if factor else item.unit_cost
