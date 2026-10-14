@@ -322,6 +322,7 @@ def test_sales_list_includes_time_items_payment(logged_client):
     )
     method = PaymentMethodRepository().get_active_methods()[0]
     OrderRepository().create_order([(product.id, 2)], method.id)
+    SaleRepository().insert_sale(date(2026, 7, 10), Decimal("80.00"), "Manual")
 
     response = logged_client.get("/api/sales")
     data = response.get_json()
