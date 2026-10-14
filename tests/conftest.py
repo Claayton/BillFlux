@@ -27,6 +27,30 @@ def create_database():
     create_db()
 
 
+@fixture(autouse=True)
+def _fresh_db():
+    """Recria o schema e re-semeia os padrões ANTES de cada teste.
+
+    O banco sqlite em memória é único (StaticPool) e compartilhado por toda a
+    suíte, então sem isso o estado vaza entre testes e causa falsos negativos
+    (ex.: vendas/movimentos de um teste aparecendo no caixa de outro)."""
+    from sqlmodel import SQLModel
+
+    from billflux import (
+        _seed_default_accounts,
+        _seed_default_payment_methods,
+        _seed_default_user,
+    )
+    from billflux.infra.config.database import engine
+
+    SQLModel.metadata.drop_all(engine)
+    SQLModel.metadata.create_all(engine)
+    _seed_default_user()
+    _seed_default_accounts()
+    _seed_default_payment_methods()
+    yield
+
+
 @fixture(scope="module")
 def app():
     """Configura o aplicativo de teste com um banco de dados em memória."""
