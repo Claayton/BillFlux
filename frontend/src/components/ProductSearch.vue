@@ -170,7 +170,14 @@ onBeforeUnmount(() => {
           @mousedown.prevent="choose(p)"
         >
           <span class="pdv-suggestion-info">
-            <span class="pdv-suggestion-name">{{ p.name }}</span>
+            <span class="pdv-suggestion-name">
+              {{ p.name }}
+              <span
+                v-if="(p.units || []).length > 1"
+                class="ps-multi"
+                title="Vendido em mais de um formato"
+              >{{ (p.units || []).length }} formatos</span>
+            </span>
             <span class="pdv-suggestion-sub">
               {{ p.barcode ? 'Cód.: ' + p.barcode : 'Sem código de barras' }}
             </span>
@@ -238,5 +245,19 @@ onBeforeUnmount(() => {
 .ps-clear:hover {
   background: var(--surface-hover, #f3f4f6);
   color: var(--text, #111827);
+}
+
+.ps-multi {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--primary, #4f46e5);
+  background: color-mix(in srgb, var(--primary, #4f46e5) 12%, transparent);
+  vertical-align: 1px;
 }
 </style>

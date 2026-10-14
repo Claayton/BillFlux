@@ -440,11 +440,11 @@ async function saveProduct() {
       min_stock: Number(productForm.value.min_stock) || 0,
       obs: productForm.value.obs,
       active: productForm.value.active,
+      stock_quantity: Number(productForm.value.stock_quantity) || 0,
     }
     if (editingProduct.value) {
       data.value = await api.put(`/products/${editingProduct.value.id}`, payload)
     } else {
-      payload.stock_quantity = Number(productForm.value.stock_quantity) || 0
       data.value = await api.post('/products', payload)
     }
     showProductModal.value = false
@@ -664,6 +664,13 @@ function onModalKeydown(event) {
                 >
                   <td>
                     <span class="cell-title" :title="product.name">{{ product.name }}</span>
+                    <span
+                      v-if="(product.units || []).length > 1"
+                      class="prod-formats"
+                      title="Vendido em mais de um formato (unidade, caixa, etc.)"
+                    >
+                      <i class="fas fa-layer-group"></i> {{ (product.units || []).length }}
+                    </span>
                     <span v-if="product.barcode || product.secondary_code" class="cell-sub cell-barcode">
                       {{ product.barcode || product.secondary_code }}
                     </span>
@@ -939,8 +946,10 @@ function onModalKeydown(event) {
                 v-model="productForm.stock_quantity"
                 type="number"
                 min="0"
-                :disabled="!!editingProduct"
               />
+              <small v-if="editingProduct" class="field-hint">
+                Define o estoque absoluto (registra um ajuste).
+              </small>
             </div>
             <div class="form-field">
               <label for="product_min_stock">Estoque mínimo</label>
@@ -1235,6 +1244,22 @@ function onModalKeydown(event) {
 </template>
 
 <style scoped>
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.prod-formats {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary, #4f46e5);
+  background: color-mix(in srgb, var(--primary, #4f46e5) 12%, transparent);
+}
 .muted {
   color: var(--text-muted);
   padding: 24px 4px;

@@ -665,6 +665,306 @@ class TestPurchaseAPI:
         assert data["purchase"]["status"] == "confirmada"
         assert data["purchase"]["bill_id"] is not None
 
+    def test_update_rascunho_preserves_id_and_factor(self, logged_client):
+        """PUT substitui itens no MESMO id e o total não multiplica pelo fator."""
+        from billflux.infra.repository.purchase_repository import PurchaseRepository
+
+        token = _csrf(logged_client)
+        po = PurchaseRepository().insert_purchase(
+            nf_number="300",
+            total=Decimal("0"),
+            net_total=Decimal("0"),
+            items=[
+                {
+                    "product_id": None,
+                    "quantity": 1,
+                    "unit_cost": Decimal("10"),
+                    "total": Decimal("10"),
+                    "product_name": "Antigo",
+                }
+            ],
+        )
+
+        resp = logged_client.put(
+            f"/api/purchases/{po.id}",
+            json={
+                "nf_number": "301",
+                "items": [
+                    {
+                        "product_id": None,
+                        "quantity": 2,
+                        "unit_cost": "47.99",
+                        "factor": 6,
+                        "product_name": "Novo",
+                    }
+                ],
+            },
+            headers={"X-CSRFToken": token},
+        )
+        assert resp.status_code == 200
+        purchase = resp.get_json()["purchase"]
+        assert purchase["id"] == po.id  # MESMO id (não recria)
+        assert purchase["nf_number"] == "301"
+        assert Decimal(purchase["total"]) == Decimal("95.98")  # 2×47.99
+
+        detail = logged_client.get(f"/api/purchases/{po.id}").get_json()
+        item = detail["items"][0]
+        assert item["factor"] == 6
+        assert item["quantity"] == 2
+        assert Decimal(item["total"]) == Decimal("95.98")
+
+    def test_create_total_never_multiplied_by_factor(self, logged_client):
+        """Criação: total = Qtd × Valor (fator entra só no estoque/custo)."""
+        token = _csrf(logged_client)
+        resp = logged_client.post(
+            "/api/purchases",
+            json={
+                "items": [
+                    {
+                        "product_id": None,
+                        "quantity": 2,
+                        "unit_cost": "47.99",
+                        "factor": 6,
+                        "product_name": "Pack c/6",
+                    }
+                ]
+            },
+            headers={"X-CSRFToken": token},
+        )
+        assert resp.status_code == 201
+        purchase = resp.get_json()["purchase"]
+        assert Decimal(purchase["total"]) == Decimal("95.98")
+
+    def test_confirm_recomputes_total_on_launch_edit(self, logged_client):
+        """Confirm recalculou o total após editar qtd/valor no modal de lançamento."""
+        from billflux.infra.repository.purchase_repository import PurchaseRepository
+
+        product_id = _make_product()
+        token = _csrf(logged_client)
+        po = PurchaseRepository().insert_purchase(
+            total=Decimal("10"),
+            net_total=Decimal("10"),
+            items=[
+                {
+                    "product_id": product_id,
+                    "quantity": 1,
+                    "unit_cost": Decimal("10"),
+                    "total": Decimal("10"),
+                    "product_name": "Produto",
+                }
+            ],
+        )
+        stored = PurchaseRepository().get_purchase_items(po.id)
+
+        resp = logged_client.post(
+            f"/api/purchases/{po.id}/confirm",
+            json={
+                "create_bill": False,
+                "paid": False,
+                "items": [
+                    {
+                        "id": stored[0].id,
+                        "product_id": product_id,
+                        "quantity": 3,
+                        "unit_cost": "10.00",
+                        "factor": 1,
+                    }
+                ],
+            },
+            headers={"X-CSRFToken": token},
+        )
+        assert resp.status_code == 200
+        purchase = resp.get_json()["purchase"]
+        assert Decimal(purchase["total"]) == Decimal("30")
+
+    def test_confirm_adds_and_removes_items(self, logged_client):
+        """No lançamento dá pra ADICIONAR item novo e REMOVER item da nota."""
+        from billflux.infra.repository.purchase_repository import PurchaseRepository
+        from billflux.infra.config.database import get_session
+        from billflux.infra.entities.product import Product
+
+        p1, p2, p3 = _make_product(), _make_product(), _make_product()
+        token = _csrf(logged_client)
+        repo = PurchaseRepository()
+        po = repo.insert_purchase(
+            total=Decimal("0"),
+            net_total=Decimal("0"),
+            items=[
+                {
+                    "product_id": p1,
+                    "quantity": 1,
+                    "unit_cost": Decimal("10"),
+                    "total": Decimal("10"),
+                    "product_name": "A",
+                },
+                {
+                    "product_id": p2,
+                    "quantity": 1,
+                    "unit_cost": Decimal("5"),
+                    "total": Decimal("5"),
+                    "product_name": "B",
+                },
+            ],
+        )
+        a, b = repo.get_purchase_items(po.id)
+        assert a.product_id == p1 and b.product_id == p2
+
+        resp = logged_client.post(
+            f"/api/purchases/{po.id}/confirm",
+            json={
+                "create_bill": False,
+                "paid": False,
+                "items": [
+                    # mantém A; REMOVE B (não enviado); ADICIONA p3 (novo, sem id)
+                    {
+                        "id": a.id,
+                        "product_id": p1,
+                        "quantity": 1,
+                        "unit_cost": "10",
+                        "factor": 1,
+                    },
+                    {
+                        "product_id": p3,
+                        "quantity": 3,
+                        "unit_cost": "4",
+                        "factor": 1,
+                        "product_name": "C",
+                    },
+                ],
+            },
+            headers={"X-CSRFToken": token},
+        )
+        assert resp.status_code == 200, resp.get_json()
+        data = resp.get_json()
+        assert Decimal(data["purchase"]["total"]) == Decimal("22")  # 10 + 3×4
+
+        final = repo.get_purchase_items(po.id)
+        assert {i.product_id for i in final} == {p1, p3}
+        assert len(final) == 2
+
+        session = get_session()
+        pA = session.get(Product, p1)
+        pB = session.get(Product, p2)
+        pC = session.get(Product, p3)
+        assert pB.stock_quantity == 0  # removido: nada entrou
+        assert pA.stock_quantity == 1
+        assert pC.stock_quantity == 3
+        session.close()
+
+    def test_confirm_money_with_thousands(self, logged_client):
+        """O valor da nota aceita '1.234,56' (milhar com vírgula)."""
+        from billflux.infra.repository.purchase_repository import PurchaseRepository
+
+        product_id = _make_product()
+        token = _csrf(logged_client)
+        repo = PurchaseRepository()
+        po = repo.insert_purchase(
+            total=Decimal("0"),
+            net_total=Decimal("0"),
+            items=[
+                {
+                    "product_id": product_id,
+                    "quantity": 1,
+                    "unit_cost": Decimal("0"),
+                    "total": Decimal("0"),
+                    "product_name": "X",
+                }
+            ],
+        )
+        item_id = repo.get_purchase_items(po.id)[0].id
+        resp = logged_client.post(
+            f"/api/purchases/{po.id}/confirm",
+            json={
+                "create_bill": False,
+                "paid": False,
+                "items": [
+                    {
+                        "id": item_id,
+                        "product_id": product_id,
+                        "quantity": 1,
+                        "unit_cost": "1.234,56",
+                        "factor": 1,
+                    }
+                ],
+            },
+            headers={"X-CSRFToken": token},
+        )
+        assert resp.status_code == 200, resp.get_json()
+        assert Decimal(resp.get_json()["purchase"]["total"]) == Decimal("1234.56")
+        """Editar compra confirmada estorna e reaplica o estoque (com fator) e a conta."""
+        from billflux.infra.repository.purchase_repository import PurchaseRepository
+
+        product_id = _make_product()
+        token = _csrf(logged_client)
+        repo = PurchaseRepository()
+        po = repo.insert_purchase(
+            total=Decimal("47.99"),
+            net_total=Decimal("47.99"),
+            items=[
+                {
+                    "product_id": product_id,
+                    "quantity": 1,
+                    "unit_cost": Decimal("47.99"),
+                    "total": Decimal("47.99"),
+                    "product_name": "Pack",
+                }
+            ],
+        )
+        confirmed = logged_client.post(
+            f"/api/purchases/{po.id}/confirm",
+            json={
+                "create_bill": True,
+                "paid": False,
+                "items": [
+                    {
+                        "product_id": product_id,
+                        "quantity": 1,
+                        "unit_cost": "47.99",
+                        "factor": 6,
+                    }
+                ],
+            },
+            headers={"X-CSRFToken": token},
+        ).get_json()["purchase"]
+        assert confirmed["status"] == "confirmada"
+        bill_id = confirmed["bill_id"]
+
+        resp = logged_client.put(
+            f"/api/purchases/{po.id}",
+            json={
+                "items": [
+                    {
+                        "product_id": product_id,
+                        "quantity": 2,
+                        "unit_cost": "47.99",
+                        "factor": 6,
+                        "product_name": "Pack",
+                    }
+                ],
+            },
+            headers={"X-CSRFToken": token},
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["purchase"]["id"] == po.id
+        assert data["purchase"]["status"] == "confirmada"
+        assert Decimal(data["purchase"]["total"]) == Decimal("95.98")  # 2×47.99
+
+        from billflux.infra.config.database import get_session
+        from billflux.infra.entities.bill import Bill
+        from billflux.infra.entities.product import Product
+
+        session = get_session()
+        product = session.get(Product, product_id)
+        # confirm: 1 caixa de 6 → estoque 6; edição: estorna 6 e reaplica 2×6
+        assert product.stock_quantity == 12
+        session.close()
+
+        session = get_session()
+        bill = session.get(Bill, bill_id)
+        assert bill.value == Decimal("95.98")
+        session.close()
+
     def test_nfe_import(self, logged_client):
         token = _csrf(logged_client)
         resp = logged_client.post(
@@ -874,6 +1174,44 @@ class TestWeightedAverageCost:
             Decimal("10") * Decimal("5.00") + Decimal("20") * Decimal("4.50")
         ) / Decimal("30")
         assert p.cost == expected_cost.quantize(Decimal("0.01"))
+        session.close()
+
+    def test_weighted_average_user_example(self):
+        """10 un a R$3,00 + 3 un a R$2,50 → custo médio ~R$2,88."""
+        _open_register()
+        product_id = _make_product()
+        from billflux.infra.config.database import get_session
+        from billflux.infra.entities.product import Product
+        from billflux.infra.repository.purchase_repository import PurchaseRepository
+
+        session = get_session()
+        p = session.get(Product, product_id)
+        p.stock_quantity = 10
+        p.cost = Decimal("3.00")
+        session.add(p)
+        session.commit()
+        session.close()
+
+        repo = PurchaseRepository()
+        po = repo.insert_purchase(
+            items=[
+                {
+                    "product_id": product_id,
+                    "quantity": 3,
+                    "unit_cost": Decimal("2.50"),
+                    "total": Decimal("7.50"),
+                    "product_name": "X",
+                }
+            ],
+            total=Decimal("7.50"),
+            net_total=Decimal("7.50"),
+        )
+        repo.confirm_purchase(po.id)
+
+        session = get_session()
+        p = session.get(Product, product_id)
+        assert p.stock_quantity == 13
+        assert p.cost == Decimal("2.88")
         session.close()
 
 
