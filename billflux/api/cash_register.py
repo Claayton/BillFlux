@@ -11,6 +11,7 @@ from billflux.infra.repository.cash_movement_repository import CashMovementRepos
 from billflux.infra.repository.payment_method_repository import (
     PaymentMethodRepository,
 )
+from billflux.infra.repository.tab_repository import TabRepository
 from billflux.services.audit import audit
 from billflux.services.credit import get_fiado_method_ids
 
@@ -89,6 +90,15 @@ def _caixa_payload():
         ]
         movement_totals = CashMovementRepository().totals_by_kind(open_register.id)
 
+    open_tabs = [
+        {
+            "id": tab.id,
+            "number": tab.number,
+            "identification": tab.identification,
+        }
+        for tab in TabRepository().list_tabs(status="open")
+    ]
+
     return {
         "open": _serialize(open_register) if open_register else None,
         "last_closed": _serialize(last_closed) if last_closed else None,
@@ -98,6 +108,7 @@ def _caixa_payload():
         "payment_methods": _payment_methods_map(),
         "movements": movements,
         "movement_totals": movement_totals,
+        "open_tabs": open_tabs,
     }
 
 

@@ -756,14 +756,14 @@ describe('PdvView — comandas abertas', () => {
     expect(wrapper.find('.tab-card').exists()).toBe(false)
   })
 
-  it('sair da comanda libera o PDV sem fechar a comanda', async () => {
+  it('minimizar a comanda libera o PDV sem fechar a comanda', async () => {
     openWithActiveTab()
     const wrapper = mountView()
     await flushPromises()
 
     const leave = wrapper
       .findAll('.pdv-tabbar-actions button')
-      .find((b) => b.text().includes('Sair'))
+      .find((b) => b.text().includes('Minimizar'))
     await leave.trigger('click')
     await flushPromises()
 
@@ -772,6 +772,32 @@ describe('PdvView — comandas abertas', () => {
     expect(sessionStorage.getItem('pdv.active_tab')).toBeNull()
     expect(wrapper.find('#cart-count').text()).toBe('0 itens')
     expect(wrapper.text()).toContain('Carrinho vazio')
+  })
+
+  it('imprimir a comanda ativa minimiza depois de imprimir', async () => {
+    openWithActiveTab()
+    apiMock.post.mockResolvedValue({ tab: { id: 42, number: 7, print_count: 1 } })
+    const originalPrint = window.print
+    window.print = vi.fn()
+    const wrapper = mountView()
+    await flushPromises()
+
+    const printBtn = wrapper
+      .findAll('.pdv-tabbar-actions button')
+      .find((b) => b.text().includes('Imprimir'))
+    await printBtn.trigger('click')
+    await flushPromises()
+
+    // TabPrintModal auto-imprime após ~250ms e emite 'printed' -> minimiza
+    await new Promise((r) => setTimeout(r, 320))
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith('/tabs/42/print')
+    expect(wrapper.find('.pdv-tabbar').exists()).toBe(false)
+    expect(sessionStorage.getItem('pdv.active_tab')).toBeNull()
+    expect(wrapper.find('#cart-count').text()).toBe('0 itens')
+
+    window.print = originalPrint
   })
 
   it('mostra o botão "Comandas abertas" com a contagem', async () => {
