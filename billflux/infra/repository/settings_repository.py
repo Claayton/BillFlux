@@ -17,6 +17,11 @@ ALLOWED_KEYS = frozenset(
         "receipt.width",
         "receipt.header",
         "receipt.footer",
+        "receipt.message",
+        "receipt.show_cnpj",
+        "receipt.show_address",
+        "receipt.show_phone",
+        "receipt.show_customer",
         "pdv.auto_print",
         "stock.default_min",
     }

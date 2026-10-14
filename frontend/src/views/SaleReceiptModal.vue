@@ -29,6 +29,11 @@ const autoPrintEnabled = computed(() => settings.value['pdv.auto_print'] === 'tr
 const headerLines = computed(() => splitLines(settings.value['receipt.header']))
 const footerLines = computed(() => splitLines(settings.value['receipt.footer']))
 const companyLine = computed(() => settings.value['company.name'] || 'BeeFlux')
+const companyCnpj = computed(() => settings.value['company.cnpj'] || '')
+const companyAddress = computed(() => settings.value['company.address'] || '')
+const companyPhone = computed(() => settings.value['company.phone'] || '')
+const receiptMessage = computed(() => settings.value['receipt.message'] || '')
+const isOn = (key) => settings.value[key] === 'true'
 
 function splitLines(text) {
   return (text || '').split('\n').map((l) => l.trim()).filter(Boolean)
@@ -204,6 +209,14 @@ onBeforeUnmount(() => {
             :header-lines="headerLines"
             :footer-lines="footerLines"
             :order="order"
+            :company-cnpj="companyCnpj"
+            :company-address="companyAddress"
+            :company-phone="companyPhone"
+            :show-cnpj="isOn('receipt.show_cnpj')"
+            :show-address="isOn('receipt.show_address')"
+            :show-phone="isOn('receipt.show_phone')"
+            :show-customer="isOn('receipt.show_customer')"
+            :message="receiptMessage"
           />
 
           <!-- Recibo completo (formato atual) -->
