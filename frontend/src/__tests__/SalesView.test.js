@@ -390,4 +390,62 @@ describe('SalesView', () => {
     await flushPromises()
     expect(firstValue()).toBe('R$ ••••')
   })
+
+  it('mostra divisor de troca de caixa entre sessões no histórico', async () => {
+    apiMock.get.mockResolvedValue({
+      today: '2026-08-21',
+      caixa: { open: true, opened_at: '2026-08-21 08:00:00' },
+      caixa_sessions: [
+        {
+          id: 1,
+          opened_at: '2026-08-19 08:00:00',
+          closed_at: '2026-08-20 18:00:00',
+          status: 'closed',
+        },
+        { id: 2, opened_at: '2026-08-21 08:00:00', closed_at: null, status: 'open' },
+      ],
+      periods: {
+        hoje: { total: 50, count: 1, days: 1, avg: 50 },
+        '7d': { total: 80, count: 2, days: 2, avg: 40 },
+        mes: { total: 80, count: 2, days: 2, avg: 40 },
+        mes_anterior: { total: 0, count: 0, days: 0, avg: 0 },
+      },
+      sales: [
+        {
+          kind: 'pdv',
+          id: 10,
+          date: '2026-08-21',
+          total: 50,
+          obs: null,
+          time: '14:30',
+          items: [],
+          payment: 'Dinheiro',
+          cancelled: false,
+          in_caixa: true,
+          caixa_id: 2,
+        },
+        {
+          kind: 'pdv',
+          id: 9,
+          date: '2026-08-20',
+          total: 30,
+          obs: null,
+          time: '10:00',
+          items: [],
+          payment: 'PIX',
+          cancelled: false,
+          in_caixa: false,
+          caixa_id: 1,
+        },
+      ],
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const dividers = wrapper.findAll('.caixa-divider')
+    expect(dividers.length).toBe(1)
+    expect(dividers[0].text()).toContain('Caixa fechado')
+    expect(dividers[0].text()).toContain('novo caixa aberto')
+  })
 })
