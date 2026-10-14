@@ -42,6 +42,7 @@ describe('PdvView', () => {
     apiMock.put.mockReset()
     routerPush.mockReset()
     sessionStorage.clear()
+    localStorage.clear()
     apiMock.get.mockImplementation((url) => {
       if (String(url).startsWith('/pdv/recibo')) {
         const id = String(url).split('/').pop()
@@ -514,6 +515,31 @@ describe('PdvView', () => {
     expect(wrapper.find('#cart-total').text()).toBe('R$ 4,50')
     expect(wrapper.find('.pdv-footer-discount').exists()).toBe(true)
   })
+
+  it('reutiliza el catálogo del cache cuando el stamp no cambió', async () => {
+    apiMock.get.mockImplementation((url) => {
+      const p = String(url)
+      if (p === '/pdv/stamp') return Promise.resolve({ stamp: 'abc123' })
+      if (p === '/pdv') return Promise.resolve({ products, methods, customers })
+      if (p === '/caixa') {
+        return Promise.resolve({ open: { id: 1, opened_by: 't', status: 'open' } })
+      }
+      return Promise.resolve({ products, methods, customers })
+    })
+
+    const pdvCalls = () => apiMock.get.mock.calls.filter((c) => c[0] === '/pdv').length
+
+    let wrapper = mountView()
+    await flushPromises()
+    expect(pdvCalls()).toBe(1)
+    wrapper.unmount()
+
+    wrapper = mountView()
+    await flushPromises()
+    expect(pdvCalls()).toBe(1) // no re-descargó: usó el cache
+    expect(wrapper.find('#pdv-search').exists()).toBe(true)
+    wrapper.unmount()
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -603,6 +629,7 @@ describe('PdvView — comandas abertas', () => {
     apiMock.put.mockReset()
     routerPush.mockReset()
     sessionStorage.clear()
+    localStorage.clear()
     apiMock.get.mockImplementation((url) => {
       const path = String(url)
       if (path.startsWith('/tabs?')) return Promise.resolve(tabListPayload)
@@ -756,14 +783,14 @@ describe('PdvView — comandas abertas', () => {
     expect(wrapper.find('.tab-card').exists()).toBe(false)
   })
 
-  it('sair da comanda libera o PDV sem fechar a comanda', async () => {
+  it('minimizar a comanda libera o PDV sem fechar a comanda', async () => {
     openWithActiveTab()
     const wrapper = mountView()
     await flushPromises()
 
     const leave = wrapper
       .findAll('.pdv-tabbar-actions button')
-      .find((b) => b.text().includes('Sair'))
+      .find((b) => b.text().includes('Minimizar'))
     await leave.trigger('click')
     await flushPromises()
 
@@ -772,6 +799,32 @@ describe('PdvView — comandas abertas', () => {
     expect(sessionStorage.getItem('pdv.active_tab')).toBeNull()
     expect(wrapper.find('#cart-count').text()).toBe('0 itens')
     expect(wrapper.text()).toContain('Carrinho vazio')
+  })
+
+  it('imprimir a comanda ativa minimiza depois de imprimir', async () => {
+    openWithActiveTab()
+    apiMock.post.mockResolvedValue({ tab: { id: 42, number: 7, print_count: 1 } })
+    const originalPrint = window.print
+    window.print = vi.fn()
+    const wrapper = mountView()
+    await flushPromises()
+
+    const printBtn = wrapper
+      .findAll('.pdv-tabbar-actions button')
+      .find((b) => b.text().includes('Imprimir'))
+    await printBtn.trigger('click')
+    await flushPromises()
+
+    // TabPrintModal auto-imprime após ~250ms e emite 'printed' -> minimiza
+    await new Promise((r) => setTimeout(r, 320))
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith('/tabs/42/print')
+    expect(wrapper.find('.pdv-tabbar').exists()).toBe(false)
+    expect(sessionStorage.getItem('pdv.active_tab')).toBeNull()
+    expect(wrapper.find('#cart-count').text()).toBe('0 itens')
+
+    window.print = originalPrint
   })
 
   it('mostra o botão "Comandas abertas" com a contagem', async () => {

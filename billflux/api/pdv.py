@@ -3,6 +3,8 @@
 from decimal import Decimal
 
 from flask import request
+from sqlalchemy import func
+from sqlmodel import select
 
 from billflux.api import (
     bp,
@@ -11,6 +13,7 @@ from billflux.api import (
     api_response,
     br_to_decimal,
 )
+from billflux.infra.config.database import get_session
 from billflux.infra.repository.order_repository import OrderRepository
 from billflux.infra.repository.payment_method_repository import (
     PaymentMethodRepository,
@@ -18,10 +21,61 @@ from billflux.infra.repository.payment_method_repository import (
 from billflux.infra.repository.product_repository import ProductRepository
 from billflux.infra.repository.customer_repository import CustomerRepository
 from billflux.infra.repository.product_unit_repository import ProductUnitRepository
+from billflux.infra.entities.product import Product as ProductModel
+from billflux.infra.entities.product_unit import ProductUnit as ProductUnitModel
+from billflux.infra.entities.product_movement import (
+    ProductMovement as ProductMovementModel,
+)
+from billflux.infra.entities.customer import Customer as CustomerModel
+from billflux.infra.entities.payment_method import (
+    PaymentMethod as PaymentMethodModel,
+)
+from billflux.infra.entities.setting import Setting as SettingModel
+from billflux.services.pdv_cache import PDV_VERSION_KEY
 from billflux.services.credit import (
     ensure_fiado_customer,
     register_order_credit,
 )
+
+
+def _pdv_stamp() -> str:
+    """Huella de versión de los datos que expone ``/pdv``."""
+    session = get_session()
+    try:
+        with session:
+            version = 0
+            row = session.get(SettingModel, PDV_VERSION_KEY)
+            if row and row.value:
+                try:
+                    version = int(row.value)
+                except (TypeError, ValueError):
+                    version = 0
+
+            def _max_of(model, column):
+                return session.scalar(select(func.max(getattr(model, column))))
+
+            products = session.scalar(select(func.count(ProductModel.id)))
+            customers = session.scalar(select(func.count(CustomerModel.id)))
+            methods = session.scalar(select(func.count(PaymentMethodModel.id)))
+            return "-".join(
+                [
+                    f"v{version}",
+                    f"p{_max_of(ProductModel, 'id') or 0}:{products}",
+                    f"u{_max_of(ProductUnitModel, 'id') or 0}",
+                    f"m{_max_of(ProductMovementModel, 'id') or 0}",
+                    f"c{_max_of(CustomerModel, 'id') or 0}:{customers}",
+                    f"pm{_max_of(PaymentMethodModel, 'id') or 0}:{methods}",
+                ]
+            )
+    finally:
+        session.close()
+
+
+@bp.route("/pdv/stamp")
+@api_login_required
+def pdv_stamp():
+    """Versión de los datos del PDV (para cache local del navegador)."""
+    return api_response({"stamp": _pdv_stamp()})
 
 
 def _serialize_product(product, units=None):

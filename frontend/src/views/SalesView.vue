@@ -155,6 +155,46 @@ const searchedSales = computed(() => {
   })
 })
 
+const caixaSessionsById = computed(() => {
+  const map = {}
+  for (const session of data.value?.caixa_sessions || []) {
+    map[session.id] = session
+  }
+  return map
+})
+
+/** Há troca de caixa entre a venda acima e a venda no índice informado? */
+function caixaBoundaryBefore(index) {
+  const list = searchedSales.value
+  if (index <= 0 || index >= list.length) return false
+  return (list[index].caixa_id ?? null) !== (list[index - 1].caixa_id ?? null)
+}
+
+function fmtStamp(value) {
+  if (!value) return ''
+  const dt = new Date(String(value).replace(' ', 'T'))
+  if (Number.isNaN(dt.getTime())) return value
+  return dt.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+/** Divisor: caixa de baixo (mais antigo) fechou e o de cima abriu. */
+function caixaBoundaryLabel(index) {
+  const list = searchedSales.value
+  const below = caixaSessionsById.value[list[index].caixa_id]
+  const above = caixaSessionsById.value[list[index - 1].caixa_id]
+  const closed = below && below.closed_at
+  const parts = [closed ? `Caixa fechado em ${fmtStamp(below.closed_at)}` : 'Sem caixa']
+  if (above && above.opened_at) {
+    parts.push(`novo caixa aberto em ${fmtStamp(above.opened_at)}`)
+  }
+  return parts.join(' · ')
+}
+
 function mask(event) {
   form.value.total = maskMoney(event.target.value)
 }
@@ -509,9 +549,15 @@ onBeforeUnmount(clearEyeTimer)
               <span>Itens</span>
               <span>Ações</span>
             </div>
+            <template v-for="(sale, index) in searchedSales" :key="sale.kind + '-' + sale.id">
+            <div v-if="caixaBoundaryBefore(index)" class="caixa-divider">
+              <span class="caixa-divider-line"></span>
+              <span class="caixa-divider-label">
+                <i class="fas fa-cash-register"></i> {{ caixaBoundaryLabel(index) }}
+              </span>
+              <span class="caixa-divider-line"></span>
+            </div>
             <div
-              v-for="sale in searchedSales"
-              :key="sale.kind + '-' + sale.id"
               class="sale-row"
               :class="{ 'is-cancelled': sale.cancelled }"
             >
@@ -602,6 +648,7 @@ onBeforeUnmount(clearEyeTimer)
                 </div>
               </div>
             </div>
+            </template>
           </div>
           </div>
         </div>

@@ -5,6 +5,7 @@ import { api } from '@/api/client'
 import { maskMoney, moneyToDecimal } from '@/utils/format'
 import { normalizeForSearch } from '@/utils/normalize'
 import { paymentIcon, paymentColor } from '@/utils/payment'
+import { readPdvCache, writePdvCache, getPdvStamp } from '@/utils/pdvCache'
 import { TAB_STATUS, tabLabel } from '@/utils/tabs'
 import SaleReceiptModal from '@/views/SaleReceiptModal.vue'
 import TabOpenModal from '@/components/TabOpenModal.vue'
@@ -50,6 +51,7 @@ const tabPrint = ref(null) // detalhe da comanda na tela de impressão
 const tabConfirm = ref(null) // comanda aguardando confirmação de cancelamento
 const tabBusy = ref(false) // abrindo/selecionando/fechando/cancelando
 const tabSyncing = ref(false) // sincronização de itens em andamento
+let minimizeOnPrint = false // imprimir a comanda ativa minimiza depois
 
 const cartItems = computed(() => Array.from(cart.value.values()))
 const cartCount = computed(() => cartItems.value.reduce((sum, item) => sum + item.qty, 0))
@@ -98,13 +100,35 @@ function formatBRL(value) {
 
 async function load() {
   try {
-    const [pdvData, caixaData] = await Promise.all([
-      api.get('/pdv'),
-      api.get('/caixa').catch(() => ({ open: null })),
-    ])
-    products.value = pdvData.products
-    methods.value = pdvData.methods
-    customers.value = pdvData.customers || []
+    // Cache local del catálogo: si el stamp no cambió, no re-descargamos
+    // productos/presentaciones/clientes (solo precios/stock se invalidan al
+    // cambiar el stamp tras movimientos/ediciones).
+    let stamp = null
+    try {
+      stamp = (await api.get('/pdv/stamp')).stamp
+    } catch {
+      stamp = getPdvStamp()
+    }
+    const cached = stamp ? readPdvCache(stamp) : null
+    if (cached) {
+      products.value = cached.products
+      methods.value = cached.methods
+      customers.value = cached.customers || []
+    } else {
+      const pdvData = await api.get('/pdv')
+      products.value = pdvData.products
+      methods.value = pdvData.methods
+      customers.value = pdvData.customers || []
+      if (stamp) {
+        writePdvCache(stamp, {
+          products: pdvData.products,
+          methods: pdvData.methods,
+          customers: pdvData.customers || [],
+        })
+      }
+    }
+    // El estado del caixa siempre se consulta en vivo (es barato).
+    const caixaData = await api.get('/caixa').catch(() => ({ open: null }))
     caixaOpen.value = !!caixaData.open
     searchInput.value?.focus()
   } catch (error) {
@@ -122,10 +146,14 @@ function findUnit(product, unitId) {
 }
 
 function defaultUnit(product) {
-  if (!product || !product.units || !product.units.length) {
-    return { id: 0, name: 'Unidade', factor: 1, price: product?.price || 0, is_default: true }
-  }
-  return product.units.find((u) => u.is_default) || product.units[0]
+  if (!product) return { id: 0, name: 'Unidade', factor: 1, price: 0, is_default: true }
+  const units = product.units || []
+  // Prefere a apresentação de fator 1 (padrão primeiro) — nunca o pack como base.
+  const base =
+    units.find((u) => (u.factor || 1) === 1 && u.is_default) ||
+    units.find((u) => (u.factor || 1) === 1)
+  if (base) return base
+  return { id: 0, name: 'Unidade', factor: 1, price: product.price || 0, is_default: true }
 }
 
 function cartKey(productId, unitId) {
@@ -354,6 +382,8 @@ async function leaveTab() {
 async function reprintActiveTab() {
   if (!activeTab.value) return
   await flushTabSync()
+  // ao imprimir a comanda ativa, minimiza depois de imprimir (não fecha)
+  minimizeOnPrint = true
   tabPrint.value = activeTab.value
 }
 
@@ -373,6 +403,12 @@ function onTabPrinted(tabData) {
   }
   const listed = tabsList.value.find((t) => t.id === tabData.id)
   if (listed) listed.print_count = tabData.print_count
+  // Impressão da comanda ativa: fecha o modal e minimiza (comanda segue aberta).
+  if (minimizeOnPrint && activeTab.value && activeTab.value.id === tabData.id) {
+    minimizeOnPrint = false
+    tabPrint.value = null
+    leaveTab()
+  }
 }
 
 function requestCancelTab(tab) {
@@ -431,13 +467,15 @@ function buildSuggestions(term) {
   const results = []
   for (const p of products.value) {
     if (normalizeForSearch(p.name).includes(lower) || normalizeForSearch(p.barcode || '').includes(lower)) {
-      if (p.units && p.units.length > 1) {
-        for (const u of p.units) {
+      const units = p.units || []
+      // Unidade-base (fator 1) sempre: das apresentações ou sintetizada do preço.
+      const base = defaultUnit(p)
+      results.push({ ...p, _unit: base, _suggestionKey: p.id + '_base' })
+      // Caixas/packs (fator > 1) aparecem como opções próprias.
+      for (const u of units) {
+        if ((u.factor || 1) > 1) {
           results.push({ ...p, _unit: u, _suggestionKey: p.id + '_' + u.id })
         }
-      } else {
-        const u = defaultUnit(p)
-        results.push({ ...p, _unit: u, _suggestionKey: p.id + '_' + u.id })
       }
     }
   }
@@ -968,10 +1006,10 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="btn btn-ghost btn-sm"
-              title="Sair da comanda sem fechar"
+              title="Minimizar comanda (sai sem fechar)"
               @click="leaveTab"
             >
-              <i class="fas fa-sign-out-alt"></i> Sair
+              <i class="fas fa-window-minimize"></i> Minimizar
             </button>
           </span>
         </div>
@@ -1785,6 +1823,18 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 .pdv-tabs-btn.is-highlighted {
-  color: var(--primary, #4f46e5);
+  background: var(--primary, #4f46e5);
+  border-color: var(--primary, #4f46e5);
+  color: #fff;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary, #4f46e5) 22%, transparent);
+}
+
+.pdv-tabs-btn.is-highlighted:hover {
+  filter: brightness(1.06);
+}
+
+.pdv-tabs-btn.is-highlighted .pdv-tabs-count {
+  background: rgba(255, 255, 255, 0.24);
+  color: #fff;
 }
 </style>

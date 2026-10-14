@@ -19,14 +19,19 @@ from billflux.infra.repository.product_supplier_repository import (
 )
 
 DAY_NAMES = [
+    "domingo",
     "segunda-feira",
     "terça-feira",
     "quarta-feira",
     "quinta-feira",
     "sexta-feira",
     "sábado",
-    "domingo",
 ]
+
+
+def _dom_weekday(d: date) -> int:
+    """Dia da semana com 0=domingo … 6=sábado (igual ao app)."""
+    return (d.weekday() + 1) % 7
 
 
 def _serialize_link(ps):
@@ -213,39 +218,69 @@ def _build_suggestions(delivery_day: int) -> list:
                 current = product.stock_quantity
                 if ideal <= 0 or current >= ideal:
                     continue
+                min_stock = getattr(product, "min_stock", 0) or 0
                 suggested_qty = ideal - current
                 avg_daily = _avg_daily_sales(link.product_id)
+                avg_float = float(avg_daily)
+                coverage = round(current / avg_float, 1) if avg_float > 0 else None
+                if current <= 0:
+                    urgency, reason = "critico", "Sem estoque"
+                elif min_stock > 0 and current <= min_stock:
+                    urgency, reason = (
+                        "abaixo_minimo",
+                        f"Abaixo do mínimo ({min_stock})",
+                    )
+                else:
+                    urgency, reason = "abaixo_ideal", "Abaixo do ideal"
+                if coverage is not None:
+                    reason += f" · ~{coverage:.0f} dia(s) de cobertura"
                 entry = {
                     "product_id": product.id,
                     "product_name": product.name,
                     "current_stock": current,
+                    "min_stock": min_stock,
                     "ideal_stock": ideal,
                     "suggested_qty": suggested_qty,
-                    "avg_daily_sales": float(avg_daily),
+                    "avg_daily_sales": avg_float,
+                    "coverage_days": coverage,
+                    "urgency": urgency,
+                    "reason": reason,
                 }
                 if link.supplier_id not in by_supplier:
                     by_supplier[link.supplier_id] = {
                         "supplier_id": link.supplier_id,
                         "supplier_name": link.supplier_name,
                         "products": [],
+                        "critical_count": 0,
                     }
-                by_supplier[link.supplier_id]["products"].append(entry)
+                bucket = by_supplier[link.supplier_id]
+                bucket["products"].append(entry)
+                if urgency == "critico":
+                    bucket["critical_count"] += 1
         finally:
             session.close()
 
-    return list(by_supplier.values())
+    rank = {"critico": 0, "abaixo_minimo": 1, "abaixo_ideal": 2}
+    for bucket in by_supplier.values():
+        bucket["products"].sort(
+            key=lambda p: (rank.get(p["urgency"], 9), (p["product_name"] or "").lower())
+        )
+    return sorted(
+        by_supplier.values(),
+        key=lambda b: (-b["critical_count"], (b["supplier_name"] or "").lower()),
+    )
 
 
 @bp.route("/schedule/today")
 @api_login_required
 def schedule_today():
     today = date.today()
-    weekday = today.weekday()
-    suggestions = _build_suggestions(weekday)
+    dow = _dom_weekday(today)
+    suggestions = _build_suggestions(dow)
     return api_response(
         {
             "date": today.isoformat(),
-            "day_of_week": DAY_NAMES[weekday],
+            "day_of_week": DAY_NAMES[dow],
             "suggestions": suggestions,
         }
     )
@@ -259,13 +294,13 @@ def schedule_week():
     week = []
     for i in range(7):
         day_date = today + timedelta(days=i - today_weekday)
-        weekday = day_date.weekday()
-        suggestions = _build_suggestions(weekday)
+        dow = _dom_weekday(day_date)
+        suggestions = _build_suggestions(dow)
         week.append(
             {
                 "date": day_date.isoformat(),
-                "day_name": DAY_NAMES[weekday],
-                "day_of_week": weekday,
+                "day_name": DAY_NAMES[dow],
+                "day_of_week": dow,
                 "is_today": day_date == today,
                 "suggestions": suggestions,
                 "supplier_count": len(suggestions),
@@ -284,8 +319,8 @@ def create_order_from_suggestions():
         return api_error("supplier_id e obrigatorio.", 400)
 
     today = date.today()
-    weekday = today.weekday()
-    suggestions = _build_suggestions(weekday)
+    dow = _dom_weekday(today)
+    suggestions = _build_suggestions(dow)
 
     target = None
     for s in suggestions:

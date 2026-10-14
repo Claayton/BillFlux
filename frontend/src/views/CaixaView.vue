@@ -5,6 +5,7 @@ import { api } from '@/api/client'
 import { brl, brdate, maskMoney, moneyToDecimal } from '@/utils/format'
 import AppShell from '@/components/AppShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import { tabLabel } from '@/utils/tabs'
 
 const data = ref(null)
 const loading = ref(false)
@@ -13,6 +14,12 @@ const confirmClose = ref(false)
 
 const isOpen = computed(() => !!data.value?.open)
 const methods = computed(() => data.value?.payment_methods || {})
+
+/** Comandas abertas (aviso ao abrir/fechar o caixa). */
+const openTabs = computed(() => data.value?.open_tabs || [])
+const openTabsLabel = computed(() =>
+  openTabs.value.map((t) => tabLabel(t.number)).join(', ')
+)
 
 // abertura: só Dinheiro e PIX
 const OPEN_METHODS = { Dinheiro: true, PIX: true }
@@ -90,11 +97,19 @@ function diffTone(diff) {
 const closeSummary = computed(() => {
   const diff = totalDiff.value
   const tone = diffTone(diff)
-  return [
+  const rows = [
     { label: 'Valor contado', value: brl(closeTotalCounted.value) },
     { label: 'Valor registrado', value: brl(expectedTotal.value) },
     { label: 'Diferença', value: diffLabelText(expectedTotal.value, closeTotalCounted.value), tone },
   ]
+  if (openTabs.value.length) {
+    rows.push({
+      label: 'Comandas abertas',
+      value: `${openTabs.value.length} (${openTabsLabel.value})`,
+      tone: 'warn',
+    })
+  }
+  return rows
 })
 
 const movementForm = ref({ kind: 'sangria', amount: '', obs: '' })
@@ -464,6 +479,13 @@ onMounted(() => {
         <div v-if="!isOpen" class="caixa-action-card">
           <h3><i class="fas fa-door-open"></i> Abrir caixa</h3>
           <p>Informe o valor em dinheiro e PIX que estão no caixa na abertura.</p>
+          <div v-if="openTabs.length" class="caixa-tabs-warning">
+            <i class="fas fa-triangle-exclamation"></i>
+            <span>
+              Há {{ openTabs.length }} comanda(s) aberta(s) (<strong>{{ openTabsLabel }}</strong>).
+              Elas continuam abertas e continuarão contando nas vendas.
+            </span>
+          </div>
           <form class="caixa-form" @submit.prevent="openRegister">
             <div class="method-rows">
               <div v-for="(name, mid) in openMethods" :key="mid" class="method-row">
@@ -494,6 +516,13 @@ onMounted(() => {
         <div v-if="isOpen" class="caixa-action-card caixa-close">
           <h3><i class="fas fa-door-closed"></i> Fechar caixa</h3>
           <p>Confira o valor contado de cada forma de pagamento com o total registrado pelo sistema.</p>
+          <div v-if="openTabs.length" class="caixa-tabs-warning">
+            <i class="fas fa-triangle-exclamation"></i>
+            <span>
+              Atenção: {{ openTabs.length }} comanda(s) em aberto (<strong>{{ openTabsLabel }}</strong>).
+              Elas continuarão abertas após fechar o caixa.
+            </span>
+          </div>
 
           <div class="close-table" role="table" aria-label="Conferência do caixa">
             <div class="close-table-head" role="row">
@@ -732,6 +761,23 @@ onMounted(() => {
   font-size: 14px;
   color: var(--text-secondary);
   margin: 0 0 18px;
+}
+.caixa-tabs-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  margin: 0 0 16px;
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+  border-radius: var(--brand-radius-sm, 8px);
+  font-size: 13px;
+  color: #92400e;
+  line-height: 1.5;
+}
+.caixa-tabs-warning i {
+  margin-top: 2px;
+  color: #d97706;
 }
 
 /* Method rows (shared for open/close) */

@@ -12,6 +12,14 @@ defineProps({
   footerLines: { type: Array, default: () => [] },
   /** Dados do pedido (mesmo formato do recibo da API). */
   order: { type: Object, required: true },
+  companyCnpj: { type: String, default: '' },
+  companyAddress: { type: String, default: '' },
+  companyPhone: { type: String, default: '' },
+  showCnpj: { type: Boolean, default: false },
+  showAddress: { type: Boolean, default: false },
+  showPhone: { type: Boolean, default: false },
+  showCustomer: { type: Boolean, default: false },
+  message: { type: String, default: '' },
 })
 
 function formatDateTime(iso) {
@@ -34,11 +42,15 @@ function formatDateTime(iso) {
       <strong>{{ headerLines[0] || company }}</strong>
       <span v-if="headerLines.length > 1">{{ headerLines.slice(1).join(' · ') }}</span>
       <span v-else>Recibo de venda</span>
+      <span v-if="showCnpj && companyCnpj">CNPJ: {{ companyCnpj }}</span>
+      <span v-if="showAddress && companyAddress">{{ companyAddress }}</span>
+      <span v-if="showPhone && companyPhone">Tel: {{ companyPhone }}</span>
     </div>
 
     <div class="receipt-meta">
       <span>Venda <strong>#{{ order.order_id }}</strong></span>
       <span>{{ formatDateTime(order.date) }}</span>
+      <span v-if="showCustomer && order.customer_name">Cliente: {{ order.customer_name }}</span>
     </div>
 
     <table class="receipt-table">
@@ -96,8 +108,8 @@ function formatDateTime(iso) {
       </template>
       <template v-else>
         <span>Obrigado pela preferência!</span>
-        <span>BeeFlux — Clayton Garcia da Silva, Br.</span>
       </template>
+      <span v-if="message" class="receipt-message">{{ message }}</span>
     </div>
   </div>
 </template>
@@ -185,5 +197,10 @@ function formatDateTime(iso) {
   margin-top: 8px;
   padding-top: 6px;
   font-size: 10px;
+}
+
+.receipt-thermal .receipt-message {
+  font-weight: 700;
+  margin-top: 2px;
 }
 </style>

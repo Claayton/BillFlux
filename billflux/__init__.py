@@ -5,8 +5,10 @@ from datetime import timedelta
 from flask import Flask
 from dynaconf import FlaskDynaconf
 from flask_wtf import CSRFProtect
+from sqlalchemy.exc import IntegrityError
 from billflux.config import settings
 from billflux.api import bp as api_bp
+from billflux.api import api_error
 from billflux.api import auth as api_auth
 from billflux.api import dashboard as api_dashboard
 from billflux.api import sales as api_sales
@@ -76,6 +78,16 @@ def _seed_default_accounts():
         repository.insert_account(name=name, type="despesa")
 
 
+def _handle_integrity_error(error):
+    """Conflito de vínculo (FK) vira JSON amigável em vez de 500 cru."""
+    from flask import current_app
+
+    current_app.logger.exception("IntegrityError: %s", error)
+    return api_error(
+        "Não foi possível concluir: registro vinculado a outros dados.", 409
+    )
+
+
 def _seed_default_payment_methods():
     """Cria as formas de pagamento padrão se a tabela estiver vazia e
     garante que a forma 'Fiado' exista mesmo em bancos já populados."""
@@ -119,5 +131,6 @@ def create_app():
     _seed_default_payment_methods()
 
     app.register_blueprint(api_bp)
+    app.register_error_handler(IntegrityError, _handle_integrity_error)
 
     return app

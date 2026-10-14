@@ -273,6 +273,115 @@ def test_products_edit_syncs_default_unit_price(logged_client):
     assert by_name["Caixa"]["price"] == 100.0
 
 
+def _product_id_by_name(client, name):
+    products = client.get("/api/products").get_json()["products"]
+    return next(p["id"] for p in products if p["name"] == name)
+
+
+def test_create_default_unit_sets_product_price(logged_client):
+    """Cadastrar a 'Unidade' (default, fator 1) define o preço-base do produto."""
+    token = _csrf(logged_client)
+    logged_client.post(
+        "/api/products",
+        json={"name": "Heineken New", "price": "0,00"},
+        headers={"X-CSRFToken": token},
+    )
+    product_id = _product_id_by_name(logged_client, "Heineken New")
+
+    logged_client.post(
+        f"/api/products/{product_id}/units",
+        json={"name": "Unidade", "factor": 1, "price": "9,99", "is_default": True},
+        headers={"X-CSRFToken": token},
+    )
+    logged_client.post(
+        f"/api/products/{product_id}/units",
+        json={"name": "Pack c/ 6", "factor": 6, "price": "47,99"},
+        headers={"X-CSRFToken": token},
+    )
+
+    products = logged_client.get("/api/products").get_json()["products"]
+    product = next(p for p in products if p["id"] == product_id)
+    assert product["price"] == 9.99  # Unidade define o preço-base, NÃO o pack
+
+    units = logged_client.get(f"/api/products/{product_id}/units").get_json()["units"]
+    units_by_name = {u["name"]: u for u in units}
+    assert units_by_name["Unidade"]["price"] == 9.99
+    assert units_by_name["Pack c/ 6"]["price"] == 47.99
+
+
+def test_update_default_unit_syncs_product_price(logged_client):
+    """Editar o preço da 'Unidade' padrão acompanha o preço-base do produto."""
+    token = _csrf(logged_client)
+    logged_client.post(
+        "/api/products",
+        json={"name": "Sinc Reverse", "price": "0,00"},
+        headers={"X-CSRFToken": token},
+    )
+    product_id = _product_id_by_name(logged_client, "Sinc Reverse")
+    unit_id = logged_client.post(
+        f"/api/products/{product_id}/units",
+        json={"name": "Unidade", "factor": 1, "price": "9,99", "is_default": True},
+        headers={"X-CSRFToken": token},
+    ).get_json()["unit"]["id"]
+
+    logged_client.put(
+        f"/api/product-units/{unit_id}",
+        json={
+            "product_id": product_id,
+            "name": "Unidade",
+            "factor": 1,
+            "price": "8,50",
+        },
+        headers={"X-CSRFToken": token},
+    )
+
+    products = logged_client.get("/api/products").get_json()["products"]
+    product = next(p for p in products if p["id"] == product_id)
+    assert product["price"] == 8.5
+
+
+def test_pack_cannot_be_default(logged_client):
+    """Apresentação com fator > 1 não pode ser a padrão."""
+    token = _csrf(logged_client)
+    logged_client.post(
+        "/api/products",
+        json={"name": "Pack Default", "price": "10,00"},
+        headers={"X-CSRFToken": token},
+    )
+    product_id = _product_id_by_name(logged_client, "Pack Default")
+
+    resp = logged_client.post(
+        f"/api/products/{product_id}/units",
+        json={"name": "Pack c/ 6", "factor": 6, "price": "47,99", "is_default": True},
+        headers={"X-CSRFToken": token},
+    )
+    assert resp.status_code == 400
+
+
+def test_pdv_stamp_changes_on_product_edit(logged_client):
+    """O stamp do PDV muda ao criar produto e ao editar preço (invalida cache)."""
+    token = _csrf(logged_client)
+    s1 = logged_client.get("/api/pdv/stamp").get_json()["stamp"]
+    assert isinstance(s1, str) and s1
+
+    logged_client.post(
+        "/api/products",
+        json={"name": "Stamp T", "price": "1,00"},
+        headers={"X-CSRFToken": token},
+    )
+    s2 = logged_client.get("/api/pdv/stamp").get_json()["stamp"]
+    assert s2 != s1
+
+    product_id = _product_id_by_name(logged_client, "Stamp T")
+    logged_client.put(
+        f"/api/products/{product_id}",
+        json={"name": "Stamp T", "price": "2,00", "cost": "0,00", "active": True},
+        headers={"X-CSRFToken": token},
+    )
+    s3 = logged_client.get("/api/pdv/stamp").get_json()["stamp"]
+    assert s3 != s2
+
+
 def test_delete_product_removes_presentation(logged_client):
     """DELETE remove o produto e a apresentação própria (product_unit)."""
 
