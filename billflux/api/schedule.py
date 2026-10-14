@@ -19,14 +19,19 @@ from billflux.infra.repository.product_supplier_repository import (
 )
 
 DAY_NAMES = [
+    "domingo",
     "segunda-feira",
     "terça-feira",
     "quarta-feira",
     "quinta-feira",
     "sexta-feira",
     "sábado",
-    "domingo",
 ]
+
+
+def _dom_weekday(d: date) -> int:
+    """Dia da semana com 0=domingo … 6=sábado (igual ao app)."""
+    return (d.weekday() + 1) % 7
 
 
 def _serialize_link(ps):
@@ -270,12 +275,12 @@ def _build_suggestions(delivery_day: int) -> list:
 @api_login_required
 def schedule_today():
     today = date.today()
-    weekday = today.weekday()
-    suggestions = _build_suggestions(weekday)
+    dow = _dom_weekday(today)
+    suggestions = _build_suggestions(dow)
     return api_response(
         {
             "date": today.isoformat(),
-            "day_of_week": DAY_NAMES[weekday],
+            "day_of_week": DAY_NAMES[dow],
             "suggestions": suggestions,
         }
     )
@@ -289,13 +294,13 @@ def schedule_week():
     week = []
     for i in range(7):
         day_date = today + timedelta(days=i - today_weekday)
-        weekday = day_date.weekday()
-        suggestions = _build_suggestions(weekday)
+        dow = _dom_weekday(day_date)
+        suggestions = _build_suggestions(dow)
         week.append(
             {
                 "date": day_date.isoformat(),
-                "day_name": DAY_NAMES[weekday],
-                "day_of_week": weekday,
+                "day_name": DAY_NAMES[dow],
+                "day_of_week": dow,
                 "is_today": day_date == today,
                 "suggestions": suggestions,
                 "supplier_count": len(suggestions),
@@ -314,8 +319,8 @@ def create_order_from_suggestions():
         return api_error("supplier_id e obrigatorio.", 400)
 
     today = date.today()
-    weekday = today.weekday()
-    suggestions = _build_suggestions(weekday)
+    dow = _dom_weekday(today)
+    suggestions = _build_suggestions(dow)
 
     target = None
     for s in suggestions:
