@@ -47,6 +47,14 @@ function toggleAutoPrint(event) {
   form.value['pdv.auto_print'] = event.target.checked ? 'true' : 'false'
 }
 
+/** Alterna uma flag booleana guardada como 'true'/'false'. */
+function isOn(key) {
+  return form.value[key] === 'true'
+}
+function toggleSetting(key, event) {
+  form.value[key] = event.target.checked ? 'true' : 'false'
+}
+
 function splitLines(text) {
   return (text || '').split('\n').map((l) => l.trim()).filter(Boolean)
 }
@@ -70,6 +78,7 @@ const previewOrder = {
   troco: 26.45,
   obs: 'Retirar no balcão 2',
   payment_method: 'Dinheiro',
+  customer_name: 'Maria Souza',
 }
 
 onMounted(load)
@@ -198,6 +207,19 @@ onMounted(load)
                   <label for="cfg-footer">Rodapé do cupom</label>
                   <textarea id="cfg-footer" v-model="form['receipt.footer']" rows="2" placeholder="Obrigado pela preferência!"></textarea>
                 </div>
+                <div class="form-field">
+                  <label for="cfg-message">Mensagem da notinha</label>
+                  <input id="cfg-message" v-model="form['receipt.message']" type="text" placeholder="Ex: Obrigado e volte sempre!" />
+                </div>
+                <div class="form-field">
+                  <span class="config-label">Informações exibidas</span>
+                  <div class="config-checks">
+                    <label class="form-check"><input type="checkbox" :checked="isOn('receipt.show_cnpj')" @change="toggleSetting('receipt.show_cnpj', $event)" /> <span>Mostrar CNPJ</span></label>
+                    <label class="form-check"><input type="checkbox" :checked="isOn('receipt.show_address')" @change="toggleSetting('receipt.show_address', $event)" /> <span>Mostrar endereço</span></label>
+                    <label class="form-check"><input type="checkbox" :checked="isOn('receipt.show_phone')" @change="toggleSetting('receipt.show_phone', $event)" /> <span>Mostrar telefone</span></label>
+                    <label class="form-check"><input type="checkbox" :checked="isOn('receipt.show_customer')" @change="toggleSetting('receipt.show_customer', $event)" /> <span>Mostrar cliente</span></label>
+                  </div>
+                </div>
               </div>
 
               <div class="coupon-preview">
@@ -208,6 +230,14 @@ onMounted(load)
                   :header-lines="previewHeaderLines"
                   :footer-lines="previewFooterLines"
                   :order="previewOrder"
+                  :company-cnpj="form['company.cnpj'] || ''"
+                  :company-address="form['company.address'] || ''"
+                  :company-phone="form['company.phone'] || ''"
+                  :show-cnpj="isOn('receipt.show_cnpj')"
+                  :show-address="isOn('receipt.show_address')"
+                  :show-phone="isOn('receipt.show_phone')"
+                  :show-customer="isOn('receipt.show_customer')"
+                  :message="form['receipt.message'] || ''"
                 />
                 <span class="preview-note">Venda de exemplo — a impressão sai exatamente assim.</span>
               </div>
@@ -295,6 +325,19 @@ onMounted(load)
   margin-top: 6px;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.config-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+
+.config-checks .form-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
 }
 
 .config-check {
