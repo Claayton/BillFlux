@@ -1,5 +1,6 @@
 """Endpoints de vendas da API JSON (lista, lançamento avulso e exclusão)."""
 
+import math
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -17,6 +18,7 @@ from billflux.infra.repository.customer_repository import CustomerRepository
 from billflux.infra.repository.cash_register_repository import CashRegisterRepository
 from billflux.services.audit import audit
 from billflux.services.credit import fiado_amount_for_order, get_fiado_method_ids
+from billflux.services.text_normalize import strip_accents
 
 
 def _build_range_summary(sales, orders, start, end):
@@ -145,13 +147,22 @@ def _caixa_id_for_day(day, sessions):
     return found["id"] if found else None
 
 
-def _combine_sales(sales, orders, payment_names, caixa_opened_at=None, sessions=None):
+def _combine_sales(
+    sales,
+    orders,
+    payment_names,
+    caixa_opened_at=None,
+    sessions=None,
+    with_details=True,
+):
     """Junta vendas avulsas (manuais) e pedidos do PDV numa única lista.
 
     `caixa_opened_at` (datetime ou None) marca o início do caixa aberto e
     permite sinalizar quais vendas pertencem ao caixa atual (`in_caixa`).
     `sessions` associa cada venda à sessão de caixa (`caixa_id`), pra separar
-    onde um caixa foi fechado e outro aberto."""
+    onde um caixa foi fechado e outro aberto.
+    Com ``with_details=False`` não busca itens (evita N+1); a página atual
+    preenche os itens depois, só para as linhas exibidas."""
 
     sessions = sessions or []
     combined = []
@@ -174,7 +185,7 @@ def _combine_sales(sales, orders, payment_names, caixa_opened_at=None, sessions=
             }
         )
     for order in orders:
-        detail = _order_detail(order)
+        detail = _order_detail(order) if with_details else None
         combined.append(
             {
                 "kind": "pdv",
@@ -182,8 +193,14 @@ def _combine_sales(sales, orders, payment_names, caixa_opened_at=None, sessions=
                 "date": order.created_at.date(),
                 "total": order.total,
                 "obs": order.obs,
-                "time": detail["time"],
-                "items": detail["items"],
+                "time": (
+                    detail["time"]
+                    if detail
+                    else (
+                        order.created_at.strftime("%H:%M") if order.created_at else None
+                    )
+                ),
+                "items": detail["items"] if detail else None,
                 "payment": payment_names.get(order.payment_method_id, "—"),
                 "cancelled": order.cancelled,
                 "caixa_id": _caixa_id_for_datetime(order.created_at, sessions),
@@ -195,8 +212,8 @@ def _combine_sales(sales, orders, payment_names, caixa_opened_at=None, sessions=
     return sorted(combined, key=lambda item: item["date"], reverse=True)
 
 
-def _sales_payload():
-    """Dados completos da página de vendas (períodos + lista combinada)."""
+def _sales_payload(page=1, per_page=20, status=None, q=None):
+    """Dados da página de vendas com paginação server-side do histórico."""
     list_sales = SaleRepository().get_sales()
     orders = OrderRepository().get_orders()
     open_register = CashRegisterRepository().get_open()
@@ -219,9 +236,75 @@ def _sales_payload():
         method.id: method.name for method in PaymentMethodRepository().get_methods()
     }
     sessions = _caixa_sessions()
-    combined = _combine_sales(
-        list_sales, orders, payment_names, caixa_opened_at, sessions
+    # Lista leve (sem itens) → evita N+1; os itens são buscados só na página.
+    all_sales = _combine_sales(
+        list_sales,
+        orders,
+        payment_names,
+        caixa_opened_at,
+        sessions,
+        with_details=False,
     )
+
+    status_counts = {
+        "todas": len(all_sales),
+        "ativas": sum(1 for s in all_sales if not s["cancelled"]),
+        "canceladas": sum(1 for s in all_sales if s["cancelled"]),
+    }
+    in_caixa = [s for s in all_sales if s["in_caixa"] and not s["cancelled"]]
+    cx_total = sum(float(s["total"]) for s in in_caixa)
+    cx_days = len({s["date"].isoformat() for s in in_caixa})
+    caixa_summary = {
+        "total": cx_total,
+        "count": len(in_caixa),
+        "days": cx_days,
+        "avg": (cx_total / cx_days) if cx_days else 0,
+    }
+
+    # Filtros (status + busca por id/observação/forma de pagamento).
+    filtered = all_sales
+    if status in ("ativas", "canceladas"):
+        want_cancelled = status == "canceladas"
+        filtered = [s for s in filtered if bool(s["cancelled"]) == want_cancelled]
+    term = strip_accents((q or "").strip()).lower()
+    if term:
+        filtered = [
+            s
+            for s in filtered
+            if term
+            in " ".join(
+                [
+                    str(s["id"]),
+                    strip_accents(s.get("obs") or "").lower(),
+                    strip_accents(s.get("payment") or "").lower(),
+                ]
+            )
+        ]
+
+    try:
+        per_page = int(per_page)
+    except (TypeError, ValueError):
+        per_page = 20
+    per_page = min(max(per_page, 1), 100)
+    total = len(filtered)
+    pages = max(1, math.ceil(total / per_page))
+    try:
+        page = int(page)
+    except (TypeError, ValueError):
+        page = 1
+    page = min(max(page, 1), pages)
+    start = (page - 1) * per_page
+    page_sales = filtered[start : start + per_page]
+
+    # Itens só das linhas da página atual.
+    orders_by_id = {o.id: o for o in orders}
+    for item in page_sales:
+        if item["kind"] == "pdv" and item["items"] is None:
+            order = orders_by_id.get(item["id"])
+            if order is not None:
+                detail = _order_detail(order)
+                item["time"] = detail["time"]
+                item["items"] = detail["items"]
 
     return {
         "today": today.isoformat(),
@@ -231,6 +314,14 @@ def _sales_payload():
         },
         "caixa_sessions": sessions,
         "periods": periods,
+        "caixa_summary": caixa_summary,
+        "status_counts": status_counts,
+        "pagination": {
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "pages": pages,
+        },
         "sales": [
             {
                 "kind": item["kind"],
@@ -245,7 +336,7 @@ def _sales_payload():
                 "caixa_id": item["caixa_id"],
                 "in_caixa": item["in_caixa"],
             }
-            for item in combined
+            for item in page_sales
         ],
     }
 
@@ -261,8 +352,15 @@ def _normalize_total(raw):
 @bp.route("/sales")
 @api_login_required
 def sales_list():
-    """Lista vendas avulsas + pedidos do PDV, com resumos por período."""
-    return api_response(_sales_payload())
+    """Histórico de vendas paginado + resumos por período."""
+    return api_response(
+        _sales_payload(
+            page=request.args.get("page", default=1, type=int) or 1,
+            per_page=request.args.get("per_page", default=20, type=int) or 20,
+            status=(request.args.get("status") or "").strip() or None,
+            q=(request.args.get("q") or "").strip() or None,
+        )
+    )
 
 
 @bp.route("/sales", methods=["POST"])
