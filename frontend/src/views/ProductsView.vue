@@ -41,7 +41,7 @@ const page = ref(1)
 const PAGE_SIZE = 50
 const productSuppliers = ref([])
 const productSuppliersLoading = ref(false)
-const newSupplierLink = ref({ supplier_id: null, delivery_day: 1, lead_time: 1, is_primary: false, frequency: 'semanal', week_parity: 0 })
+const newSupplierLink = ref({ supplier_id: null, delivery_days: [], lead_time: 1, is_primary: false, frequency: 'semanal', week_parity: 0 })
 
 const productUnits = ref([])
 const productUnitsLoading = ref(false)
@@ -339,10 +339,14 @@ async function saveUnitPrice(unit) {
 async function addProductSupplier() {
   const ns = newSupplierLink.value
   if (!ns.supplier_id) { ElMessage.warning('Selecione um fornecedor.'); return }
+  if (!ns.delivery_days || !ns.delivery_days.length) {
+    ElMessage.warning('Selecione ao menos um dia de entrega.')
+    return
+  }
   try {
     await api.post(`/products/${editingProduct.value.id}/suppliers`, {
       supplier_id: ns.supplier_id,
-      delivery_day: ns.delivery_day,
+      delivery_days: ns.delivery_days,
       lead_time: ns.lead_time,
       is_primary: ns.is_primary,
       frequency: ns.frequency,
@@ -350,7 +354,7 @@ async function addProductSupplier() {
     })
     ElMessage.success('Fornecedor vinculado!')
     await loadProductSuppliers()
-    newSupplierLink.value = { supplier_id: null, delivery_day: 1, lead_time: 1, is_primary: false, frequency: 'semanal', week_parity: 0 }
+    newSupplierLink.value = { supplier_id: null, delivery_days: [], lead_time: 1, is_primary: false, frequency: 'semanal', week_parity: 0 }
   } catch (error) {
     ElMessage.error(error.message)
   }
@@ -390,6 +394,10 @@ async function openMovements(product) {
 
 const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 function dayName(idx) { return dayNames[idx] || '' }
+function daysLabel(days, fallback) {
+  const list = days && days.length ? days : (fallback != null ? [fallback] : [])
+  return list.map((d) => dayName(d)).filter(Boolean).join(' • ')
+}
 
 async function load() {
   loading.value = true
@@ -1013,7 +1021,7 @@ function onModalKeydown(event) {
               <tbody>
                 <tr v-for="ps in productSuppliers" :key="ps.id">
                   <td>{{ ps.supplier_name }}</td>
-                  <td>{{ dayName(ps.delivery_day) }}</td>
+                  <td><span class="day-badge">{{ daysLabel(ps.delivery_days, ps.delivery_day) }}</span></td>
                   <td>{{ ps.frequency === 'quinzenal' ? 'Quinzenal (' + (ps.week_parity === 0 ? '1ª/3ª' : '2ª/4ª') + ')' : ps.frequency === 'mensal' ? 'Mensal (semana ' + (ps.week_parity + 1) + ')' : 'Semanal' }}</td>
                   <td>{{ ps.lead_time }} dia(s)</td>
                   <td>{{ ps.is_primary ? 'Sim' : '' }}</td>
@@ -1028,7 +1036,7 @@ function onModalKeydown(event) {
             <p v-else class="muted" style="margin-bottom:12px">Nenhum fornecedor vinculado.</p>
 
             <div class="supplier-link-form" v-if="editingProduct">
-              <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr 1fr auto">
+              <div class="form-grid" style="grid-template-columns: 2fr 2.4fr 1fr 1fr auto">
                 <div class="form-field">
                   <label>Fornecedor</label>
                   <select v-model="newSupplierLink.supplier_id">
@@ -1037,10 +1045,13 @@ function onModalKeydown(event) {
                   </select>
                 </div>
                 <div class="form-field">
-                  <label>Dia entrega</label>
-                  <select v-model.number="newSupplierLink.delivery_day">
-                    <option v-for="(name, idx) in dayNames" :key="idx" :value="idx">{{ name }}</option>
-                  </select>
+                  <label>Dias de entrega</label>
+                  <div class="day-checks">
+                    <label v-for="(name, idx) in dayNames" :key="idx" class="day-check">
+                      <input type="checkbox" :value="idx" v-model.number="newSupplierLink.delivery_days" />
+                      <span>{{ name }}</span>
+                    </label>
+                  </div>
                 </div>
                 <div class="form-field">
                   <label>Frequência</label>
@@ -1254,6 +1265,32 @@ function onModalKeydown(event) {
   display: inline-block;
   margin-left: 6px;
   padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary, #4f46e5);
+  background: color-mix(in srgb, var(--primary, #4f46e5) 12%, transparent);
+}
+
+.day-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.day-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.day-check input {
+  width: auto;
+  margin: 0;
+}
+.day-badge {
+  display: inline-block;
+  padding: 1px 8px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;

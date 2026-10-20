@@ -1,5 +1,6 @@
 """Repository for ProductSupplier (many-to-many product ↔ supplier with schedule)"""
 
+import json
 from typing import List, Optional
 
 from sqlmodel import select
@@ -10,6 +11,19 @@ from billflux.infra.entities.product_supplier import (
 from billflux.infra.entities.supplier import Supplier as SupplierModel
 from billflux.infra.entities.product import Product as ProductModel
 from billflux.domain.models.product_suppliers import ProductSupplier
+
+
+def _parse_days(ps: ProductSupplierModel) -> tuple:
+    """Dias de entrega (0=domingo…6=sábado) com fallback pro campo antigo."""
+    raw = getattr(ps, "delivery_days", None)
+    if raw:
+        try:
+            days = json.loads(raw)
+            if isinstance(days, list):
+                return tuple(sorted({int(d) for d in days if 0 <= int(d) <= 6}))
+        except (ValueError, TypeError):
+            pass
+    return (ps.delivery_day,)
 
 
 def _to_domain(
@@ -26,6 +40,7 @@ def _to_domain(
         is_primary=ps.is_primary,
         frequency=getattr(ps, "frequency", "semanal") or "semanal",
         week_parity=getattr(ps, "week_parity", 0) or 0,
+        delivery_days=_parse_days(ps),
     )
 
 
@@ -62,10 +77,11 @@ class ProductSupplierRepository:
                     )
                     .where(ProductSupplierModel.supplier_id == supplier_id)
                 )
-                if delivery_day is not None:
-                    stmt = stmt.where(ProductSupplierModel.delivery_day == delivery_day)
                 results = session.exec(stmt).all()
-                return [_to_domain(ps, product_name=pname) for ps, pname in results]
+                domain = [_to_domain(ps, product_name=pname) for ps, pname in results]
+                if delivery_day is not None:
+                    domain = [ps for ps in domain if delivery_day in ps.delivery_days]
+                return domain
         finally:
             session.close()
 
@@ -99,13 +115,14 @@ class ProductSupplierRepository:
                     .join(
                         ProductModel, ProductSupplierModel.product_id == ProductModel.id
                     )
-                    .where(ProductSupplierModel.delivery_day == delivery_day)
                 )
                 results = session.exec(stmt).all()
-                return [
+                domain = [
                     _to_domain(ps, supplier_name=sname, product_name=pname)
                     for ps, sname, pname in results
                 ]
+                # Cada vínculo tem uma lista de dias; filtra pela presença.
+                return [ps for ps in domain if delivery_day in ps.delivery_days]
         finally:
             session.close()
 
@@ -114,11 +131,19 @@ class ProductSupplierRepository:
         product_id: int,
         supplier_id: int,
         delivery_day: int,
+        delivery_days: Optional[list] = None,
         lead_time: int = 1,
         is_primary: bool = False,
         frequency: str = "semanal",
         week_parity: int = 0,
     ) -> ProductSupplier:
+        days = tuple(
+            sorted({int(d) for d in (delivery_days or []) if 0 <= int(d) <= 6})
+        )
+        if not days:
+            days = (int(delivery_day),)
+        primary_day = days[0]
+        days_json = json.dumps(list(days))
         session = get_session()
         try:
             with session:
@@ -128,7 +153,8 @@ class ProductSupplierRepository:
                 )
                 existing = session.exec(stmt).first()
                 if existing:
-                    existing.delivery_day = delivery_day
+                    existing.delivery_day = primary_day
+                    existing.delivery_days = days_json
                     existing.lead_time = lead_time
                     existing.is_primary = is_primary
                     existing.frequency = frequency
@@ -149,7 +175,8 @@ class ProductSupplierRepository:
                     ps = ProductSupplierModel(
                         product_id=product_id,
                         supplier_id=supplier_id,
-                        delivery_day=delivery_day,
+                        delivery_day=primary_day,
+                        delivery_days=days_json,
                         lead_time=lead_time,
                         is_primary=is_primary,
                         frequency=frequency,
