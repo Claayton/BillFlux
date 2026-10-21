@@ -151,3 +151,38 @@ def test_link_requires_ideal_stock(logged_client):
         headers={"X-CSRFToken": token},
     )
     assert resp.status_code == 400
+
+
+def test_legacy_link_without_days_list(logged_client):
+    """Vínculo antigo (só delivery_day, sem delivery_days) continua aparecendo."""
+    from billflux.infra.config.database import get_session
+    from billflux.infra.entities.product_supplier import ProductSupplier
+    from billflux.infra.repository.product_repository import ProductRepository
+    from billflux.infra.repository.supplier_repository import SupplierRepository
+
+    product = ProductRepository().insert_product(
+        name="Legado", price=Decimal("10"), stock_quantity=0
+    )
+    ProductRepository().update_product(product.id, ideal_stock=5)
+    supplier = SupplierRepository().insert_supplier(name="Forn Legado")
+
+    session = get_session()
+    with session:
+        session.add(
+            ProductSupplier(
+                product_id=product.id,
+                supplier_id=supplier.id,
+                delivery_day=2,
+                delivery_days=None,
+            )
+        )
+        session.commit()
+    session.close()
+
+    week = logged_client.get("/api/schedule/week").get_json()["week"]
+    by_dow = {d["day_of_week"]: d for d in week}
+    assert any(
+        p["product_name"] == "Legado"
+        for s in by_dow[2]["suggestions"]
+        for p in s["products"]
+    )
