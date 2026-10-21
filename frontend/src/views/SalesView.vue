@@ -3,7 +3,6 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl, brdateShort, maskMoney, moneyToDecimal } from '@/utils/format'
-import { normalizeForSearch } from '@/utils/normalize'
 import { paymentIcon, paymentColor } from '@/utils/payment'
 import AppShell from '@/components/AppShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -31,6 +30,12 @@ const showAvulsa = ref(false)
 const data = ref(null)
 const loading = ref(false)
 const saving = ref(false)
+const page = ref(1)
+const perPage = ref(20)
+const pagination = computed(
+  () => data.value?.pagination || { page: 1, per_page: 20, total: 0, pages: 1 }
+)
+let searchDebounce = null
 
 const filterOptions = [
   { key: 'todas', label: 'Todas' },
@@ -54,15 +59,10 @@ const editForm = ref({ date: '', total: '', obs: '' })
 
 const currentPeriod = computed(() => (data.value?.periods || {})[active.value])
 
-/** Resumo das vendas do caixa aberto (flag in_caixa vinda do backend). */
-const caixaSummary = computed(() => {
-  const sales = (data.value?.sales || []).filter((s) => s.in_caixa && !s.cancelled)
-  const total = sales.reduce((sum, s) => sum + Number(s.total || 0), 0)
-  const count = sales.length
-  const days = new Set(sales.map((s) => s.date)).size
-  const avg = days > 0 ? total / days : 0
-  return { total, count, days, avg }
-})
+/** Resumo das vendas do caixa (calculado no backend sobre TODAS as vendas). */
+const caixaSummary = computed(
+  () => data.value?.caixa_summary || { total: 0, count: 0, days: 0, avg: 0 }
+)
 
 const caixaOpenedDate = computed(() => {
   const raw = data.value?.caixa?.opened_at
@@ -123,37 +123,13 @@ const kpis = computed(() => {
   ]
 })
 
-const statusCounts = computed(() => {
-  const sales = data.value?.sales || []
-  return {
-    todas: sales.length,
-    ativas: sales.filter((s) => !s.cancelled).length,
-    canceladas: sales.filter((s) => Boolean(s.cancelled)).length,
-  }
-})
+const statusCounts = computed(
+  () =>
+    data.value?.status_counts || { todas: 0, ativas: 0, canceladas: 0 }
+)
 
-const filteredSales = computed(() => {
-  if (!data.value) return []
-  if (saleFilter.value === 'todas') return data.value.sales
-  const wantCancelled = saleFilter.value === 'canceladas'
-  return data.value.sales.filter((sale) => Boolean(sale.cancelled) === wantCancelled)
-})
-
-const searchedSales = computed(() => {
-  const q = normalizeForSearch(search.value.trim())
-  if (!q) return filteredSales.value
-  return filteredSales.value.filter((sale) => {
-    const hay = [
-      String(sale.id),
-      sale.obs || '',
-      sale.payment || '',
-      ...(sale.items || []).map((item) => `${item.quantity} ${item.name}`),
-    ]
-      .map((part) => normalizeForSearch(part))
-      .join(' ')
-    return hay.includes(q)
-  })
-})
+// O backend já devolve a página filtrada (status/busca/paginação).
+const searchedSales = computed(() => data.value?.sales || [])
 
 const caixaSessionsById = computed(() => {
   const map = {}
@@ -248,11 +224,43 @@ function applyDefault() {
 async function load() {
   loading.value = true
   try {
-    data.value = await api.get('/sales')
+    const params = new URLSearchParams()
+    params.set('page', String(page.value))
+    params.set('per_page', String(perPage.value))
+    if (saleFilter.value !== 'todas') params.set('status', saleFilter.value)
+    if (search.value.trim()) params.set('q', search.value.trim())
+    data.value = await api.get('/sales?' + params.toString())
+    page.value = data.value?.pagination?.page || 1
     if (!filterTouched.value) applyDefault()
   } finally {
     loading.value = false
   }
+}
+
+function goPage(target) {
+  const pages = pagination.value.pages || 1
+  page.value = Math.min(Math.max(1, target), pages)
+  load()
+}
+
+function changePerPage(event) {
+  perPage.value = Number(event.target.value) || 20
+  page.value = 1
+  load()
+}
+
+function selectSaleFilter(key) {
+  saleFilter.value = key
+  page.value = 1
+  load()
+}
+
+function onSearchInput() {
+  clearTimeout(searchDebounce)
+  searchDebounce = setTimeout(() => {
+    page.value = 1
+    load()
+  }, 300)
 }
 
 async function submit() {
@@ -263,7 +271,7 @@ async function submit() {
   }
   saving.value = true
   try {
-    data.value = await api.post('/sales', {
+    await api.post('/sales', {
       date: form.value.date,
       total: String(total),
       obs: form.value.obs,
@@ -273,6 +281,8 @@ async function submit() {
       total: '',
       obs: '',
     }
+    page.value = 1
+    await load()
     ElMessage.success('Venda lançada!')
   } catch (error) {
     ElMessage.error(error.message)
@@ -303,12 +313,13 @@ async function saveEditManual() {
   }
   saving.value = true
   try {
-    data.value = await api.put(`/sales/${sale.id}`, {
+    await api.put(`/sales/${sale.id}`, {
       date: editForm.value.date,
       total: String(total),
       obs: editForm.value.obs,
     })
     editManual.value = { open: false, sale: null }
+    await load()
     ElMessage.success('Venda editada!')
   } catch (error) {
     ElMessage.error(error.message)
@@ -337,12 +348,13 @@ async function confirmCancel(reason) {
   const body = reason && String(reason).trim() ? { reason: String(reason).trim() } : {}
   try {
     if (sale.kind === 'pdv') {
-      data.value = await api.post(`/sales/orders/${sale.id}/cancel`, body)
+      await api.post(`/sales/orders/${sale.id}/cancel`, body)
       ElMessage.success('Venda cancelada e estoque restaurado.')
     } else {
-      data.value = await api.post(`/sales/${sale.id}/cancel`, body)
+      await api.post(`/sales/${sale.id}/cancel`, body)
       ElMessage.success('Venda cancelada.')
     }
+    await load()
   } catch (error) {
     ElMessage.error(error.message)
   }
@@ -447,7 +459,9 @@ onBeforeUnmount(clearEyeTimer)
         </button>
       </div>
 
-      <div v-if="loading" class="muted">Carregando…</div>
+      <div v-if="loading && !data" class="sales-skeleton" aria-hidden="true">
+        <div v-for="n in 6" :key="n" class="skeleton-row"></div>
+      </div>
       <template v-else-if="data">
         <div class="stats-row">
           <div v-for="kpi in kpis" :key="kpi.key" class="stat-card">
@@ -507,9 +521,12 @@ onBeforeUnmount(clearEyeTimer)
           </div>
         </div>
 
-        <div class="table-card">
+        <div class="table-card" :class="{ 'is-refreshing': loading }">
           <div class="table-card-head">
-            <h2>Histórico de vendas</h2>
+            <h2>
+              Histórico de vendas
+              <i v-if="loading" class="fas fa-circle-notch fa-spin refresh-spinner" aria-label="Atualizando"></i>
+            </h2>
             <div class="table-head-tools">
               <div class="search-box">
                 <i class="fas fa-search"></i>
@@ -517,7 +534,8 @@ onBeforeUnmount(clearEyeTimer)
                   v-model="search"
                   type="search"
                   placeholder="Buscar venda…"
-                  aria-label="Buscar vendas por ID, observação, itens ou pagamento"
+                  aria-label="Buscar vendas por ID, observação ou pagamento"
+                  @input="onSearchInput"
                 />
               </div>
               <div class="filter-segmented sales-filter" role="group" aria-label="Filtrar vendas">
@@ -526,7 +544,7 @@ onBeforeUnmount(clearEyeTimer)
                   :key="opt.key"
                   type="button"
                   :class="{ 'is-active': saleFilter === opt.key }"
-                  @click="saleFilter = opt.key"
+                  @click="selectSaleFilter(opt.key)"
                 >
                   {{ opt.label }}
                   <span class="filter-count">{{ statusCounts[opt.key] }}</span>
@@ -651,6 +669,39 @@ onBeforeUnmount(clearEyeTimer)
             </template>
           </div>
           </div>
+
+          <div class="pagination-bar">
+            <span class="pagination-info">
+              Página {{ pagination.page }} de {{ pagination.pages }} ·
+              {{ pagination.total }} venda(s)
+            </span>
+            <label class="pagination-size">
+              Por página
+              <select :value="perPage" @change="changePerPage">
+                <option :value="10">10</option>
+                <option :value="20">20</option>
+                <option :value="50">50</option>
+              </select>
+            </label>
+            <div class="pagination-actions">
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                :disabled="pagination.page <= 1"
+                @click="goPage(pagination.page - 1)"
+              >
+                <i class="fas fa-chevron-left"></i> Anterior
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                :disabled="pagination.page >= pagination.pages"
+                @click="goPage(pagination.page + 1)"
+              >
+                Próxima <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+          </div>
         </div>
       </template>
     </div>
@@ -717,5 +768,75 @@ onBeforeUnmount(clearEyeTimer)
 .muted {
   color: var(--text-muted);
   padding: 24px 4px;
+}
+
+/* Skeleton de carregamento inicial */
+.sales-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+}
+.skeleton-row {
+  height: 46px;
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-hover, #f3f4f6) 25%,
+    rgba(0, 0, 0, 0.04) 37%,
+    var(--surface-hover, #f3f4f6) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.2s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* Atualizando (paginação/busca) sem sumir a lista */
+.refresh-spinner {
+  margin-left: 8px;
+  font-size: 13px;
+  color: var(--primary);
+}
+.table-card.is-refreshing .sales-list-scroll,
+.table-card.is-refreshing .empty-state {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+
+/* Paginação */
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.pagination-info {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.pagination-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.pagination-size select {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--surface);
+}
+.pagination-actions {
+  display: inline-flex;
+  gap: 8px;
 }
 </style>
