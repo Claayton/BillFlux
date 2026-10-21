@@ -36,6 +36,9 @@ import SalesView from '@/views/SalesView.vue'
 const payload = {
   today: '2026-08-21',
   caixa: { open: true, opened_at: '2026-08-21 08:00:00' },
+  pagination: { page: 1, per_page: 20, total: 3, pages: 1 },
+  status_counts: { todas: 3, ativas: 2, canceladas: 1 },
+  caixa_summary: { total: 50, count: 1, days: 1, avg: 50 },
   periods: {
     hoje: { total: 150, count: 2, days: 1, avg: 150 },
     '7d': { total: 150, count: 2, days: 1, avg: 150 },
@@ -87,6 +90,23 @@ const payload = {
   ],
 }
 
+function salesResponse(url) {
+  const u = new URL(String(url), 'http://x')
+  const status = u.searchParams.get('status')
+  const q = (u.searchParams.get('q') || '').toLowerCase()
+  let sales = payload.sales
+  if (status === 'ativas') sales = sales.filter((s) => !s.cancelled)
+  if (status === 'canceladas') sales = sales.filter((s) => s.cancelled)
+  if (q) {
+    sales = sales.filter((s) =>
+      [String(s.id), (s.obs || '').toLowerCase(), (s.payment || '').toLowerCase()]
+        .join(' ')
+        .includes(q)
+    )
+  }
+  return { ...payload, sales }
+}
+
 function mountView() {
   return mount(SalesView, {
     global: {
@@ -102,7 +122,7 @@ describe('SalesView', () => {
     apiMock.put.mockReset()
     apiMock.del.mockReset()
     routerPush.mockReset()
-    apiMock.get.mockResolvedValue(payload)
+    apiMock.get.mockImplementation((url) => Promise.resolve(salesResponse(url)))
   })
 
   afterEach(() => {
@@ -204,12 +224,14 @@ describe('SalesView', () => {
   })
 
   it('busca filtra por observação e contagens aparecem no filtro', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const wrapper = mountView()
     await flushPromises()
 
     const counts = wrapper.findAll('.sales-filter .filter-count').map((el) => el.text())
     expect(counts).toEqual(['3', '2', '1'])
     await wrapper.find('.search-box input').setValue('feira')
+    vi.advanceTimersByTime(350)
     await flushPromises()
 
     const rows = wrapper.findAll('.sale-row')

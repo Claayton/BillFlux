@@ -1,5 +1,6 @@
 """API for purchase schedule — daily suggestions and product-supplier CRUD."""
 
+import json
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -42,11 +43,49 @@ def _serialize_link(ps):
         "supplier_name": ps.supplier_name,
         "product_name": ps.product_name,
         "delivery_day": ps.delivery_day,
+        "delivery_days": list(getattr(ps, "delivery_days", ()) or ()),
         "lead_time": ps.lead_time,
         "is_primary": ps.is_primary,
         "frequency": ps.frequency,
         "week_parity": ps.week_parity,
     }
+
+
+def _parse_delivery_days(data):
+    """Normaliza delivery_days (lista) com fallback pro delivery_day único."""
+    raw = data.get("delivery_days")
+    if raw is None:
+        single = data.get("delivery_day")
+        if single is None:
+            return None, "Selecione ao menos um dia de entrega."
+        raw = [single]
+    if not isinstance(raw, list) or not raw:
+        return None, "Selecione ao menos um dia de entrega."
+    try:
+        days = sorted({int(d) for d in raw})
+    except (TypeError, ValueError):
+        return None, "Dia inválido."
+    if any(d < 0 or d > 6 for d in days):
+        return None, "Dia deve ser 0-6 (dom-sáb)."
+    return days, None
+
+
+def _validate_product_ideal(product_id):
+    """A agenda só funciona se o produto tiver estoque ideal definido."""
+    session = get_session()
+    try:
+        with session:
+            product = session.get(ProductModel, product_id)
+            if not product:
+                return "Produto não encontrado."
+            if (product.ideal_stock or 0) <= 0:
+                return (
+                    "Defina o 'Estoque ideal' do produto (maior que 0) "
+                    "antes de vincular o fornecedor."
+                )
+            return None
+    finally:
+        session.close()
 
 
 # ── CRUD de fornecedores por produto ──────────────────────────────
@@ -65,24 +104,28 @@ def product_suppliers(product_id):
 def add_product_supplier(product_id):
     data = request.get_json(silent=True) or {}
     supplier_id = data.get("supplier_id")
-    delivery_day = data.get("delivery_day")
     lead_time = data.get("lead_time", 1)
     is_primary = data.get("is_primary", False)
     frequency = data.get("frequency", "semanal")
     week_parity = int(data.get("week_parity", 0))
 
-    if supplier_id is None or delivery_day is None:
-        return api_error("supplier_id e delivery_day sao obrigatorios.", 400)
-    if not (0 <= int(delivery_day) <= 6):
-        return api_error("delivery_day deve ser 0-6 (dom-sab).", 400)
+    days, error = _parse_delivery_days(data)
+    if error:
+        return api_error(error, 400)
+    if supplier_id is None:
+        return api_error("supplier_id e obrigatorio.", 400)
     if frequency not in ("semanal", "quinzenal", "mensal"):
         return api_error("frequency deve ser semanal, quinzenal ou mensal.", 400)
+    ideal_error = _validate_product_ideal(product_id)
+    if ideal_error:
+        return api_error(ideal_error, 400)
 
     repo = ProductSupplierRepository()
     link = repo.upsert(
         product_id=product_id,
         supplier_id=int(supplier_id),
-        delivery_day=int(delivery_day),
+        delivery_day=days[0],
+        delivery_days=days,
         lead_time=int(lead_time),
         is_primary=bool(is_primary),
         frequency=frequency,
@@ -105,8 +148,12 @@ def update_product_supplier(link_id):
             ps = session.get(ProductSupplierModel, link_id)
             if not ps:
                 return api_error("Vinculo nao encontrado.", 404)
-            if "delivery_day" in data:
-                ps.delivery_day = int(data["delivery_day"])
+            if "delivery_days" in data or "delivery_day" in data:
+                days, error = _parse_delivery_days(data)
+                if error:
+                    return api_error(error, 400)
+                ps.delivery_day = days[0]
+                ps.delivery_days = json.dumps(days)
             if "lead_time" in data:
                 ps.lead_time = int(data["lead_time"])
             if "is_primary" in data:

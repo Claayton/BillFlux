@@ -14,3 +14,4 @@ class ProductSupplier(NamedTuple):
     is_primary: bool
     frequency: str = "semanal"
     week_parity: int = 0
+    delivery_days: tuple = ()

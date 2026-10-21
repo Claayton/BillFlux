@@ -375,3 +375,47 @@ def test_sales_list_includes_time_items_payment(logged_client):
     manual = next(s for s in data["sales"] if s["kind"] == "manual")
     assert manual["items"] == []
     assert manual["time"] is None
+
+
+def test_sales_pagination(logged_client):
+    """Paginação server-side: LIMIT/OFFSET e metadados."""
+    for i in range(5):
+        SaleRepository().insert_sale(
+            date(2026, 9, i + 1), Decimal("10.00"), f"Venda {i}"
+        )
+
+    page1 = logged_client.get("/api/sales?page=1&per_page=2").get_json()
+    assert page1["pagination"] == {
+        "page": 1,
+        "per_page": 2,
+        "total": 5,
+        "pages": 3,
+    }
+    assert len(page1["sales"]) == 2
+
+    page2 = logged_client.get("/api/sales?page=2&per_page=2").get_json()
+    assert page2["pagination"]["page"] == 2
+    assert len(page2["sales"]) == 2
+    ids1 = {s["id"] for s in page1["sales"]}
+    ids2 = {s["id"] for s in page2["sales"]}
+    assert ids1.isdisjoint(ids2)
+
+    page3 = logged_client.get("/api/sales?page=3&per_page=2").get_json()
+    assert len(page3["sales"]) == 1
+
+
+def test_sales_search_and_status_filter(logged_client):
+    token = _csrf(logged_client)
+    sale = SaleRepository().insert_sale(date(2026, 9, 10), Decimal("77.00"), "BuscaXYZ")
+
+    found = logged_client.get("/api/sales?q=BuscaXYZ").get_json()
+    assert any(x["obs"] == "BuscaXYZ" for x in found["sales"])
+
+    counts = logged_client.get("/api/sales").get_json()["status_counts"]
+    assert set(counts) == {"todas", "ativas", "canceladas"}
+
+    logged_client.post(f"/api/sales/{sale.id}/cancel", headers={"X-CSRFToken": token})
+    ativas = logged_client.get("/api/sales?status=ativas").get_json()
+    canceladas = logged_client.get("/api/sales?status=canceladas").get_json()
+    assert all(not x["cancelled"] for x in ativas["sales"])
+    assert all(x["cancelled"] for x in canceladas["sales"])
