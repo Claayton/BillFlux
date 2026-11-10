@@ -432,6 +432,45 @@ def test_api_pending_documents_and_reenviar(logged_client, monkeypatch):
     assert resent.get_json()["document"]["status"] == STATUS_AUTHORIZED
 
 
+def test_api_banner_includes_rejected_and_bulk_retries(logged_client, monkeypatch):
+    provider = FakeProvider()
+    provider.emit_result = FiscalResult(
+        ok=False,
+        status=STATUS_REJECTED,
+        error_code="462",
+        error_message="CSC não cadastrado",
+    )
+    _prepare_api(monkeypatch, provider)
+    _, _, order = _make_order()
+
+    response = logged_client.post(
+        "/api/fiscal/emitir",
+        json={"order_id": order.id},
+        headers={"X-CSRFToken": _csrf(logged_client)},
+    )
+    assert response.status_code == 200
+    assert response.get_json()["document"]["status"] == STATUS_REJECTED
+
+    banner = logged_client.get("/api/fiscal/pendentes").get_json()
+    assert banner["count"] == 1
+    assert banner["documents"][0]["status"] == STATUS_REJECTED
+
+    provider.emit_result = FiscalResult(
+        ok=True,
+        status=STATUS_AUTHORIZED,
+        access_key=ACCESS_KEY,
+        protocol="135",
+        xml="<nfe/>",
+    )
+    resent = logged_client.post(
+        "/api/fiscal/reenviar-pendentes",
+        json={"limit": 50},
+        headers={"X-CSRFToken": _csrf(logged_client)},
+    )
+    assert resent.status_code == 200
+    assert resent.get_json()["authorized"] == 1
+
+
 def test_api_cancel_validates_justification(logged_client, monkeypatch):
     provider = FakeProvider()
     _prepare_api(monkeypatch, provider)

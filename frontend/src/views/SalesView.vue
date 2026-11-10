@@ -503,7 +503,7 @@ onBeforeUnmount(clearEyeTimer)
           <div class="fiscal-banner-text">
             <strong>
               {{ fiscalPending.length }}
-              {{ fiscalPending.length === 1 ? 'nota fiscal pendente' : 'notas fiscais pendentes' }}
+              {{ fiscalPending.length === 1 ? 'nota fiscal com problema' : 'notas fiscais com problema' }}
             </strong>
             <span>Vendas do PDV sem NFC-e autorizada. Reenvie para tentar de novo.</span>
             <ul class="fiscal-banner-list">

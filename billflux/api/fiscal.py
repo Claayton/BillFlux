@@ -18,6 +18,8 @@ from billflux.infra.repository.settings_repository import SettingsRepository
 from billflux.services.fiscal import (
     PENDING_STATUSES,
     STATUS_AUTHORIZED,
+    STATUS_DENIED,
+    STATUS_REJECTED,
     FiscalCancellationError,
     FiscalConfigError,
     FiscalError,
@@ -253,7 +255,11 @@ def fiscal_cancelar(document_id):
 def fiscal_pendentes():
     """Notas pendentes (banner da tela inicial e tela de pendências fiscais)."""
 
-    documents = FiscalDocumentRepository().list_by_status(PENDING_STATUSES)
+    # Pendentes + rejeitadas/denegadas: tudo que ainda não tem NFC-e válida
+    # aparece no banner para o operador reenviar.
+    documents = FiscalDocumentRepository().list_by_status(
+        set(PENDING_STATUSES) | {STATUS_REJECTED, STATUS_DENIED}
+    )
     orders = {order.id: order for order in OrderRepository().get_orders()}
     customers = {c.id: c.name for c in CustomerRepository().get_customers()}
 

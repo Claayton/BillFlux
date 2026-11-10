@@ -141,7 +141,12 @@ class FiscalService:
             }
 
         now = datetime.now()
-        documents = self.repository.list_by_status(PENDING_STATUSES)
+        statuses = set(PENDING_STATUSES)
+        # Rejeitada/denegada não é documento válido: o reenvio manual também
+        # tenta de novo. O automático (cron) continua só nas pendentes.
+        if force:
+            statuses |= {STATUS_REJECTED, STATUS_DENIED}
+        documents = self.repository.list_by_status(statuses)
         processed = authorized = pending = skipped = attempts = 0
         details = []
 

@@ -494,7 +494,7 @@ describe('SalesView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    expect(wrapper.find('.fiscal-banner').text()).toContain('1 nota fiscal pendente')
+    expect(wrapper.find('.fiscal-banner').text()).toContain('1 nota fiscal com problema')
     expect(wrapper.find('.fiscal-banner').text()).toContain('Venda #10')
     expect(wrapper.find('.fiscal-banner').text()).toContain('SEFAZ fora do ar')
 
