@@ -809,6 +809,7 @@ function usesFiadoPayment() {
 }
 
 async function confirmCheckout(emitFiscal = false) {
+  if (finishing.value) return
   if (!methods.value.length) {
     ElMessage.warning('Nenhuma forma de pagamento ativa.')
     return

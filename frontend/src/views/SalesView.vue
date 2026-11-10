@@ -264,6 +264,9 @@ async function resendFiscalPending() {
     } else {
       ElMessage.success(`${authorized} nota(s) autorizada(s).`)
     }
+    // O reenvio em lote pode mudar o badge de várias vendas: recarrega a
+    // lista (e o banner) para a tela não ficar com status velho.
+    await load()
     await loadFiscalPending()
   } catch (error) {
     ElMessage.error(error.message)
@@ -337,6 +340,7 @@ function patchSaleFiscal(saleId, document) {
 }
 
 async function emitFiscal(sale) {
+  if (fiscalBusy.value) return
   fiscalBusy.value = true
   try {
     const result = await api.post('/fiscal/emitir', { order_id: sale.id })
@@ -358,6 +362,7 @@ async function emitFiscal(sale) {
 }
 
 async function resendFiscal(sale) {
+  if (fiscalBusy.value) return
   fiscalBusy.value = true
   try {
     const result = await api.post(`/fiscal/${sale.fiscal.id}/reenviar`)

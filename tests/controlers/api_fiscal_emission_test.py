@@ -521,6 +521,30 @@ def test_api_download_xml_and_danfe(logged_client, monkeypatch):
     assert danfe.data.startswith(b"%PDF")
 
 
+def test_api_danfe_html_is_served_as_attachment(logged_client, monkeypatch):
+    """HTML do DANFE não pode ser renderizado inline na origem do app."""
+
+    provider = FakeProvider()
+    provider.emit_result = FiscalResult(
+        ok=True,
+        status=STATUS_AUTHORIZED,
+        access_key=ACCESS_KEY,
+        protocol="135",
+        xml="<nfe/>",
+        danfe=base64.b64encode(b"<html><body>DANFE</body></html>").decode(),
+    )
+    _prepare_api(monkeypatch, provider)
+    _, _, order = _make_order()
+    document = FiscalService().emitir(order.id)
+
+    response = logged_client.get(f"/api/fiscal/{document.id}/danfe")
+
+    assert response.status_code == 200
+    assert response.mimetype == "text/html"
+    assert "attachment" in response.headers["Content-Disposition"]
+    assert b"DANFE" in response.data
+
+
 def test_api_sale_cancel_cancels_note(logged_client, monkeypatch):
     provider = FakeProvider()
     _prepare_api(monkeypatch, provider)

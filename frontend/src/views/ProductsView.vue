@@ -59,7 +59,8 @@ const filteredProducts = computed(() => {
   if (!data.value) return []
   let list = baseProducts.value
   if (fiscalOnly.value) {
-    list = list.filter(p => missingFiscal(p).length > 0)
+    // Mesma regra do /api/fiscal/pending-products: só produtos ativos.
+    list = list.filter(p => p.active && missingFiscal(p).length > 0)
   }
   if (activeCategoryId.value !== null) {
     list = list.filter(p => p.category_id === activeCategoryId.value)
@@ -120,7 +121,7 @@ function missingFiscal(product) {
 
 /** Produtos ativos com pendência fiscal (para o contador/filtro). */
 const fiscalPendingProducts = computed(() =>
-  baseProducts.value.filter(p => missingFiscal(p).length > 0)
+  baseProducts.value.filter(p => p.active && missingFiscal(p).length > 0)
 )
 
 /** Rótulo do estoque: zero sem controle vira "—" (neutro, não "0 un."). */

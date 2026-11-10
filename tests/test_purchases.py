@@ -977,6 +977,22 @@ class TestPurchaseAPI:
         assert data["duplicate"] is False
         assert data["purchase"]["nf_number"] == "100"
 
+    def test_nfe_import_rejects_dtd_and_entities(self, logged_client):
+        token = _csrf(logged_client)
+        bomb = (
+            '<?xml version="1.0"?>'
+            '<!DOCTYPE lolz [<!ENTITY lol "lol">]>'
+            '<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe">'
+            '<infNFe Id="NFe1">&lol;</infNFe></nfeProc>'
+        )
+        resp = logged_client.post(
+            "/api/purchases/nfe-import",
+            json={"xml": bomb},
+            headers={"X-CSRFToken": token},
+        )
+        assert resp.status_code == 400
+        assert "processar o XML" in resp.get_json()["error"]
+
     def test_nfe_import_duplicate(self, logged_client):
         token = _csrf(logged_client)
         DUPLICATE_XML = (

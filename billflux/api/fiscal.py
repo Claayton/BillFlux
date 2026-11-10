@@ -321,7 +321,9 @@ def fiscal_danfe(document_id):
     if head.startswith(b"%pdf"):
         mimetype, extension, attachment = "application/pdf", "pdf", True
     elif head.startswith(b"<"):
-        mimetype, extension, attachment = "text/html", "html", False
+        # HTML do provedor pode conter dados do produto: nunca renderizar
+        # inline na origem do app (evita XSS); o download vira anexo.
+        mimetype, extension, attachment = "text/html", "html", True
     else:
         mimetype, extension, attachment = "application/octet-stream", "bin", True
 

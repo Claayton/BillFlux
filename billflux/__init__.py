@@ -126,6 +126,9 @@ def create_app():
     app.config["SESSION_COOKIE_SECURE"] = _as_bool(
         settings.get("session_cookie_secure", False)
     )
+    # XML de NF-e (e o JSON ao redor) fica muito abaixo disso. Limita o corpo
+    # para evitar consumo de memória por payload gigante.
+    app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
     csrf.init_app(app)
     _seed_default_user()
     _seed_default_accounts()
