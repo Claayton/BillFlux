@@ -130,7 +130,7 @@ describe('ProductsView', () => {
     await openEdit(wrapper)
 
     const tabs = wrapper.findAll('.modal-tabs button')
-    await tabs[1].trigger('click')
+    await tabs.find((tab) => tab.text().includes('Transações')).trigger('click')
     await flushPromises()
 
     expect(apiMock.get).toHaveBeenCalledWith('/products/3/movements')
@@ -258,7 +258,7 @@ describe('ProductsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    expect(wrapper.find('.prod-fiscal-warn').text()).toContain('Sem NCM/CFOP/CSOSN/CST')
+    expect(wrapper.find('.prod-fiscal-warn').text()).toContain('Sem NCM')
     expect(wrapper.find('.toolbar-fiscal-btn').text()).toContain('Pendências fiscais (1)')
 
     await wrapper.find('.toolbar-fiscal-btn').trigger('click')
@@ -266,6 +266,12 @@ describe('ProductsView', () => {
     expect(wrapper.findAll('tbody tr:not(.empty-row)').length).toBe(1)
 
     await openEdit(wrapper)
+    await flushPromises()
+    const fiscalTab = wrapper
+      .findAll('.modal-tabs button')
+      .find((button) => button.text().includes('Fiscal'))
+    expect(fiscalTab).toBeTruthy()
+    await fiscalTab.trigger('click')
     await flushPromises()
     expect(wrapper.find('#product_ncm').exists()).toBe(true)
     expect(wrapper.find('#product_cfop').exists()).toBe(true)

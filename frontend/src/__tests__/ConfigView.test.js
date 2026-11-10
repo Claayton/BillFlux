@@ -88,7 +88,7 @@ describe('ConfigView', () => {
     expect(wrapper.find('#cfg-fiscal-crt').exists()).toBe(true)
     expect(wrapper.find('.fiscal-status').text()).toContain('Faltam configurações')
     expect(wrapper.find('.fiscal-status').text()).toContain('3 produto(s)')
-    expect(wrapper.find('.fiscal-actions').text()).toContain('NCM/CFOP/CSOSN')
+    expect(wrapper.find('.fiscal-actions').text()).toContain('aba Fiscal')
   })
 
   it('aba Empresa exibe os campos preenchidos', async () => {

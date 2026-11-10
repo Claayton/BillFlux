@@ -59,23 +59,14 @@ def _fiscal_settings():
     }
 
 
-def _missing_fiscal(product, crt):
-    """Campos fiscais que faltam no produto (vazio = pronto para emitir)."""
-    missing = []
-    if not (product.ncm or "").strip():
-        missing.append("ncm")
-    if not (product.cfop or "").strip():
-        missing.append("cfop")
-    # Simples usa CSOSN; Regime Normal usa CST.
-    if crt == "3":
-        if not (product.cst or "").strip():
-            missing.append("cst")
-    elif not (product.csosn or "").strip():
-        missing.append("csosn")
-    return missing
+def _missing_fiscal(product):
+    """Campos que impedem a emissão (só o NCM bloqueia; o resto tem padrão)."""
+    if (product.ncm or "").strip():
+        return []
+    return ["ncm"]
 
 
-def _pending_products(crt):
+def _pending_products():
     session = get_session()
     try:
         with session:
@@ -84,7 +75,7 @@ def _pending_products(crt):
             ).all()
             pending = []
             for product in products:
-                missing = _missing_fiscal(product, crt)
+                missing = _missing_fiscal(product)
                 if missing:
                     pending.append(
                         {
@@ -104,9 +95,9 @@ def fiscal_status():
     """Configuração fiscal atual + pendências + se está pronto para emitir."""
     settings = _fiscal_settings()
     token_configured = bool(os.environ.get(TOKEN_ENV, "").strip())
-    pending = _pending_products(settings["crt"])
+    pending = _pending_products()
     # CFOP/CSOSN/origem têm padrão; somente o NCM bloqueia a emissão.
-    blocking = [item for item in pending if "ncm" in item["missing"]]
+    pending = _pending_products()
     pending_documents = FiscalDocumentRepository().list_by_status(PENDING_STATUSES)
 
     missing = []
@@ -116,7 +107,7 @@ def fiscal_status():
         missing.append("cnpj")
     if not settings["ie"]:
         missing.append("ie")
-    if blocking:
+    if pending:
         missing.append("produtos_sem_dados_fiscais")
 
     return api_response(
@@ -134,7 +125,7 @@ def fiscal_status():
             "auto_retry": settings["auto_retry"],
             "nfce_series": settings["nfce_series"],
             "nfce_last_number": settings["nfce_last_number"],
-            "pending_products": len(blocking),
+            "pending_products": len(pending),
             "pending_documents": len(pending_documents),
             "missing": missing,
             "ready": not missing,
@@ -145,9 +136,8 @@ def fiscal_status():
 @bp.route("/fiscal/pending-products")
 @api_login_required
 def fiscal_pending_products():
-    """Produtos ativos sem os dados fiscais mínimos para emitir NFC-e."""
-    settings = _fiscal_settings()
-    pending = _pending_products(settings["crt"])
+    """Produtos ativos sem NCM (único campo que bloqueia a emissão)."""
+    pending = _pending_products()
     return api_response({"count": len(pending), "products": pending})
 
 

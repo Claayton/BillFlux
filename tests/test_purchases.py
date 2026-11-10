@@ -1251,7 +1251,11 @@ class TestProductBarcodeSearchAPI:
 
 
 def test_confirm_fills_product_fiscal_data_from_nfe():
-    """A NF-e de compra completa NCM/CFOP do produto sem sobrescrever."""
+    """A NF-e de compra completa o NCM do produto sem sobrescrever.
+
+    O CFOP da nota de compra é o do fornecedor (saída dele) e não é copiado:
+    a venda usa o padrão 5102/5405 do emissor.
+    """
 
     _open_register()
     product_id = _make_product()
@@ -1282,5 +1286,5 @@ def test_confirm_fills_product_fiscal_data_from_nfe():
     session = get_session()
     updated = session.get(Product, product_id)
     assert updated.ncm == "22021000"
-    assert updated.cfop == "5102"
+    assert updated.cfop is None
     session.close()

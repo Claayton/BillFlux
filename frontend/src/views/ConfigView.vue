@@ -395,7 +395,7 @@ watch(activeTab, (tab) => {
                 <i class="fas fa-list-check"></i> Ver pendências fiscais
               </router-link>
               <small class="config-note">
-                NCM/CFOP/CSOSN são preenchidos em Produtos → Dados → Dados fiscais.
+                O NCM é preenchido em Produtos → Dados → aba Fiscal. CFOP, CSOSN/CST e origem usam padrão.
               </small>
             </div>
           </div>

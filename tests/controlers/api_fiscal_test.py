@@ -64,13 +64,12 @@ def test_fiscal_status_ready_when_everything_is_set(logged_client, monkeypatch):
     assert payload["pending_products"] == 0
 
 
-def test_fiscal_pending_products_lists_missing_fields(logged_client):
-    product = _make_product("Só NCM", ncm="12345678")
+def test_fiscal_pending_products_lists_only_ncm(logged_client):
+    complete = _make_product("Só NCM", ncm="12345678")
+    missing = _make_product("Sem NCM")
 
     payload = logged_client.get("/api/fiscal/pending-products").get_json()
 
-    assert payload["count"] >= 1
-    entry = next(p for p in payload["products"] if p["id"] == product.id)
-    assert "cfop" in entry["missing"]
-    assert "csosn" in entry["missing"]
-    assert "ncm" not in entry["missing"]
+    ids = {entry["id"]: entry for entry in payload["products"]}
+    assert complete.id not in ids
+    assert ids[missing.id]["missing"] == ["ncm"]

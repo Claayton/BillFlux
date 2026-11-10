@@ -23,7 +23,7 @@
 | Fiado | Emite com `TipoPagamento = 99 (outros)` e mostra aviso |
 | Desconto | Vai como desconto na nota (`vDesc`) |
 | Pagamento dividido | Uma linha de pagamento por forma |
-| NCM | Preenchido automaticamente pelas NF-es de compra; **sem NCM bloqueia a emissão** |
+| NCM | Preenchido automaticamente pelas NF-es de compra; **sem NCM bloqueia a emissão** (o CFOP da compra não é copiado: é o CFOP de saída do fornecedor) |
 | Padrões Simples | `CSOSN 102`, `origem 0`, `CFOP 5102` (ou `5405` com ST) — editáveis |
 | Pendências | Tela/filtro "Pendências fiscais" com o que falta por produto |
 | Token | Variável de ambiente `BRASILNFE_TOKEN` (nunca no banco) |
@@ -164,6 +164,24 @@ e chama o mesmo serviço; **"Finalizar"** fecha sem criar `fiscal_document`.
    O botão manual ignora o agendamento; o script `scripts/fiscal_reenviar.py`
    roda no cron/systemd e respeita `fiscal.auto_retry`.
 
+### Bebidas sujeitas a ST (Paraná)
+
+Cervejas, refrigerantes, energéticos, isotônicos e **água mineral** estão no
+regime de substituição tributária no PR (Decreto 9.673/2021, água desde
+01/03/2022). Para esses produtos: **CSOSN 500**, **CFOP 5405** e o **CEST** do
+Convênio ICMS 142/18.
+
+| Produto | CEST |
+|---|---|
+| Refrigerante em PET | `03.010.01` |
+| Refrigerante em lata | `03.010.02` |
+| Refrigerante em vidro descartável | `03.010.00` |
+| Demais refrigerantes | `03.011.00` |
+| Energético em lata | `03.013.00` |
+| Energético em PET | `03.013.01` |
+| Energético em vidro | `03.013.02` |
+| Água mineral em garrafa plástica descartável (500 ml a < 5 L) | `03.005.04` |
+
 ## 5. Endpoints (API)
 
 | Método | Rota | Descrição |
@@ -193,7 +211,7 @@ e chama o mesmo serviço; **"Finalizar"** fecha sem criar `fiscal_document`.
 
 ## 6. Telas
 
-- **Produtos → Dados → Fiscal**: NCM, CEST, CFOP, CSOSN/CST, origem, unidade.
+- **Produtos → Dados → aba Fiscal**: NCM (obrigatório), CEST, CFOP, CSOSN/CST, origem, unidade. CFOP/CSOSN/origem/unidade usam padrão quando vazios.
 - **Produtos**: badge "Sem NCM" e filtro **"Pendências fiscais"**.
 - **Config → Fiscal**: provedor, ambiente, regime, IE, impressão, reenvio,
   série/último número, status do token e botão **"Testar conexão"**.

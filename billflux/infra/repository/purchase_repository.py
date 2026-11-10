@@ -346,14 +346,13 @@ class PurchaseRepository:
                         continue
                     if not item.product_name:
                         item.product_name = product.name
-                    # Completa o cadastro fiscal do produto com o que veio da
-                    # NF-e de compra (sem sobrescrever o que já foi definido).
+                    # Completa o cadastro fiscal do produto com o NCM da NF-e
+                    # de compra (sem sobrescrever o que já foi definido).
+                    # O CFOP da nota de compra é o do fornecedor (saída dele,
+                    # 5xxx) e não serve para a nossa venda: o emissor usa
+                    # 5102/5405 como padrão.
                     if getattr(item, "ncm", None) and not getattr(product, "ncm", None):
                         product.ncm = item.ncm
-                    if getattr(item, "cfop", None) and not getattr(
-                        product, "cfop", None
-                    ):
-                        product.cfop = item.cfop
                     factor = item.factor or 1
                     base_qty = item.quantity * factor
                     base_cost = item.unit_cost / factor if factor else item.unit_cost

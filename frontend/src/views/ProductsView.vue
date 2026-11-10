@@ -113,13 +113,9 @@ const catsWithCount = computed(() => {
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 })
 
-/** Campos fiscais que faltam para emitir NFC-e (vazio = pronto). */
+/** Campos que bloqueiam a emissão da NFC-e (só o NCM; o resto usa padrão). */
 function missingFiscal(product) {
-  const missing = []
-  if (!(product.ncm || '').trim()) missing.push('NCM')
-  if (!(product.cfop || '').trim()) missing.push('CFOP')
-  if (!(product.csosn || '').trim() && !(product.cst || '').trim()) missing.push('CSOSN/CST')
-  return missing
+  return (product.ncm || '').trim() ? [] : ['NCM']
 }
 
 /** Produtos ativos com pendência fiscal (para o contador/filtro). */
@@ -695,7 +691,7 @@ function onModalKeydown(event) {
             type="button"
             class="toolbar-fiscal-btn"
             :class="{ 'is-active': fiscalOnly }"
-            :title="fiscalPendingProducts.length ? 'Produtos sem NCM/CFOP/CSOSN para emitir NFC-e' : 'Nenhuma pendência fiscal'"
+            :title="fiscalPendingProducts.length ? 'Produtos sem NCM para emitir NFC-e' : 'Nenhuma pendência fiscal'"
             @click="fiscalOnly = !fiscalOnly"
           >
             <i class="fas fa-file-invoice-dollar"></i>
@@ -889,6 +885,14 @@ function onModalKeydown(event) {
           <button
             type="button"
             role="tab"
+            :class="{ 'is-active': detailsTab === 'fiscal' }"
+            @click="detailsTab = 'fiscal'"
+          >
+            <i class="fas fa-file-invoice-dollar"></i> Fiscal
+          </button>
+          <button
+            type="button"
+            role="tab"
             :class="{ 'is-active': detailsTab === 'transacoes' }"
             @click="openDetailsTab('transacoes')"
           >
@@ -1045,11 +1049,18 @@ function onModalKeydown(event) {
             <input id="product_active" v-model="productForm.active" type="checkbox" />
             <span>Produto ativo (aparece no PDV)</span>
           </label>
+        </form>
 
+        <form
+          v-show="detailsTab === 'fiscal'"
+          class="modal-form"
+          @submit.prevent="saveProduct"
+          @keydown.enter.prevent
+        >
           <div class="fiscal-block">
             <div class="fiscal-block-head">
               <h3><i class="fas fa-file-invoice-dollar"></i> Dados fiscais (NFC-e)</h3>
-              <span class="field-hint">NCM e CFOP são obrigatórios para emitir nota.</span>
+              <span class="field-hint">Só o NCM é obrigatório. CFOP, CSOSN/CST, origem e unidade usam padrão (5102/5405, 102, 0, UN).</span>
             </div>
             <div class="form-grid fiscal-grid-3">
               <div class="form-field">
