@@ -470,4 +470,37 @@ describe('SalesView', () => {
     expect(dividers[0].text()).toContain('Caixa fechado')
     expect(dividers[0].text()).toContain('novo caixa aberto')
   })
+
+  it('mostra o banner de notas pendentes e reenvia em lote', async () => {
+    apiMock.get.mockImplementation((url) => {
+      if (String(url) === '/fiscal/pendentes') {
+        return Promise.resolve({
+          count: 1,
+          documents: [
+            {
+              id: 3,
+              order_id: 10,
+              status: 'pendente',
+              error_message: 'SEFAZ fora do ar',
+              order: { id: 10, total: 50 },
+            },
+          ],
+        })
+      }
+      return Promise.resolve(salesResponse(url))
+    })
+    apiMock.post.mockResolvedValue({ authorized: 1, pending: 0 })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.fiscal-banner').text()).toContain('1 nota fiscal pendente')
+    expect(wrapper.find('.fiscal-banner').text()).toContain('Venda #10')
+    expect(wrapper.find('.fiscal-banner').text()).toContain('SEFAZ fora do ar')
+
+    await wrapper.find('.fiscal-banner-action').trigger('click')
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith('/fiscal/reenviar-pendentes', { limit: 50 })
+  })
 })

@@ -154,6 +154,70 @@ describe('PdvView', () => {
     expect(wrapper.text()).toContain('Recibo #7')
   })
 
+  it('emitir nota fecha a venda e emite a NFC-e', async () => {
+    apiMock.post.mockImplementation((url) => {
+      if (url === '/fiscal/emitir') {
+        return Promise.resolve({
+          ok: true,
+          status: 'autorizada',
+          document: { number: 42 },
+        })
+      }
+      return Promise.resolve({ order: { order_id: 7 } })
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('arildo')
+    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+
+    await wrapper.find('#pdv-finish').trigger('click')
+    await flushPromises()
+    await wrapper.find('.pdv-payfield input').setValue('500')
+    await wrapper.find('.emit-fiscal-btn').trigger('click')
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith(
+      '/pdv/complete',
+      expect.objectContaining({ payments: [{ method_id: 1, amount: '5.00' }] })
+    )
+    expect(apiMock.post).toHaveBeenCalledWith('/fiscal/emitir', { order_id: 7 })
+    expect(ElMessage.success).toHaveBeenCalledWith(
+      expect.stringContaining('NFC-e autorizada')
+    )
+  })
+
+  it('falha na emissão não desfaz a venda e avisa que ficou pendente', async () => {
+    apiMock.post.mockImplementation((url) => {
+      if (url === '/fiscal/emitir') {
+        return Promise.resolve({
+          ok: false,
+          status: 'pendente',
+          message: 'SEFAZ fora do ar',
+        })
+      }
+      return Promise.resolve({ order: { order_id: 8 } })
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('#pdv-search').setValue('arildo')
+    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+
+    await wrapper.find('#pdv-finish').trigger('click')
+    await flushPromises()
+    await wrapper.find('.pdv-payfield input').setValue('500')
+    await wrapper.find('.emit-fiscal-btn').trigger('click')
+    await flushPromises()
+
+    expect(ElMessage.warning).toHaveBeenCalledWith(
+      expect.stringContaining('NFC-e pendente')
+    )
+    expect(wrapper.find('.sale-receipt-modal').exists()).toBe(true)
+  })
+
   it('venda fiada exige cliente selecionado e envia customer_id', async () => {
     apiMock.post.mockResolvedValue({ order: { order_id: 12 } })
     const wrapper = mountView()

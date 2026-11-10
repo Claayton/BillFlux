@@ -54,6 +54,8 @@ const editManual = ref({ open: false, sale: null })
 const editPdvId = ref(null)
 const receiptSale = ref(null)
 const cancelTarget = ref(null)
+const fiscalPending = ref([])
+const fiscalResending = ref(false)
 
 const editForm = ref({ date: '', total: '', obs: '' })
 
@@ -237,6 +239,36 @@ async function load() {
   }
 }
 
+/** Notas fiscais deixadas pendentes pelo PDV (banner de reenvio). */
+async function loadFiscalPending() {
+  try {
+    const response = await api.get('/fiscal/pendentes')
+    fiscalPending.value = response.documents || []
+  } catch {
+    fiscalPending.value = []
+  }
+}
+
+async function resendFiscalPending() {
+  if (fiscalResending.value) return
+  fiscalResending.value = true
+  try {
+    const result = await api.post('/fiscal/reenviar-pendentes', { limit: 50 })
+    const authorized = result.authorized || 0
+    const pending = result.pending || 0
+    if (pending) {
+      ElMessage.warning(`${authorized} autorizada(s); ${pending} ainda pendente(s).`)
+    } else {
+      ElMessage.success(`${authorized} nota(s) autorizada(s).`)
+    }
+    await loadFiscalPending()
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    fiscalResending.value = false
+  }
+}
+
 function goPage(target) {
   const pages = pagination.value.pages || 1
   page.value = Math.min(Math.max(1, target), pages)
@@ -408,7 +440,10 @@ watch(
   }
 )
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadFiscalPending()
+})
 onBeforeUnmount(clearEyeTimer)
 </script>
 
@@ -463,6 +498,34 @@ onBeforeUnmount(clearEyeTimer)
         <div v-for="n in 6" :key="n" class="skeleton-row"></div>
       </div>
       <template v-else-if="data">
+        <div v-if="fiscalPending.length" class="fiscal-banner" role="alert">
+          <span class="fiscal-banner-icon"><i class="fas fa-file-invoice-dollar"></i></span>
+          <div class="fiscal-banner-text">
+            <strong>
+              {{ fiscalPending.length }}
+              {{ fiscalPending.length === 1 ? 'nota fiscal pendente' : 'notas fiscais pendentes' }}
+            </strong>
+            <span>Vendas do PDV sem NFC-e autorizada. Reenvie para tentar de novo.</span>
+            <ul class="fiscal-banner-list">
+              <li v-for="doc in fiscalPending.slice(0, 3)" :key="doc.id">
+                Venda #{{ doc.order_id }}
+                <template v-if="doc.order && doc.order.total != null">· {{ brl(doc.order.total) }}</template>
+                <template v-if="doc.error_message"> — {{ doc.error_message }}</template>
+              </li>
+              <li v-if="fiscalPending.length > 3">+ {{ fiscalPending.length - 3 }} outra(s)</li>
+            </ul>
+          </div>
+          <button
+            type="button"
+            class="btn btn-outline fiscal-banner-action"
+            :disabled="fiscalResending"
+            @click="resendFiscalPending"
+          >
+            <i class="fas" :class="fiscalResending ? 'fa-circle-notch fa-spin' : 'fa-rotate-right'"></i>
+            {{ fiscalResending ? 'Reenviando…' : 'Reenviar agora' }}
+          </button>
+        </div>
+
         <div class="stats-row">
           <div v-for="kpi in kpis" :key="kpi.key" class="stat-card">
             <div class="stat-top">
@@ -765,6 +828,64 @@ onBeforeUnmount(clearEyeTimer)
 </template>
 
 <style scoped>
+/* Banner de notas fiscais pendentes */
+.fiscal-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  border: 1px solid #fcd34d;
+  border-left: 4px solid #f59e0b;
+  border-radius: var(--radius);
+  background: #fffbeb;
+}
+.fiscal-banner-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 50%;
+  background: #fef3c7;
+  color: #b45309;
+  font-size: 15px;
+}
+.fiscal-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+.fiscal-banner-text strong {
+  font-size: 14px;
+  color: #92400e;
+}
+.fiscal-banner-text > span {
+  font-size: 13px;
+  color: #a16207;
+}
+.fiscal-banner-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #92400e;
+}
+.fiscal-banner-list li {
+  line-height: 1.5;
+}
+.fiscal-banner-action {
+  flex: 0 0 auto;
+  align-self: center;
+  border-color: #d97706;
+  color: #b45309;
+}
+.fiscal-banner-action:hover:not(:disabled) {
+  background: #fef3c7;
+}
+
 .muted {
   color: var(--text-muted);
   padding: 24px 4px;
