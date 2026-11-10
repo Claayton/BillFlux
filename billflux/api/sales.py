@@ -517,28 +517,52 @@ def order_detail(order_id):
 @api_login_required
 def order_cancel(order_id):
     """Cancela uma venda do PDV mantendo-a na lista: marca como cancelada,
-    restaura o estoque dos itens e cancela o débito fiado (se houver)."""
-    if OrderRepository().cancel_order(order_id):
-        data = request.get_json(silent=True) or {}
-        details = {
-            "reason": (data.get("reason") or "").strip() or None,
-        }
-        receivable = ReceivableRepository().cancel_by_order(order_id)
-        if receivable:
-            details["credit_cancelled"] = round(float(receivable.amount or 0), 2)
-            audit(
-                "credit.cancel",
-                entity="receivable",
-                entity_id=receivable.id,
-                details={
-                    "order_id": order_id,
-                    "reason": "venda cancelada",
-                    "paid": round(float(receivable.paid_amount or 0), 2),
-                },
-            )
-        audit("order.cancel", entity="order", entity_id=order_id, details=details)
-        return api_response(_sales_payload())
-    return api_error("Pedido não encontrado ou já cancelado.", 400)
+    restaura o estoque dos itens, cancela a NFC-e (quando houver) e o débito
+    fiado. Se a SEFAZ recusar o cancelamento da nota (ex.: fora do prazo), a
+    venda NÃO é cancelada."""
+    data = request.get_json(silent=True) or {}
+    reason = (data.get("reason") or "").strip() or None
+    details = {"reason": reason}
+
+    from billflux.services.fiscal import FiscalError, FiscalService
+
+    order = OrderRepository().get_order(order_id)
+    if not order or order.cancelled:
+        return api_error("Pedido não encontrado ou já cancelado.", 400)
+
+    try:
+        fiscal_document = FiscalService().cancelar_por_venda(order_id, reason or "")
+    except FiscalError as error:
+        return api_error(str(error), 400)
+
+    if not OrderRepository().cancel_order(order_id):
+        return api_error("Pedido não encontrado ou já cancelado.", 400)
+
+    if fiscal_document:
+        details["fiscal_document_id"] = fiscal_document.id
+        details["fiscal_status"] = fiscal_document.status
+        audit(
+            "fiscal.cancel",
+            entity="fiscal_document",
+            entity_id=fiscal_document.id,
+            details={"order_id": order_id, "reason": reason},
+        )
+
+    receivable = ReceivableRepository().cancel_by_order(order_id)
+    if receivable:
+        details["credit_cancelled"] = round(float(receivable.amount or 0), 2)
+        audit(
+            "credit.cancel",
+            entity="receivable",
+            entity_id=receivable.id,
+            details={
+                "order_id": order_id,
+                "reason": "venda cancelada",
+                "paid": round(float(receivable.paid_amount or 0), 2),
+            },
+        )
+    audit("order.cancel", entity="order", entity_id=order_id, details=details)
+    return api_response(_sales_payload())
 
 
 @bp.route("/sales/orders/<int:order_id>", methods=["PUT"])

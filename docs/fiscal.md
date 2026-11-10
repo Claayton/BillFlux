@@ -2,7 +2,8 @@
 
 > Projeto da emissão de **NFC-e (modelo 65)** integrada ao PDV do BeeFlux.
 > Provedor inicial: **Brasil NFe**, atrás de uma camada plugável.
-> Estado: **Fase 1 (cadastros e configuração) — sem emissão**.
+> Estado: **Fase 2 — backend de emissão/cancelamento/reenvio concluído**.
+> Os botões do PDV e a tela de pendências entram depois da homologação.
 
 ## 1. Decisões fechadas
 
@@ -38,36 +39,47 @@
 ```
 billflux/services/fiscal/
   __init__.py
-  base.py        # FiscalProvider (ABC) + DTOs
-  brasilnfe.py   # adapter Brasil NFe (JSON, header Token)
-  factory.py     # get_provider() a partir de FISCAL_PROVIDER
+  base.py        # FiscalProvider (ABC) + DTOs + status
+  config.py      # settings + BRASILNFE_TOKEN → FiscalConfig
+  brasilnfe.py   # adapter Brasil NFe (JSON, header Token, urllib)
+  builder.py     # venda do PDV → FiscalRequest (NCM, CFOP, pagamentos...)
+  factory.py     # get_provider() a partir de fiscal.provider
+  service.py     # emitir/reenviar/cancelar/XML/DANFE + fila de pendentes
+
+billflux/infra/entities/fiscal_document.py
+billflux/domain/models/fiscal_documents.py
+billflux/infra/repository/fiscal_document_repository.py
+migrations/versions/e5f6a7b8c9d0_fiscal_document.py
 ```
 
-O restante do sistema (PDV, Vendas, Config) conversa **somente** com a interface.
+O restante do sistema (PDV, Vendas, Config) conversa **somente** com o
+`FiscalService`; o serviço conversa com a interface `FiscalProvider`.
 Trocar de provedor = novo adapter + `FISCAL_PROVIDER=outro`.
 
 ### Interface
 
 ```python
 class FiscalProvider(ABC):
-    def emitir(self, nota: NotaFiscal) -> RetornoEmissao: ...
-    def cancelar(self, chave: str, justificativa: str) -> RetornoCancelamento: ...
-    def consultar(self, chave: str) -> RetornoConsulta: ...
-    def baixar_xml(self, chave: str) -> bytes: ...
-    def baixar_danfe(self, chave: str) -> bytes: ...
-    def testar_conexao(self) -> RetornoConexao: ...
+    def emit(request: FiscalRequest) -> FiscalResult: ...
+    def cancel(access_key: str, justification: str) -> FiscalCancelResult: ...
+    def query(access_key: str = "", identifier: str = "") -> FiscalQueryResult: ...
+    def download_xml(access_key: str) -> bytes: ...
+    def download_danfe(access_key: str) -> bytes: ...
+    def test_connection() -> FiscalConnectionResult: ...
 ```
 
 ### Configuração
 
 - `FISCAL_PROVIDER` (env, padrão `brasilnfe`)
-- `BRASILNFE_TOKEN` (env, segredo)
+- `BRASILNFE_TOKEN` (env, segredo; nunca no banco)
+- `company.cnpj` (settings) — CNPJ do emitente
 - `fiscal.environment` — `homologacao` | `producao`
 - `fiscal.crt` — `1` (Simples), `3` (Normal)
 - `fiscal.ie` — inscrição estadual
 - `fiscal.print_mode` — `thermal` | `pdf` | `none`
 - `fiscal.auto_retry` — `true` | `false`
 - `fiscal.nfce_series` / `fiscal.nfce_last_number` — referência para migração
+  (a emissão atual omite `Serie`/`Numero`/`Lote` e deixa o provedor numerar)
 
 ## 3. Modelo de dados
 
@@ -93,55 +105,91 @@ class FiscalProvider(ABC):
 | Coluna | Observação |
 |---|---|
 | `id` | PK |
-| `order_id` | venda do PDV (1 nota por venda) |
+| `order_id` | venda do PDV (unique: 1 nota por venda) |
 | `provider` | `brasilnfe` etc. — preserva o histórico na troca |
 | `model` | `65` |
 | `environment` | homologação/produção |
-| `status` | `pendente`, `autorizada`, `rejeitada`, `cancelada`, `denegada` |
+| `status` | `pendente`, `pendente_autorizacao`, `autorizada`, `rejeitada`, `cancelada`, `denegada` |
 | `series`, `number` | retorno do provedor |
 | `access_key` | chave de 44 dígitos |
 | `protocol` | protocolo de autorização |
 | `xml` | XML autorizado (texto) |
-| `danfe_pdf` | PDF em base64 (opcional) |
+| `danfe` | PDF/DANFE em base64 (opcional) |
 | `qr_code_url` | URL do QR Code |
-| `error_code`, `error_message` | rejeição |
-| `retry_count`, `next_retry_at` | fila de reenvio |
-| `created_at`, `authorized_at`, `cancelled_at`, `cancel_reason` | auditoria |
+| `error_code`, `error_message` | rejeição/configuração |
+| `retry_count`, `next_retry_at` | fila de reenvio (backoff) |
+| `created_at`, `updated_at`, `authorized_at`, `cancelled_at`, `cancel_reason` | auditoria |
 
-## 4. Fluxo do PDV
+`pendente_autorizacao` cobre a **contingência automática da NFC-e**
+(`tpEmis=9`): a nota já foi registrada, mas o protocolo ainda não chegou.
+Ela **não** deve aparecer como erro no banner.
+
+## 4. Fluxo de emissão
 
 ```
-[Modal de pagamento]
-  ├─ "Finalizar"  → fecha a venda (fiscal_status = sem_nota)
-  └─ "Emitir nota" → fecha a venda + cria fiscal_document(pendente)
-                      → chama provider.emitir()
-                        ├─ sucesso → autorizada + imprime (print_mode)
-                        └─ falha   → pendente + banner na tela inicial
+POST /api/fiscal/emitir {order_id}
+  → FiscalService.emitir(order_id)
+      ├─ valida venda (existe? não cancelada?)
+      ├─ cria/reaproveita fiscal_document (status pendente)
+      ├─ monta FiscalRequest (NCM, CFOP, CSOSN, pagamentos, cliente)
+      │    └─ NCM ausente → pendente (provedor não é chamado)
+      ├─ provider.emit()
+      │    ├─ autorizada            → grava chave/protocolo/XML/DANFE
+      │    ├─ pendente_autorizacao  → contingência; consulta depois
+      │    ├─ rejeitada/denegada    → grava erro da SEFAZ
+      │    └─ falha de rede         → pendente + retry_count/backoff
+      └─ devolve {ok, status, message, document}
 ```
+
+No PDV (quando a UI entrar), o botão **"Emitir nota"** fecha a venda primeiro
+e chama o mesmo serviço; **"Finalizar"** fecha sem criar `fiscal_document`.
 
 ### Regras
 
 1. **Nunca perder venda por causa de nota**: erro do provedor não desfaz a venda.
-2. **Idempotência**: uma nota por `order_id`; reenvio não duplica.
-3. **Sem NCM**: bloqueia antes de chamar o provedor e lista os itens pendentes.
-4. **Configuração incompleta**: bloqueia com mensagem clara (token/IE/CNPJ/regime).
-5. **Cancelamento**: justificativa obrigatória; tenta cancelar na SEFAZ **antes**
-   de cancelar a venda. Se a SEFAZ recusar (fora do prazo), a venda **não** é
-   cancelada e o usuário é orientado.
+2. **Idempotência**: uma nota por `order_id` (unique no banco). O
+   `IdentificadorInterno` é `VENDA-<order_id>`; antes de reenviar, o serviço
+   consulta o provedor para não duplicar (timeout, resposta perdida etc.).
+3. **Sem NCM**: bloqueia antes de chamar o provedor e mantém a nota pendente
+   com a lista de produtos. CFOP/CSOSN/origem/unidade têm padrões.
+4. **Configuração incompleta**: token/CNPJ/IE ausentes deixam a nota pendente
+   com mensagem clara; depois de corrigir, o reenvio funciona.
+5. **Cancelamento**: justificativa de 15 a 1000 caracteres; tenta cancelar na
+   SEFAZ **antes** de cancelar a venda. Se a SEFAZ recusar (fora do prazo de
+   30 min da NFC-e), a venda **não** é cancelada e o usuário é orientado.
 6. **Emitir depois**: a NFC-e usa a data/hora da emissão (não retroage).
-7. **Contingência**: o provedor cobre SEFAZ fora; o Agente local cobre internet
-   fora (opcional, sem custo no plano).
+7. **Contingência**: o provedor cobre SEFAZ fora (NFC-e automática); o Agente
+   local cobre internet fora (opcional, sem custo no plano).
+8. **Reenvio**: `retry_count` + `next_retry_at` com backoff de 5 a 60 minutos.
+   O botão manual ignora o agendamento; o script `scripts/fiscal_reenviar.py`
+   roda no cron/systemd e respeita `fiscal.auto_retry`.
 
 ## 5. Endpoints (API)
 
-| Método | Rota | Fase | Descrição |
-|---|---|---|---|
-| `GET` | `/api/fiscal/status` | 1 | Configuração atual + pendências + `ready` |
-| `POST` | `/api/fiscal/emitir` | 2 | Emite a NFC-e de um pedido |
-| `POST` | `/api/fiscal/<id>/reenviar` | 2 | Reenvia nota pendente |
-| `POST` | `/api/fiscal/<id>/cancelar` | 2 | Cancela com justificativa |
-| `GET` | `/api/fiscal/<id>/xml` | 2 | Baixa o XML |
-| `GET` | `/api/fiscal/<id>/danfe` | 2 | Baixa o DANFE |
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/fiscal/status` | Configuração atual + pendências + `ready` + `pending_documents` |
+| `GET` | `/api/fiscal/pending-products` | Produtos ativos sem dados fiscais |
+| `POST` | `/api/fiscal/emitir` | Emite/reaproveita a NFC-e de uma venda (`{"order_id": 1}`) |
+| `POST` | `/api/fiscal/<id>/reenviar` | Reenvia uma nota pendente (consulta antes) |
+| `POST` | `/api/fiscal/reenviar-pendentes` | Reenvio em lote (botão manual; `{"limit": 50}`) |
+| `POST` | `/api/fiscal/<id>/cancelar` | Cancela com `{"justificativa": "..."}` |
+| `GET` | `/api/fiscal/pendentes` | Notas pendentes + dados da venda (banner/tela) |
+| `GET` | `/api/fiscal/vendas/<order_id>` | Situação fiscal de uma venda |
+| `GET` | `/api/fiscal/<id>/xml` | Baixa o XML autorizado |
+| `GET` | `/api/fiscal/<id>/danfe` | Baixa o DANFE (PDF ou HTML) |
+| `POST` | `/api/fiscal/testar-conexao` | Consulta o status da SEFAZ (`107` = operação) |
+
+### Reenvio automático
+
+```bash
+# cron a cada 5 minutos (com o .env carregado)
+*/5 * * * * cd /caminho/do/BillFlux && set -a && . ./.env && set +a \
+  && venv/bin/python scripts/fiscal_reenviar.py >> /var/log/beeflux-fiscal.log 2>&1
+```
+
+`--dry-run` lista as pendentes sem chamar o provedor; `--force` ignora o
+`auto_retry` e o backoff. O script sai com código 1 se sobrar nota pendente.
 
 ## 6. Telas
 
@@ -155,6 +203,14 @@ class FiscalProvider(ABC):
 
 ## 7. Checklist de homologação (Fase 2)
 
+Backend já coberto por testes com **provedor fake** e testes de contrato do
+adapter (payload/parse). O que falta depende do painel do Brasil NFe.
+
+- [x] Camada `FiscalProvider` + adapter Brasil NFe
+- [x] `fiscal_document` + migração
+- [x] Emissão, reenvio (idempotente), cancelamento, XML/DANFE e status
+- [x] Cancelamento da venda bloqueado quando a SEFAZ recusa
+- [x] Testes de payload (fiado, desconto, pagamento dividido, CPF, GTIN)
 - [ ] Token de homologação no `.env`
 - [ ] Certificado A1 e-CNPJ cadastrado no painel do Brasil NFe
 - [ ] Emitente completo (CNPJ, IE, endereço, CRT)
@@ -168,8 +224,11 @@ class FiscalProvider(ABC):
 - [ ] Reenviar nota pendente (simular queda)
 - [ ] Reimprimir cupom/DANFE
 - [ ] Conferir XML e QR Code
-- [ ] Migrar numeração (série/último número)
+- [ ] Migrar numeração (série/último número), se necessário
 - [ ] Trocar `fiscal.environment` para `producao` e emitir 1 venda real
+- [ ] Só então ligar os botões do PDV e a tela de pendências
+
+Contrato detalhado do provedor em [`docs/fiscal-brasilnfe.md`](fiscal-brasilnfe.md).
 
 ## 8. Fora de escopo (por enquanto)
 
