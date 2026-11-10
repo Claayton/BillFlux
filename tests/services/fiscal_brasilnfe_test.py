@@ -17,7 +17,7 @@ from billflux.services.fiscal.base import (
     STATUS_DENIED,
     STATUS_REJECTED,
 )
-from billflux.services.fiscal.brasilnfe import BrasilNFeProvider
+from billflux.services.fiscal.brasilnfe import BrasilNFeProvider, _extract_qr_code
 
 ACCESS_KEY = "4" * 44
 XML = "<nfe><infNFeSupl><qrCode>https://qr.test/nota</qrCode></infNFeSupl></nfe>"
@@ -102,6 +102,43 @@ def test_emit_authorized_decodes_xml_and_qr_code():
     assert call["body"]["ModeloDocumento"] == 65
     assert call["body"]["TipoAmbiente"] == 2
     assert call["body"]["Produtos"][0]["NCM"] == "22021000"
+    imposto = call["body"]["Produtos"][0]["Imposto"]
+    assert imposto["PIS"] == {"CodSituacaoTributaria": "49"}
+    assert imposto["COFINS"] == {"CodSituacaoTributaria": "49"}
+
+
+def test_qr_code_remove_cdata_do_xml():
+    xml = (
+        "<nfe><infNFeSupl><qrCode>"
+        "<![CDATA[https://qr.test/nota?a=1&b=2]]>"
+        "</qrCode></infNFeSupl></nfe>"
+    )
+
+    assert _extract_qr_code(xml) == "https://qr.test/nota?a=1&b=2"
+
+
+def test_item_payload_regime_normal_destaca_pis_cofins():
+    item = FiscalItem(
+        code="1",
+        description="Refrigerante",
+        quantity=Decimal("2"),
+        unit_price=Decimal("5.50"),
+        total=Decimal("11.00"),
+        ncm="22021000",
+        cfop="5102",
+        cst="00",
+    )
+
+    payload = BrasilNFeProvider._item_payload(item)
+
+    assert payload["Imposto"]["PIS"] == {
+        "CodSituacaoTributaria": "01",
+        "Aliquota": 0.65,
+    }
+    assert payload["Imposto"]["COFINS"] == {
+        "CodSituacaoTributaria": "01",
+        "Aliquota": 3.0,
+    }
 
 
 def test_emit_rejection_comes_as_http_200():

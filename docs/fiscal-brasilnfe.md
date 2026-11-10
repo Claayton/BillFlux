@@ -58,6 +58,8 @@ O token é lido de `BRASILNFE_TOKEN` (`.env`). Ele **não** é gravado no banco.
 | `Product.origem` | `OrigemProduto` |
 | `Product.csosn` ou `102` (CRT 1/4) | `Imposto.ICMS.CodSituacaoTributaria` |
 | `Product.cst` ou `00` (CRT 2/3) | `Imposto.ICMS.CodSituacaoTributaria` |
+| Simples/MEI (com `csosn`) | `Imposto.PIS`/`COFINS` com CST `49` (recolhidos no DAS) |
+| Regime Normal (com `cst`) | `Imposto.PIS`/`COFINS` com CST `01` (0,65% / 3,00%) |
 | quantidade vendida | `Quantidade` |
 | preço da apresentação | `ValorUnitario` |
 | quantidade × preço | `ValorTotal` |

@@ -229,10 +229,13 @@ adapter (payload/parse). O que falta depende do painel do Brasil NFe.
 - [x] Emissão, reenvio (idempotente), cancelamento, XML/DANFE e status
 - [x] Cancelamento da venda bloqueado quando a SEFAZ recusa
 - [x] Testes de payload (fiado, desconto, pagamento dividido, CPF, GTIN)
-- [ ] Token de homologação no `.env`
-- [ ] Certificado A1 e-CNPJ cadastrado no painel do Brasil NFe
-- [ ] Emitente completo (CNPJ, IE, endereço, CRT)
-- [ ] Produtos de teste com NCM/CFOP/CSOSN
+- [x] Token de homologação no `.env`
+- [x] Certificado A1 e-CNPJ cadastrado no painel do Brasil NFe
+- [x] Emitente completo (CNPJ, IE, endereço, CRT)
+- [x] Produtos de teste com NCM/CFOP/CSOSN
+- [x] Botões **Finalizar / Emitir nota** no PDV e banner de pendências em Vendas
+- [ ] **CSC de homologação** cadastrado no painel do Brasil NFe (ID + CSC) e
+  reconhecido pela SEFAZ-PR — hoje a emissão para na rejeição **462**
 - [ ] Emitir venda simples (1 item, dinheiro)
 - [ ] Emitir com desconto
 - [ ] Emitir com pagamento dividido
@@ -244,7 +247,6 @@ adapter (payload/parse). O que falta depende do painel do Brasil NFe.
 - [ ] Conferir XML e QR Code
 - [ ] Migrar numeração (série/último número), se necessário
 - [ ] Trocar `fiscal.environment` para `producao` e emitir 1 venda real
-- [ ] Só então ligar os botões do PDV e a tela de pendências
 
 Contrato detalhado do provedor em [`docs/fiscal-brasilnfe.md`](fiscal-brasilnfe.md).
 

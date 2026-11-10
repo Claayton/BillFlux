@@ -73,7 +73,13 @@ def _extract_qr_code(xml: Optional[str]) -> Optional[str]:
     if not xml:
         return None
     match = _QR_CODE_RE.search(xml)
-    return html.unescape(match.group(1).strip()) if match else None
+    if not match:
+        return None
+    value = match.group(1).strip()
+    # A SEFAZ devolve o QR-Code dentro de CDATA no XML.
+    if value.startswith("<![CDATA[") and value.endswith("]]>"):
+        value = value[9:-3].strip()
+    return html.unescape(value) or None
 
 
 def _error_list(data) -> str:
@@ -218,6 +224,15 @@ class BrasilNFeProvider(FiscalProvider):
 
     @staticmethod
     def _item_payload(item) -> dict:
+        # Simples/MEI recolhem PIS/COFINS no DAS: "Outras Saídas" (49) sem
+        # destaque. Regime Normal usa a alíquota básica (01).
+        if item.csosn:
+            pis = {"CodSituacaoTributaria": "49"}
+            cofins = {"CodSituacaoTributaria": "49"}
+        else:
+            pis = {"CodSituacaoTributaria": "01", "Aliquota": 0.65}
+            cofins = {"CodSituacaoTributaria": "01", "Aliquota": 3.0}
+
         product = {
             "NmProduto": item.description,
             "CodProdutoServico": item.code,
@@ -232,7 +247,9 @@ class BrasilNFeProvider(FiscalProvider):
             "Imposto": {
                 "ICMS": {
                     "CodSituacaoTributaria": item.csosn or item.cst or "102",
-                }
+                },
+                "PIS": pis,
+                "COFINS": cofins,
             },
         }
         if item.cest and (item.csosn or item.cst) in {
