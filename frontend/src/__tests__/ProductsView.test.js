@@ -253,6 +253,35 @@ describe('ProductsView', () => {
     )
   })
 
+  it('mostra pendência fiscal, filtra e envia os campos fiscais no salvar', async () => {
+    apiMock.put.mockResolvedValue({ products })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.prod-fiscal-warn').text()).toContain('Sem NCM/CFOP/CSOSN/CST')
+    expect(wrapper.find('.toolbar-fiscal-btn').text()).toContain('Pendências fiscais (1)')
+
+    await wrapper.find('.toolbar-fiscal-btn').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('tbody tr:not(.empty-row)').length).toBe(1)
+
+    await openEdit(wrapper)
+    await flushPromises()
+    expect(wrapper.find('#product_ncm').exists()).toBe(true)
+    expect(wrapper.find('#product_cfop').exists()).toBe(true)
+
+    await wrapper.find('#product_ncm').setValue('12345678')
+    await wrapper.find('#product_cfop').setValue('5102')
+    await wrapper.find('#product_csosn').setValue('102')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(apiMock.put).toHaveBeenCalledWith(
+      '/products/3',
+      expect.objectContaining({ ncm: '12345678', cfop: '5102', csosn: '102' })
+    )
+  })
+
   it('toolbar única com busca, selects e CTA, sem chips', async () => {
     const wrapper = mountView()
     await flushPromises()

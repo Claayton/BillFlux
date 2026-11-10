@@ -66,6 +66,8 @@ def _item_to_domain(item):
         total=item.total,
         barcode=item.barcode,
         unit_com=item.unit_com,
+        ncm=getattr(item, "ncm", None),
+        cfop=getattr(item, "cfop", None),
         factor=item.factor or 1,
     )
 
@@ -145,6 +147,8 @@ class PurchaseRepository:
                                 barcode=d.get("barcode"),
                                 product_name=d.get("product_name"),
                                 unit_com=d.get("unit_com"),
+                                ncm=d.get("ncm"),
+                                cfop=d.get("cfop"),
                                 factor=int(d.get("factor") or 1),
                             )
                         )
@@ -342,6 +346,14 @@ class PurchaseRepository:
                         continue
                     if not item.product_name:
                         item.product_name = product.name
+                    # Completa o cadastro fiscal do produto com o que veio da
+                    # NF-e de compra (sem sobrescrever o que já foi definido).
+                    if getattr(item, "ncm", None) and not getattr(product, "ncm", None):
+                        product.ncm = item.ncm
+                    if getattr(item, "cfop", None) and not getattr(
+                        product, "cfop", None
+                    ):
+                        product.cfop = item.cfop
                     factor = item.factor or 1
                     base_qty = item.quantity * factor
                     base_cost = item.unit_cost / factor if factor else item.unit_cost
@@ -514,6 +526,8 @@ class PurchaseRepository:
                             barcode=d.get("barcode"),
                             product_name=d.get("product_name"),
                             unit_com=d.get("unit_com"),
+                            ncm=d.get("ncm"),
+                            cfop=d.get("cfop"),
                             factor=int(d.get("factor") or 1),
                         )
                     )
@@ -580,6 +594,8 @@ class PurchaseRepository:
                             barcode=d.get("barcode"),
                             product_name=d.get("product_name"),
                             unit_com=d.get("unit_com"),
+                            ncm=d.get("ncm"),
+                            cfop=d.get("cfop"),
                             factor=int(d.get("factor") or 1),
                         )
                     )
@@ -603,6 +619,12 @@ class PurchaseRepository:
                     product = session.get(ProductModel, item.product_id)
                     if not product:
                         continue
+                    if getattr(item, "ncm", None) and not getattr(product, "ncm", None):
+                        product.ncm = item.ncm
+                    if getattr(item, "cfop", None) and not getattr(
+                        product, "cfop", None
+                    ):
+                        product.cfop = item.cfop
                     factor = item.factor or 1
                     base_qty = item.quantity * factor
                     base_cost = item.unit_cost / factor if factor else item.unit_cost

@@ -1248,3 +1248,39 @@ class TestProductBarcodeSearchAPI:
         assert "Coca Cola 2L XYZSEARCH" in names
         assert "Fanta Laranja 2L XYZSEARCH" in names
         assert len(data["products"]) == 2
+
+
+def test_confirm_fills_product_fiscal_data_from_nfe():
+    """A NF-e de compra completa NCM/CFOP do produto sem sobrescrever."""
+
+    _open_register()
+    product_id = _make_product()
+    from billflux.infra.repository.purchase_repository import PurchaseRepository
+
+    repo = PurchaseRepository()
+    po = repo.insert_purchase(
+        items=[
+            {
+                "product_id": product_id,
+                "quantity": 2,
+                "unit_cost": Decimal("5"),
+                "total": Decimal("10"),
+                "product_name": "Produto X",
+                "ncm": "22021000",
+                "cfop": "5102",
+            }
+        ],
+        total=Decimal("10"),
+        net_total=Decimal("10"),
+    )
+    result = repo.confirm_purchase(po.id, create_bill=False, paid=False)
+    assert result.status == "confirmada"
+
+    from billflux.infra.config.database import get_session
+    from billflux.infra.entities.product import Product
+
+    session = get_session()
+    updated = session.get(Product, product_id)
+    assert updated.ncm == "22021000"
+    assert updated.cfop == "5102"
+    session.close()

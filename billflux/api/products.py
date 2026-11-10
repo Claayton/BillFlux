@@ -1,5 +1,7 @@
 """Endpoints de produtos (catálogo e estoque) da API JSON."""
 
+import re
+
 from flask import request
 
 from billflux.api import bp, api_error, api_login_required, api_response, br_to_decimal
@@ -37,6 +39,47 @@ def _parse_supplier_id(data):
     return supplier.id if supplier else None
 
 
+_FISCAL_KEYS = ("ncm", "cest", "cfop", "csosn", "cst", "origem", "fiscal_unit")
+
+
+def _parse_fiscal(data):
+    """Normaliza os campos fiscais. Devolve (dict, erro).
+
+    O dicionário vem vazio quando o payload não traz nenhum campo fiscal
+    (assim o PUT não apaga dados existentes sem querer)."""
+
+    if not any(key in data for key in _FISCAL_KEYS):
+        return {}, None
+
+    def digits(key, size):
+        raw = str(data.get(key) or "").strip()
+        if not raw:
+            return None, None
+        cleaned = re.sub(r"\D", "", raw)
+        if len(cleaned) != size:
+            return None, f"{key.upper()} deve ter {size} dígitos."
+        return cleaned, None
+
+    values = {}
+    for key, size in (("ncm", 8), ("cest", 7), ("cfop", 4), ("csosn", 3), ("cst", 2)):
+        value, error = digits(key, size)
+        if error:
+            return None, error
+        values[key] = value
+
+    try:
+        origem = int(data.get("origem") if data.get("origem") not in (None, "") else 0)
+    except (TypeError, ValueError):
+        return None, "Origem fiscal inválida."
+    if origem < 0 or origem > 8:
+        return None, "Origem fiscal deve ser 0-8."
+    values["origem"] = origem
+    values["fiscal_unit"] = (
+        str(data.get("fiscal_unit") or "").strip().upper()[:6] or None
+    )
+    return values, None
+
+
 def _serialize_product(product, units=None):
     data = {
         "id": product.id,
@@ -55,6 +98,13 @@ def _serialize_product(product, units=None):
         "ideal_stock": getattr(product, "ideal_stock", 0) or 0,
         "obs": product.obs,
         "active": product.active,
+        "ncm": getattr(product, "ncm", None),
+        "cest": getattr(product, "cest", None),
+        "cfop": getattr(product, "cfop", None),
+        "csosn": getattr(product, "csosn", None),
+        "cst": getattr(product, "cst", None),
+        "origem": getattr(product, "origem", 0) or 0,
+        "fiscal_unit": getattr(product, "fiscal_unit", None),
     }
     if units is not None:
         data["units"] = [
@@ -140,6 +190,10 @@ def products_create():
     if stock < 0 or min_stock < 0 or ideal_stock < 0:
         return api_error("Quantidades invalidas.", 400)
 
+    fiscal, fiscal_error = _parse_fiscal(data)
+    if fiscal_error:
+        return api_error(fiscal_error, 400)
+
     repository = ProductRepository()
     if barcode and repository.get_product_by_barcode(barcode):
         return api_error("Já existe um produto com este código de barras.", 400)
@@ -157,6 +211,7 @@ def products_create():
         min_stock=min_stock,
         ideal_stock=ideal_stock,
         obs=obs,
+        **fiscal,
     )
     # Todo produto nasce com uma apresentação "Unidade" (fator 1) — evita o
     # caso de só existir pack/caixa (que o PDV tratava como a unidade).
@@ -205,6 +260,10 @@ def products_edit(product_id):
     if existing and existing.id != product_id:
         return api_error("Já existe um produto com este código de barras.", 400)
 
+    fiscal, fiscal_error = _parse_fiscal(data)
+    if fiscal_error:
+        return api_error(fiscal_error, 400)
+
     repository.update_product(
         product_id,
         name=name,
@@ -219,6 +278,7 @@ def products_edit(product_id):
         ideal_stock=ideal_stock,
         obs=obs,
         active=active,
+        **fiscal,
     )
     if current.price != price:
         ProductUnitRepository().sync_default_price(product_id, price)

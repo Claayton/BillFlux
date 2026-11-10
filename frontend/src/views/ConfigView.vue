@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import AppShell from '@/components/AppShell.vue'
@@ -9,13 +9,15 @@ const loading = ref(true)
 const saving = ref(false)
 const activeTab = ref('company')
 const form = ref({})
+const fiscalStatus = ref(null)
+const checkingFiscal = ref(false)
 
 const tabs = [
   { id: 'company', label: 'Empresa', icon: 'fas fa-store' },
   { id: 'pdv', label: 'PDV', icon: 'fas fa-cash-register' },
   { id: 'stock', label: 'Estoque', icon: 'fas fa-boxes' },
   { id: 'print', label: 'Impressão', icon: 'fas fa-print' },
-  { id: 'fiscal', label: 'Fiscal', icon: 'fas fa-file-invoice-dollar', soon: true },
+  { id: 'fiscal', label: 'Fiscal', icon: 'fas fa-file-invoice-dollar' },
 ]
 
 async function load() {
@@ -82,6 +84,23 @@ const previewOrder = {
 }
 
 onMounted(load)
+
+/** Consulta o status fiscal (token/emitente/pendências) sem emitir nada. */
+async function checkFiscal() {
+  checkingFiscal.value = true
+  try {
+    fiscalStatus.value = await api.get('/fiscal/status')
+  } catch (error) {
+    fiscalStatus.value = null
+    ElMessage.error(error.message)
+  } finally {
+    checkingFiscal.value = false
+  }
+}
+
+watch(activeTab, (tab) => {
+  if (tab === 'fiscal' && !fiscalStatus.value) checkFiscal()
+})
 </script>
 
 <template>
@@ -246,8 +265,139 @@ onMounted(load)
 
           <!-- Fiscal -->
           <div v-show="activeTab === 'fiscal'" class="config-section">
-            <h2>Fiscal</h2>
-            <p class="config-hint">Emissão de NF-e/NFC-e ficará disponível em uma versão futura.</p>
+            <h2>Fiscal (NFC-e)</h2>
+            <p class="config-hint">
+              Emissão de NFC-e pelo PDV com o provedor Brasil NFe. O token de acesso
+              fica no servidor, na variável <code>BRASILNFE_TOKEN</code>.
+            </p>
+
+            <div class="fiscal-status" :class="{ 'is-ready': fiscalStatus?.ready }">
+              <i
+                class="fiscal-status-icon fas"
+                :class="fiscalStatus?.ready ? 'fa-check-circle' : 'fa-exclamation-triangle'"
+              ></i>
+              <div class="fiscal-status-text">
+                <strong v-if="fiscalStatus">
+                  {{ fiscalStatus.ready ? 'Pronto para emitir' : 'Faltam configurações' }}
+                </strong>
+                <strong v-else>Configuração fiscal</strong>
+                <p v-if="fiscalStatus">
+                  Token: {{ fiscalStatus.token_configured ? 'configurado' : 'ausente' }} ·
+                  {{ fiscalStatus.pending_products }} produto(s) com pendência fiscal
+                </p>
+                <p v-else class="muted">
+                  Verifique o token, o emitente e os produtos antes de emitir.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                :disabled="checkingFiscal"
+                @click="checkFiscal"
+              >
+                <i class="fas" :class="checkingFiscal ? 'fa-circle-notch fa-spin' : 'fa-sync'"></i>
+                {{ checkingFiscal ? 'Verificando…' : 'Verificar configuração' }}
+              </button>
+            </div>
+
+            <div class="config-grid">
+              <div class="form-field">
+                <label for="cfg-fiscal-provider">Provedor</label>
+                <select id="cfg-fiscal-provider" v-model="form['fiscal.provider']">
+                  <option value="brasilnfe">Brasil NFe</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="cfg-fiscal-crt">Regime tributário (CRT)</label>
+                <select id="cfg-fiscal-crt" v-model="form['fiscal.crt']">
+                  <option value="1">1 — Simples Nacional</option>
+                  <option value="2">2 — Simples Nacional (excesso de sublimite)</option>
+                  <option value="3">3 — Regime Normal</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="cfg-fiscal-ie">Inscrição Estadual (IE)</label>
+                <input id="cfg-fiscal-ie" v-model="form['fiscal.ie']" type="text" placeholder="Ex: 1234567890" />
+              </div>
+              <div class="form-field">
+                <label for="cfg-fiscal-series">Série atual da NFC-e</label>
+                <input id="cfg-fiscal-series" v-model="form['fiscal.nfce_series']" type="text" placeholder="Ex: 1" />
+              </div>
+              <div class="form-field">
+                <label for="cfg-fiscal-last">Último número emitido</label>
+                <input id="cfg-fiscal-last" v-model="form['fiscal.nfce_last_number']" type="text" placeholder="Ex: 1234" />
+                <small class="config-note">Referência para migrar a numeração no painel do provedor.</small>
+              </div>
+            </div>
+
+            <div class="form-field">
+              <span class="config-label">Ambiente</span>
+              <div class="filter-segmented" role="group" aria-label="Ambiente fiscal">
+                <button
+                  type="button"
+                  :class="{ 'is-active': (form['fiscal.environment'] || 'homologacao') !== 'producao' }"
+                  @click="form['fiscal.environment'] = 'homologacao'"
+                >
+                  Homologação
+                </button>
+                <button
+                  type="button"
+                  :class="{ 'is-active': form['fiscal.environment'] === 'producao' }"
+                  @click="form['fiscal.environment'] = 'producao'"
+                >
+                  Produção
+                </button>
+              </div>
+              <small class="config-note">Homologação emite notas de teste, sem valor fiscal.</small>
+            </div>
+
+            <div class="form-field">
+              <span class="config-label">Impressão da NFC-e</span>
+              <div class="filter-segmented" role="group" aria-label="Impressão da NFC-e">
+                <button
+                  type="button"
+                  :class="{ 'is-active': (form['fiscal.print_mode'] || 'thermal') === 'thermal' }"
+                  @click="form['fiscal.print_mode'] = 'thermal'"
+                >
+                  Térmico (80 mm)
+                </button>
+                <button
+                  type="button"
+                  :class="{ 'is-active': form['fiscal.print_mode'] === 'pdf' }"
+                  @click="form['fiscal.print_mode'] = 'pdf'"
+                >
+                  PDF do DANFE
+                </button>
+                <button
+                  type="button"
+                  :class="{ 'is-active': form['fiscal.print_mode'] === 'none' }"
+                  @click="form['fiscal.print_mode'] = 'none'"
+                >
+                  Não imprimir
+                </button>
+              </div>
+            </div>
+
+            <label class="config-check">
+              <input
+                type="checkbox"
+                :checked="(form['fiscal.auto_retry'] || 'true') === 'true'"
+                @change="toggleSetting('fiscal.auto_retry', $event)"
+              />
+              <span>
+                <strong>Reenviar notas pendentes automaticamente</strong><br />
+                Tenta de novo em segundo plano quando a SEFAZ/provedor voltar.
+              </span>
+            </label>
+
+            <div class="fiscal-actions">
+              <router-link class="btn btn-ghost btn-sm" to="/products?fiscal=pending">
+                <i class="fas fa-list-check"></i> Ver pendências fiscais
+              </router-link>
+              <small class="config-note">
+                NCM/CFOP/CSOSN são preenchidos em Produtos → Dados → Dados fiscais.
+              </small>
+            </div>
           </div>
 
           <div class="config-actions">
@@ -410,5 +560,43 @@ onMounted(load)
   .print-layout {
     grid-template-columns: 1fr;
   }
+}
+
+.fiscal-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-hover, #f9fafb);
+}
+.fiscal-status.is-ready {
+  border-color: #86efac;
+  background: rgba(34, 197, 94, 0.08);
+}
+.fiscal-status-icon {
+  font-size: 20px;
+  color: #d97706;
+}
+.fiscal-status.is-ready .fiscal-status-icon {
+  color: #16a34a;
+}
+.fiscal-status-text {
+  flex: 1;
+  min-width: 0;
+}
+.fiscal-status-text p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.fiscal-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
 }
 </style>

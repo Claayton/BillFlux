@@ -47,17 +47,48 @@ describe('ConfigView', () => {
     apiMock.get.mockResolvedValue(settingsPayload)
   })
 
-  it('carrega e mostra as abas, com Fiscal desabilitada', async () => {
+  it('carrega e mostra as abas, com Fiscal habilitada', async () => {
     const wrapper = mountView()
     await flushPromises()
 
     expect(apiMock.get).toHaveBeenCalledWith('/settings')
 
     const labels = wrapper.findAll('.config-tabs button').map((b) => b.text())
-    expect(labels).toEqual(['Empresa', 'PDV', 'Estoque', 'Impressão', 'Fiscal em breve'])
+    expect(labels).toEqual(['Empresa', 'PDV', 'Estoque', 'Impressão', 'Fiscal'])
 
     const fiscal = wrapper.findAll('.config-tabs button')[4]
-    expect(fiscal.attributes('disabled')).toBeDefined()
+    expect(fiscal.attributes('disabled')).toBeUndefined()
+  })
+
+  it('aba Fiscal mostra configuração, status e pendências', async () => {
+    apiMock.get.mockImplementation((url) => {
+      if (url === '/fiscal/status') {
+        return Promise.resolve({
+          provider: 'brasilnfe',
+          environment: 'homologacao',
+          token_configured: true,
+          emitente: { cnpj: '11.222.333/0001-81', ie: '123', crt: '1' },
+          print_mode: 'thermal',
+          auto_retry: true,
+          pending_products: 3,
+          missing: ['produtos_sem_dados_fiscais'],
+          ready: false,
+        })
+      }
+      return Promise.resolve(settingsPayload)
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.findAll('.config-tabs button')[4].trigger('click')
+    await flushPromises()
+
+    expect(apiMock.get).toHaveBeenCalledWith('/fiscal/status')
+    expect(wrapper.find('#cfg-fiscal-ie').exists()).toBe(true)
+    expect(wrapper.find('#cfg-fiscal-crt').exists()).toBe(true)
+    expect(wrapper.find('.fiscal-status').text()).toContain('Faltam configurações')
+    expect(wrapper.find('.fiscal-status').text()).toContain('3 produto(s)')
+    expect(wrapper.find('.fiscal-actions').text()).toContain('NCM/CFOP/CSOSN')
   })
 
   it('aba Empresa exibe os campos preenchidos', async () => {
@@ -78,7 +109,7 @@ describe('ConfigView', () => {
 
     const widthButtons = wrapper
       .findAll('.config-section .filter-segmented button')
-      .filter((b) => b.text().includes('mm'))
+      .filter((b) => ['58 mm', '80 mm'].includes(b.text()))
     expect(widthButtons).toHaveLength(2)
     expect(widthButtons[1].classes()).toContain('is-active')
 

@@ -25,6 +25,7 @@ from billflux.api import purchases as api_purchases
 from billflux.api import schedule as api_schedule
 from billflux.api import product_units as api_product_units
 from billflux.api import settings as api_settings
+from billflux.api import fiscal as api_fiscal
 from billflux.api import audit as api_audit
 from billflux.api import reports as api_reports
 from billflux.api import inventory as api_inventory

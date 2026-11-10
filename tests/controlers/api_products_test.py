@@ -494,3 +494,74 @@ def test_delete_missing_product(logged_client):
         "/api/products/999999", headers={"X-CSRFToken": token}
     )
     assert response.status_code == 404
+
+
+def test_products_fiscal_fields(logged_client):
+    """POST/PUT gravam NCM, CFOP, CSOSN, origem e unidade fiscal."""
+
+    token = _csrf(logged_client)
+    response = logged_client.post(
+        "/api/products",
+        json={
+            "name": "Refrigerante Fiscal",
+            "price": "9,90",
+            "cost": "5,00",
+            "stock_quantity": 3,
+            "ncm": "22021000",
+            "cest": "0300100",
+            "cfop": "5102",
+            "csosn": "102",
+            "origem": 0,
+            "fiscal_unit": "un",
+        },
+        headers={"X-CSRFToken": token},
+    )
+
+    assert response.status_code == 201
+    product = next(
+        p for p in response.get_json()["products"] if p["name"] == "Refrigerante Fiscal"
+    )
+    assert product["ncm"] == "22021000"
+    assert product["cest"] == "0300100"
+    assert product["cfop"] == "5102"
+    assert product["csosn"] == "102"
+    assert product["origem"] == 0
+    assert product["fiscal_unit"] == "UN"
+
+    edited = logged_client.put(
+        f"/api/products/{product['id']}",
+        json={
+            "name": "Refrigerante Fiscal",
+            "price": "9,90",
+            "cost": "5,00",
+            "active": True,
+            "ncm": "2202.10.00",
+            "cfop": "5405",
+            "csosn": "102",
+        },
+        headers={"X-CSRFToken": token},
+    )
+    assert edited.status_code == 200
+    updated = next(p for p in edited.get_json()["products"] if p["id"] == product["id"])
+    assert updated["ncm"] == "22021000"
+    assert updated["cfop"] == "5405"
+
+
+def test_products_fiscal_validation(logged_client):
+    """NCM/CFOP/CSOSN/CST e origem inválidos devolvem 400."""
+
+    token = _csrf(logged_client)
+    base = {"name": "Fiscal inválido", "price": "1,00"}
+    for extra in (
+        {"ncm": "123"},
+        {"cfop": "51"},
+        {"csosn": "10"},
+        {"cst": "1"},
+        {"origem": 9},
+    ):
+        response = logged_client.post(
+            "/api/products",
+            json={**base, **extra},
+            headers={"X-CSRFToken": token},
+        )
+        assert response.status_code == 400, extra
