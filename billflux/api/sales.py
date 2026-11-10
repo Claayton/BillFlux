@@ -7,6 +7,9 @@ from decimal import Decimal, InvalidOperation
 from flask import request
 
 from billflux.api import bp, api_error, api_login_required, api_response
+from billflux.infra.repository.fiscal_document_repository import (
+    FiscalDocumentRepository,
+)
 from billflux.infra.repository.order_repository import OrderRepository
 from billflux.infra.repository.payment_method_repository import (
     PaymentMethodRepository,
@@ -92,6 +95,19 @@ def _order_detail(order):
             {"name": products[item.product_id], "quantity": item.quantity}
             for item in items_detail
         ],
+    }
+
+
+def _sale_fiscal(document):
+    """Situação fiscal resumida da venda (None quando ainda não há nota)."""
+    if document is None:
+        return None
+    return {
+        "id": document.id,
+        "status": document.status,
+        "has_xml": bool(document.xml),
+        "has_danfe": bool(document.danfe),
+        "error_message": document.error_message or "",
     }
 
 
@@ -306,6 +322,10 @@ def _sales_payload(page=1, per_page=20, status=None, q=None):
                 item["time"] = detail["time"]
                 item["items"] = detail["items"]
 
+    fiscal_by_order = FiscalDocumentRepository().get_by_orders(
+        item["id"] for item in page_sales if item["kind"] == "pdv"
+    )
+
     return {
         "today": today.isoformat(),
         "caixa": {
@@ -335,6 +355,11 @@ def _sales_payload(page=1, per_page=20, status=None, q=None):
                 "cancelled": item["cancelled"],
                 "caixa_id": item["caixa_id"],
                 "in_caixa": item["in_caixa"],
+                "fiscal": (
+                    _sale_fiscal(fiscal_by_order.get(item["id"]))
+                    if item["kind"] == "pdv"
+                    else None
+                ),
             }
             for item in page_sales
         ],

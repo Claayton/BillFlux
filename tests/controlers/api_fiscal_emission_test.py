@@ -398,6 +398,25 @@ def test_api_emit_and_query_document(logged_client, monkeypatch):
     assert by_order["document"]["id"] == body["document"]["id"]
 
 
+def test_sales_payload_includes_fiscal_status(logged_client, monkeypatch):
+    provider = FakeProvider()
+    _prepare_api(monkeypatch, provider)
+    _, _, order = _make_order()
+
+    document = FiscalService().emitir(order.id)
+
+    payload = logged_client.get(f"/api/sales?q={order.id}&per_page=100").get_json()
+    sale = next(
+        item
+        for item in payload["sales"]
+        if item["kind"] == "pdv" and item["id"] == order.id
+    )
+    assert sale["fiscal"]["id"] == document.id
+    assert sale["fiscal"]["status"] == STATUS_AUTHORIZED
+    assert sale["fiscal"]["has_xml"] is True
+    assert sale["fiscal"]["has_danfe"] is False
+
+
 def test_api_pending_documents_and_reenviar(logged_client, monkeypatch):
     provider = FakeProvider()
     provider.emit_result = FiscalTransportError("rede fora")

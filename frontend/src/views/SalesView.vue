@@ -56,6 +56,9 @@ const receiptSale = ref(null)
 const cancelTarget = ref(null)
 const fiscalPending = ref([])
 const fiscalResending = ref(false)
+const fiscalSale = ref(null)
+const fiscalBusy = ref(false)
+const fiscalCancelTarget = ref(null)
 
 const editForm = ref({ date: '', total: '', obs: '' })
 
@@ -266,6 +269,159 @@ async function resendFiscalPending() {
     ElMessage.error(error.message)
   } finally {
     fiscalResending.value = false
+  }
+}
+
+// ---------- Nota fiscal da venda ----------
+const FISCAL_LABELS = {
+  pendente: 'Pendente',
+  pendente_autorizacao: 'Pendente',
+  autorizada: 'Autorizada',
+  rejeitada: 'Rejeitada',
+  denegada: 'Denegada',
+  cancelada: 'Cancelada',
+}
+
+function fiscalLabel(sale) {
+  if (sale.kind !== 'pdv') return ''
+  if (!sale.fiscal) return 'Sem nota'
+  return FISCAL_LABELS[sale.fiscal.status] || sale.fiscal.status
+}
+
+function fiscalBadgeClass(sale) {
+  const status = sale.fiscal?.status
+  if (!status) return 'is-none'
+  if (status === 'autorizada') return 'is-authorized'
+  if (status === 'pendente' || status === 'pendente_autorizacao') return 'is-pending'
+  if (status === 'rejeitada' || status === 'denegada') return 'is-rejected'
+  return 'is-cancelled'
+}
+
+function fiscalIcon(sale) {
+  const status = sale.fiscal?.status
+  if (!status) return 'fa-file-circle-plus'
+  if (status === 'autorizada') return 'fa-circle-check'
+  if (status === 'pendente' || status === 'pendente_autorizacao') return 'fa-clock'
+  if (status === 'rejeitada' || status === 'denegada') return 'fa-triangle-exclamation'
+  return 'fa-ban'
+}
+
+function fiscalNeedsRetry(sale) {
+  return ['pendente', 'pendente_autorizacao', 'rejeitada', 'denegada'].includes(
+    sale.fiscal?.status
+  )
+}
+
+function openFiscal(sale) {
+  fiscalSale.value = sale
+}
+
+function fiscalFromDocument(document) {
+  return {
+    id: document.id,
+    status: document.status,
+    has_xml: Boolean(document.has_xml),
+    has_danfe: Boolean(document.has_danfe),
+    error_message: document.error_message || '',
+  }
+}
+
+function patchSaleFiscal(saleId, document) {
+  const fiscal = fiscalFromDocument(document)
+  const sale = (data.value?.sales || []).find(
+    (item) => item.kind === 'pdv' && item.id === saleId
+  )
+  if (sale) sale.fiscal = fiscal
+  if (fiscalSale.value?.id === saleId) fiscalSale.value.fiscal = fiscal
+  return sale
+}
+
+async function emitFiscal(sale) {
+  fiscalBusy.value = true
+  try {
+    const result = await api.post('/fiscal/emitir', { order_id: sale.id })
+    patchSaleFiscal(sale.id, result.document)
+    if (result.ok) {
+      ElMessage.success('NFC-e autorizada!')
+    } else {
+      ElMessage.warning(
+        'Venda finalizada, mas a nota ficou com problema: ' +
+          (result.message || 'tente reenviar.')
+      )
+    }
+    await loadFiscalPending()
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    fiscalBusy.value = false
+  }
+}
+
+async function resendFiscal(sale) {
+  fiscalBusy.value = true
+  try {
+    const result = await api.post(`/fiscal/${sale.fiscal.id}/reenviar`)
+    patchSaleFiscal(sale.id, result.document)
+    if (result.ok) {
+      ElMessage.success('NFC-e autorizada!')
+    } else {
+      ElMessage.warning(
+        'A nota continua com problema: ' + (result.message || 'tente de novo.')
+      )
+    }
+    await loadFiscalPending()
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    fiscalBusy.value = false
+  }
+}
+
+async function downloadFiscal(documentId, kind) {
+  try {
+    const response = await fetch(`/api/fiscal/${documentId}/${kind}`, {
+      credentials: 'same-origin',
+    })
+    if (!response.ok) throw new Error('Não foi possível baixar o arquivo.')
+    const blob = await response.blob()
+    const extension =
+      kind === 'xml' ? 'xml' : blob.type.includes('pdf') ? 'pdf' : 'html'
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `nfce-${documentId}.${extension}`
+    link.click()
+    URL.revokeObjectURL(link.href)
+  } catch (error) {
+    ElMessage.error(error.message)
+  }
+}
+
+function askCancelFiscal(sale) {
+  fiscalCancelTarget.value = sale
+}
+
+async function confirmCancelFiscal(reason) {
+  const sale = fiscalCancelTarget.value
+  if (!sale) return
+  const justification = String(reason || '').trim()
+  if (justification.length < 15) {
+    ElMessage.warning('A justificativa precisa ter ao menos 15 caracteres.')
+    return
+  }
+  fiscalCancelTarget.value = null
+  fiscalBusy.value = true
+  try {
+    await api.post(`/fiscal/${sale.fiscal.id}/cancelar`, {
+      justificativa: justification,
+    })
+    ElMessage.success('Nota fiscal cancelada.')
+    fiscalSale.value = null
+    await load()
+    await loadFiscalPending()
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    fiscalBusy.value = false
   }
 }
 
@@ -626,6 +782,7 @@ onBeforeUnmount(clearEyeTimer)
               <span>ID</span>
               <span>Valor</span>
               <span>Origem</span>
+              <span>Fiscal</span>
               <span>Data / hora</span>
               <span>Itens</span>
               <span>Ações</span>
@@ -660,6 +817,21 @@ onBeforeUnmount(clearEyeTimer)
                     <i :class="sale.kind === 'pdv' ? 'fas fa-cash-register' : 'fas fa-hand-holding-usd'"></i>
                     {{ sale.kind === 'pdv' ? 'PDV' : 'Manual' }}
                   </span>
+                </span>
+
+                <span class="sale-fiscal-cell">
+                  <button
+                    v-if="sale.kind === 'pdv'"
+                    type="button"
+                    class="fiscal-badge sale-fiscal-btn"
+                    :class="fiscalBadgeClass(sale)"
+                    :title="sale.fiscal?.error_message || 'Abrir situação fiscal'"
+                    @click="openFiscal(sale)"
+                  >
+                    <i class="fas" :class="fiscalIcon(sale)"></i>
+                    {{ fiscalLabel(sale) }}
+                  </button>
+                  <span v-else class="sale-fiscal-empty">—</span>
                 </span>
 
                 <span class="sale-date">
@@ -811,6 +983,100 @@ onBeforeUnmount(clearEyeTimer)
       @close="receiptSale = null"
     />
 
+    <!-- Situação fiscal da venda -->
+    <div v-if="fiscalSale" class="modal is-open">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2><i class="fas fa-file-invoice-dollar"></i> Nota fiscal — Venda #{{ fiscalSale.id }}</h2>
+          <button type="button" class="modal-close" aria-label="Fechar" @click="fiscalSale = null">&times;</button>
+        </div>
+        <div class="fiscal-modal-body">
+          <div class="fiscal-modal-head">
+            <span class="fiscal-badge" :class="fiscalBadgeClass(fiscalSale)">
+              <i class="fas" :class="fiscalIcon(fiscalSale)"></i>
+              {{ fiscalLabel(fiscalSale) }}
+            </span>
+            <span class="fiscal-modal-sale">
+              Venda #{{ fiscalSale.id }} · {{ brl(fiscalSale.total) }}
+            </span>
+          </div>
+          <p v-if="fiscalSale.fiscal?.error_message" class="fiscal-modal-error">
+            <i class="fas fa-triangle-exclamation"></i>
+            {{ fiscalSale.fiscal.error_message }}
+          </p>
+          <p v-else-if="!fiscalSale.fiscal" class="fiscal-modal-note">
+            Esta venda ainda não tem nota fiscal. Você pode emitir agora ou deixar sem nota.
+          </p>
+          <p v-else-if="fiscalSale.fiscal.status === 'autorizada'" class="fiscal-modal-note is-ok">
+            <i class="fas fa-circle-check"></i>
+            NFC-e autorizada pela SEFAZ. Baixe o XML ou o DANFE abaixo.
+          </p>
+          <p v-else class="fiscal-modal-note">
+            A nota existe mas ainda não foi autorizada. Use “Reenviar” para tentar de novo.
+          </p>
+        </div>
+        <div class="modal-footer fiscal-modal-footer">
+          <button type="button" class="btn btn-ghost" @click="fiscalSale = null">Fechar</button>
+          <button
+            v-if="!fiscalSale.fiscal && !fiscalSale.cancelled"
+            type="button"
+            class="btn btn-primary"
+            :disabled="fiscalBusy"
+            @click="emitFiscal(fiscalSale)"
+          >
+            <i class="fas fa-file-circle-plus"></i>
+            {{ fiscalBusy ? 'Emitindo…' : 'Emitir nota' }}
+          </button>
+          <button
+            v-if="fiscalNeedsRetry(fiscalSale)"
+            type="button"
+            class="btn btn-primary"
+            :disabled="fiscalBusy"
+            @click="resendFiscal(fiscalSale)"
+          >
+            <i class="fas fa-rotate-right"></i>
+            {{ fiscalBusy ? 'Reenviando…' : 'Reenviar' }}
+          </button>
+          <button
+            v-if="fiscalSale.fiscal?.has_xml"
+            type="button"
+            class="btn btn-outline"
+            @click="downloadFiscal(fiscalSale.fiscal.id, 'xml')"
+          >
+            <i class="fas fa-file-code"></i> XML
+          </button>
+          <button
+            v-if="fiscalSale.fiscal?.has_danfe"
+            type="button"
+            class="btn btn-outline"
+            @click="downloadFiscal(fiscalSale.fiscal.id, 'danfe')"
+          >
+            <i class="fas fa-file-lines"></i> DANFE
+          </button>
+          <button
+            v-if="fiscalSale.fiscal?.status === 'autorizada' && !fiscalSale.cancelled"
+            type="button"
+            class="btn btn-danger"
+            @click="askCancelFiscal(fiscalSale)"
+          >
+            <i class="fas fa-ban"></i> Cancelar nota
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <ConfirmDialog
+      v-if="fiscalCancelTarget"
+      title="Cancelar nota fiscal"
+      :message="`Cancelar a NFC-e da venda #${fiscalCancelTarget.id}? A venda continua registrada.`"
+      confirm-label="Cancelar nota"
+      danger
+      input-label="Justificativa (mínimo 15 caracteres)"
+      input-placeholder="Ex: erro na emissão, dados incorretos..."
+      @confirm="confirmCancelFiscal($event)"
+      @cancel="fiscalCancelTarget = null"
+    />
+
     <ConfirmDialog
       v-if="cancelTarget"
       title="Cancelar venda"
@@ -884,6 +1150,110 @@ onBeforeUnmount(clearEyeTimer)
 }
 .fiscal-banner-action:hover:not(:disabled) {
   background: #fef3c7;
+}
+
+/* Badge fiscal na linha da venda */
+.sale-fiscal-cell {
+  display: inline-flex;
+  justify-content: center;
+}
+.fiscal-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.sale-fiscal-btn {
+  cursor: pointer;
+  transition: filter 150ms ease, transform 100ms ease;
+}
+.sale-fiscal-btn:hover {
+  filter: brightness(0.96);
+}
+.sale-fiscal-btn:active {
+  transform: translateY(1px);
+}
+.fiscal-badge.is-none,
+.fiscal-badge.is-cancelled {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #6b7280;
+}
+.fiscal-badge.is-pending {
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #b45309;
+}
+.fiscal-badge.is-authorized {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #047857;
+}
+.fiscal-badge.is-rejected {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+.sale-fiscal-empty {
+  color: var(--text-muted);
+}
+
+/* Modal da nota fiscal */
+.fiscal-modal-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.fiscal-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.fiscal-modal-sale {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.fiscal-modal-note,
+.fiscal-modal-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.fiscal-modal-note {
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+}
+.fiscal-modal-note.is-ok {
+  background: #ecfdf5;
+  color: #047857;
+}
+.fiscal-modal-error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+.fiscal-modal-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+.fiscal-modal-footer .btn-ghost {
+  margin-right: auto;
 }
 
 .muted {

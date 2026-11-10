@@ -83,6 +83,24 @@ class FiscalDocumentRepository:
         finally:
             session.close()
 
+    def get_by_orders(self, order_ids: Iterable[int]) -> dict:
+        """Notas de várias vendas de uma vez (chave = order_id)."""
+
+        ids = [int(order_id) for order_id in order_ids]
+        if not ids:
+            return {}
+        session = get_session()
+        try:
+            with session:
+                models = session.exec(
+                    select(FiscalDocumentModel).where(
+                        FiscalDocumentModel.order_id.in_(ids)
+                    )
+                ).all()
+                return {model.order_id: _to_domain(model) for model in models}
+        finally:
+            session.close()
+
     def list_by_status(self, statuses: Iterable[str]) -> List[FiscalDocument]:
         statuses = list(statuses)
         if not statuses:
