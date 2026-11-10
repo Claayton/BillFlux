@@ -234,9 +234,10 @@ adapter (payload/parse). O que falta depende do painel do Brasil NFe.
 - [x] Emitente completo (CNPJ, IE, endereço, CRT)
 - [x] Produtos de teste com NCM/CFOP/CSOSN
 - [x] Botões **Finalizar / Emitir nota** no PDV e banner de pendências em Vendas
-- [ ] **CSC de homologação** cadastrado no painel do Brasil NFe (ID + CSC) e
-  reconhecido pela SEFAZ-PR — hoje a emissão para na rejeição **462**
-- [ ] Emitir venda simples (1 item, dinheiro)
+- [x] **CSC de homologação** cadastrado no painel do Brasil NFe (ID + CSC)
+- [x] Situação fiscal por venda em Vendas (badge, emitir/reenviar, XML/DANFE,
+  cancelar nota)
+- [x] Emitir venda simples (1 item, dinheiro) — vendas #19 e #20 autorizadas
 - [ ] Emitir com desconto
 - [ ] Emitir com pagamento dividido
 - [ ] Emitir com CPF e sem CPF
@@ -244,7 +245,7 @@ adapter (payload/parse). O que falta depende do painel do Brasil NFe.
 - [ ] Cancelar dentro do prazo (com justificativa)
 - [ ] Reenviar nota pendente (simular queda)
 - [ ] Reimprimir cupom/DANFE
-- [ ] Conferir XML e QR Code
+- [x] Conferir XML e QR Code
 - [ ] Migrar numeração (série/último número), se necessário
 - [ ] Trocar `fiscal.environment` para `producao` e emitir 1 venda real
 
