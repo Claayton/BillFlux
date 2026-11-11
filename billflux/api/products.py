@@ -10,6 +10,7 @@ from billflux.infra.repository.product_repository import ProductRepository
 from billflux.infra.repository.supplier_repository import SupplierRepository
 from billflux.infra.repository.product_unit_repository import ProductUnitRepository
 from billflux.services.audit import audit
+from billflux.services.fiscal.ncm import is_valid_ncm
 from billflux.services.pdv_cache import bump_pdv_version
 
 
@@ -65,6 +66,11 @@ def _parse_fiscal(data):
         value, error = digits(key, size)
         if error:
             return None, error
+        if key == "ncm" and value and not is_valid_ncm(value):
+            return None, (
+                f"NCM {value} não existe na tabela vigente da Siscomex. "
+                "Confira o código na aba Fiscal do produto."
+            )
         values[key] = value
 
     try:
@@ -99,6 +105,10 @@ def _serialize_product(product, units=None):
         "obs": product.obs,
         "active": product.active,
         "ncm": getattr(product, "ncm", None),
+        # False quando o NCM existe mas não está na tabela vigente da Siscomex.
+        "ncm_valid": (
+            is_valid_ncm(product.ncm) if getattr(product, "ncm", None) else None
+        ),
         "cest": getattr(product, "cest", None),
         "cfop": getattr(product, "cfop", None),
         "csosn": getattr(product, "csosn", None),

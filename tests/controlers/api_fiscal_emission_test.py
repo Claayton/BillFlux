@@ -114,7 +114,7 @@ def _make_order(
     name="Item NFC-e",
     price="10.00",
     qty=2,
-    ncm="12345678",
+    ncm="22021000",
     barcode=None,
     customer_id=None,
     payments=None,
@@ -179,7 +179,7 @@ def test_emit_authorized_persists_protocol_and_xml():
     request = provider.emit_calls[0]
     assert request.identifier == f"VENDA-{order.id}"
     assert request.environment == "homologacao"
-    assert request.items[0].ncm == "12345678"
+    assert request.items[0].ncm == "22021000"
     assert request.items[0].cfop == "5102"
     assert request.items[0].csosn == "102"
     assert request.items[0].ean == "SEM GTIN"
@@ -200,6 +200,22 @@ def test_emit_without_ncm_stays_pending_and_does_not_call_provider():
     assert product.name in document.error_message
     assert provider.emit_calls == []
     assert FiscalDocumentRepository().get_by_order(order.id).id == document.id
+
+
+def test_emit_with_invalid_ncm_stays_pending_and_does_not_call_provider():
+    """NCM fora da tabela da Siscomex é barrado antes de chamar o provedor."""
+
+    provider = FakeProvider()
+    service = FiscalService(provider=provider, config=_config())
+    product, _, order = _make_order(ncm="12345678")
+
+    document = service.emitir(order.id)
+
+    assert document.status == STATUS_PENDING
+    assert "NCM inválido" in document.error_message
+    assert "12345678" in document.error_message
+    assert product.name in document.error_message
+    assert provider.emit_calls == []
 
 
 def test_emit_rejected_records_sefaz_error():

@@ -132,7 +132,7 @@ POST /api/fiscal/emitir {order_id}
       ├─ valida venda (existe? não cancelada?)
       ├─ cria/reaproveita fiscal_document (status pendente)
       ├─ monta FiscalRequest (NCM, CFOP, CSOSN, pagamentos, cliente)
-      │    └─ NCM ausente → pendente (provedor não é chamado)
+      │    └─ NCM ausente/inválido → pendente (provedor não é chamado)
       ├─ provider.emit()
       │    ├─ autorizada            → grava chave/protocolo/XML/DANFE
       │    ├─ pendente_autorizacao  → contingência; consulta depois
@@ -151,7 +151,8 @@ e chama o mesmo serviço; **"Finalizar"** fecha sem criar `fiscal_document`.
    `IdentificadorInterno` é `VENDA-<order_id>`; antes de reenviar, o serviço
    consulta o provedor para não duplicar (timeout, resposta perdida etc.).
 3. **Sem NCM**: bloqueia antes de chamar o provedor e mantém a nota pendente
-   com a lista de produtos. CFOP/CSOSN/origem/unidade têm padrões.
+   com a lista de produtos. CFOP/CSOSN/origem/unidade têm padrões. NCM fora da
+   tabela vigente da Siscomex também bloqueia (ver abaixo).
 4. **Configuração incompleta**: token/CNPJ/IE ausentes deixam a nota pendente
    com mensagem clara; depois de corrigir, o reenvio funciona.
 5. **Cancelamento**: justificativa de 15 a 1000 caracteres; tenta cancelar na
@@ -163,6 +164,29 @@ e chama o mesmo serviço; **"Finalizar"** fecha sem criar `fiscal_document`.
 8. **Reenvio**: `retry_count` + `next_retry_at` com backoff de 5 a 60 minutos.
    O botão manual ignora o agendamento; o script `scripts/fiscal_reenviar.py`
    roda no cron/systemd e respeita `fiscal.auto_retry`.
+
+### Validação de NCM
+
+O NCM é conferido contra a tabela vigente do Siscomex, embutida em
+`billflux/services/fiscal/data/ncm_vigente.txt` (10.516 códigos). A validação
+roda **offline** e acontece em dois momentos:
+
+- **cadastro/edição do produto** (`POST/PUT /api/products`): NCM inexistente
+  devolve 400 e não é gravado;
+- **emissão**: NCM fora da tabela deixa a nota pendente com mensagem clara,
+  sem chamar o provedor (evita a rejeição 778 da SEFAZ).
+
+A importação de compra continua aceitando o NCM da nota do fornecedor (a
+SEFAZ já validou aquele XML). Para atualizar a tabela quando a Siscomex
+publicar mudanças:
+
+```bash
+venv/bin/python scripts/atualizar_ncm.py
+```
+
+O script grava a data de atualização no cabeçalho do arquivo. Se o arquivo
+não existir no deploy, a validação degrada para "8 dígitos" em vez de
+bloquear tudo (fail-open).
 
 ### Bebidas sujeitas a ST (Paraná)
 
@@ -187,7 +211,7 @@ Convênio ICMS 142/18.
 | Método | Rota | Descrição |
 |---|---|---|
 | `GET` | `/api/fiscal/status` | Configuração atual + pendências + `ready` + `pending_documents` |
-| `GET` | `/api/fiscal/pending-products` | Produtos ativos sem dados fiscais |
+| `GET` | `/api/fiscal/pending-products` | Produtos ativos sem NCM ou com NCM inválido |
 | `POST` | `/api/fiscal/emitir` | Emite/reaproveita a NFC-e de uma venda (`{"order_id": 1}`) |
 | `POST` | `/api/fiscal/<id>/reenviar` | Reenvia uma nota pendente (consulta antes) |
 | `POST` | `/api/fiscal/reenviar-pendentes` | Reenvio em lote (botão manual; `{"limit": 50}`) |
@@ -206,13 +230,24 @@ Convênio ICMS 142/18.
   && venv/bin/python scripts/fiscal_reenviar.py >> /var/log/beeflux-fiscal.log 2>&1
 ```
 
+Em produção com Docker, rode dentro do container (o banco e o token estão no
+ambiente dele):
+
+```bash
+*/5 * * * * cd /caminho/do/BillFlux && \
+  docker compose -f docker-compose-prod.yml exec -T api \
+  python scripts/fiscal_reenviar.py >> /var/log/beeflux-fiscal.log 2>&1
+```
+
 `--dry-run` lista as pendentes sem chamar o provedor; `--force` ignora o
 `auto_retry` e o backoff. O script sai com código 1 se sobrar nota pendente.
+O roteiro completo de go-live está em
+[`docs/fiscal-producao.md`](fiscal-producao.md).
 
 ## 6. Telas
 
 - **Produtos → Dados → aba Fiscal**: NCM (obrigatório), CEST, CFOP, CSOSN/CST, origem, unidade. CFOP/CSOSN/origem/unidade usam padrão quando vazios.
-- **Produtos**: badge "Sem NCM" e filtro **"Pendências fiscais"**.
+- **Produtos**: badge "Sem NCM"/"NCM inválido" e filtro **"Pendências fiscais"**.
 - **Config → Fiscal**: provedor, ambiente, regime, IE, impressão, reenvio,
   série/último número, status do token e botão **"Testar conexão"**.
 - **PDV → modal de pagamento**: **Finalizar** e **Emitir nota**.
@@ -238,14 +273,18 @@ adapter (payload/parse). O que falta depende do painel do Brasil NFe.
 - [x] Situação fiscal por venda em Vendas (badge, emitir/reenviar, XML/DANFE,
   cancelar nota)
 - [x] Emitir venda simples (1 item, dinheiro) — vendas #19 e #20 autorizadas
-- [ ] Emitir com desconto
-- [ ] Emitir com pagamento dividido
-- [ ] Emitir com CPF e sem CPF
-- [ ] Emitir fiado (`tPag 99`)
-- [ ] Cancelar dentro do prazo (com justificativa)
-- [ ] Reenviar nota pendente (simular queda)
-- [ ] Reimprimir cupom/DANFE
+- [x] Emitir com desconto — venda #21 / nota #3 (`vDesc 1,00`)
+- [x] Emitir com pagamento dividido — venda #22 / nota #4 (`tPag 01` + `20`)
+- [x] Emitir com CPF e sem CPF — venda #23 / nota #5 (`<CPF>` no XML)
+- [x] Emitir fiado (`tPag 99`) — venda #24 / nota #6 + débito gerado
+- [x] Cancelar dentro do prazo (com justificativa) — nota #3 e venda #23
+- [x] Reenviar nota pendente/rejeitada — venda #26 / nota #7
+- [x] Reimprimir cupom/DANFE — recibo da #22 e DANFE da nota #4
 - [x] Conferir XML e QR Code
+- [x] Bloquear produto sem NCM antes de chamar a SEFAZ — venda #25
+- [x] Validar NCM contra a tabela Siscomex (cadastro e emissão)
+- [ ] Cancelar após 30 min (SEFAZ recusa e a venda fica bloqueada)
+- [ ] Emitir com produto sem NCM **e** venda cancelada no mesmo fluxo (operador)
 - [ ] Migrar numeração (série/último número), se necessário
 - [ ] Trocar `fiscal.environment` para `producao` e emitir 1 venda real
 

@@ -13,6 +13,7 @@ from billflux.services.fiscal.base import (
     FiscalRequest,
     FiscalValidationError,
 )
+from billflux.services.fiscal.ncm import is_valid_ncm
 from billflux.services.text_normalize import strip_accents
 
 #: Fuso de Brasília/Paraná (sem horário de verão desde 2019).
@@ -103,6 +104,7 @@ def build_request(
     """
 
     missing_ncm = []
+    invalid_ncm = []
     fiscal_items = []
 
     for item in items:
@@ -115,6 +117,9 @@ def build_request(
         ncm = only_digits(getattr(product, "ncm", ""))
         if len(ncm) != 8:
             missing_ncm.append(product.name)
+            continue
+        if not is_valid_ncm(ncm):
+            invalid_ncm.append(f"{product.name} ({ncm})")
             continue
 
         quantity = Decimal(str(item.quantity or 0))
@@ -162,6 +167,12 @@ def build_request(
         names = ", ".join(missing_ncm)
         raise FiscalValidationError(
             f"Produtos sem NCM não podem ser emitidos: {names}."
+        )
+    if invalid_ncm:
+        names = ", ".join(invalid_ncm)
+        raise FiscalValidationError(
+            f"Produtos com NCM inválido não podem ser emitidos: {names}. "
+            "Corrija o NCM na aba Fiscal do produto."
         )
     if not fiscal_items:
         raise FiscalValidationError("A venda não possui itens para emitir.")

@@ -42,7 +42,7 @@ def test_fiscal_status_ready_when_everything_is_set(logged_client, monkeypatch):
     """Com token, CNPJ, IE e produtos fiscais completos, fica pronto."""
 
     monkeypatch.setenv("BRASILNFE_TOKEN", "token-de-teste")
-    _make_product("Completo", ncm="12345678", cfop="5102", csosn="102")
+    _make_product("Completo", ncm="22021000", cfop="5102", csosn="102")
 
     from billflux.infra.repository.settings_repository import SettingsRepository
 
@@ -65,7 +65,7 @@ def test_fiscal_status_ready_when_everything_is_set(logged_client, monkeypatch):
 
 
 def test_fiscal_pending_products_lists_only_ncm(logged_client):
-    complete = _make_product("Só NCM", ncm="12345678")
+    complete = _make_product("Só NCM", ncm="22021000")
     missing = _make_product("Sem NCM")
 
     payload = logged_client.get("/api/fiscal/pending-products").get_json()
@@ -73,3 +73,14 @@ def test_fiscal_pending_products_lists_only_ncm(logged_client):
     ids = {entry["id"]: entry for entry in payload["products"]}
     assert complete.id not in ids
     assert ids[missing.id]["missing"] == ["ncm"]
+
+
+def test_fiscal_pending_products_flags_invalid_ncm(logged_client):
+    """NCM fora da tabela vigente também entra como pendência."""
+
+    invalid = _make_product("NCM inexistente", ncm="12345678")
+
+    payload = logged_client.get("/api/fiscal/pending-products").get_json()
+
+    ids = {entry["id"]: entry for entry in payload["products"]}
+    assert ids[invalid.id]["missing"] == ["ncm_invalido"]

@@ -565,3 +565,17 @@ def test_products_fiscal_validation(logged_client):
             headers={"X-CSRFToken": token},
         )
         assert response.status_code == 400, extra
+
+
+def test_products_rejects_ncm_fora_da_tabela(logged_client):
+    """NCM com 8 dígitos mas inexistente na Siscomex é recusado no cadastro."""
+
+    token = _csrf(logged_client)
+    response = logged_client.post(
+        "/api/products",
+        json={"name": "NCM inexistente", "price": "1,00", "ncm": "12345678"},
+        headers={"X-CSRFToken": token},
+    )
+
+    assert response.status_code == 400
+    assert "Siscomex" in response.get_json()["error"]

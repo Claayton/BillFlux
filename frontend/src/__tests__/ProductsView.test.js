@@ -288,6 +288,24 @@ describe('ProductsView', () => {
     )
   })
 
+  it('marca NCM fora da tabela da Siscomex como pendência', async () => {
+    apiMock.get.mockImplementation((url) => {
+      if (String(url).includes('/categories')) return Promise.resolve({ categories })
+      if (String(url).includes('/products')) {
+        return Promise.resolve({
+          products: [{ ...products[0], ncm: '12345678', ncm_valid: false }],
+          suppliers: [{ id: 1, name: 'Fornecedor X', active: true }],
+        })
+      }
+      return Promise.resolve({})
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.prod-fiscal-warn').text()).toContain('NCM inválido')
+    expect(wrapper.find('.toolbar-fiscal-btn').text()).toContain('Pendências fiscais (1)')
+  })
+
   it('toolbar única com busca, selects e CTA, sem chips', async () => {
     const wrapper = mountView()
     await flushPromises()

@@ -27,6 +27,7 @@ from billflux.services.fiscal import (
     FiscalTransportError,
     FiscalValidationError,
 )
+from billflux.services.fiscal.ncm import is_valid_ncm
 
 PROVIDER_DEFAULT = "brasilnfe"
 TOKEN_ENV = "BRASILNFE_TOKEN"
@@ -63,9 +64,12 @@ def _fiscal_settings():
 
 def _missing_fiscal(product):
     """Campos que impedem a emissão (só o NCM bloqueia; o resto tem padrão)."""
-    if (product.ncm or "").strip():
-        return []
-    return ["ncm"]
+    ncm = (product.ncm or "").strip()
+    if not ncm:
+        return ["ncm"]
+    if not is_valid_ncm(ncm):
+        return ["ncm_invalido"]
+    return []
 
 
 def _pending_products():
@@ -97,7 +101,6 @@ def fiscal_status():
     """Configuração fiscal atual + pendências + se está pronto para emitir."""
     settings = _fiscal_settings()
     token_configured = bool(os.environ.get(TOKEN_ENV, "").strip())
-    pending = _pending_products()
     # CFOP/CSOSN/origem têm padrão; somente o NCM bloqueia a emissão.
     pending = _pending_products()
     pending_documents = FiscalDocumentRepository().list_by_status(PENDING_STATUSES)
@@ -138,7 +141,7 @@ def fiscal_status():
 @bp.route("/fiscal/pending-products")
 @api_login_required
 def fiscal_pending_products():
-    """Produtos ativos sem NCM (único campo que bloqueia a emissão)."""
+    """Produtos ativos sem NCM ou com NCM fora da tabela vigente."""
     pending = _pending_products()
     return api_response({"count": len(pending), "products": pending})
 

@@ -116,7 +116,17 @@ const catsWithCount = computed(() => {
 
 /** Campos que bloqueiam a emissão da NFC-e (só o NCM; o resto usa padrão). */
 function missingFiscal(product) {
-  return (product.ncm || '').trim() ? [] : ['NCM']
+  const ncm = (product.ncm || '').trim()
+  if (!ncm) return ['NCM']
+  // O backend confere o código contra a tabela vigente da Siscomex.
+  return product.ncm_valid === false ? ['NCM inválido'] : []
+}
+
+/** Texto curto do aviso fiscal exibido na lista. */
+function fiscalWarnLabel(product) {
+  const issues = missingFiscal(product)
+  if (!issues.length) return ''
+  return issues[0] === 'NCM' ? 'Sem NCM' : issues[0]
 }
 
 /** Produtos ativos com pendência fiscal (para o contador/filtro). */
@@ -742,9 +752,9 @@ function onModalKeydown(event) {
                     <span
                       v-if="missingFiscal(product).length"
                       class="prod-fiscal-warn"
-                      :title="`Faltando para NFC-e: ${missingFiscal(product).join(', ')}`"
+                      :title="`Pendência para NFC-e: ${missingFiscal(product).join(', ')}`"
                     >
-                      <i class="fas fa-exclamation-triangle"></i> Sem {{ missingFiscal(product).join('/') }}
+                      <i class="fas fa-exclamation-triangle"></i> {{ fiscalWarnLabel(product) }}
                     </span>
                   </td>
                   <td class="col-cat">
