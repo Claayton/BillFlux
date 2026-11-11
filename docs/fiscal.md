@@ -2,8 +2,10 @@
 
 > Projeto da emissão de **NFC-e (modelo 65)** integrada ao PDV do BeeFlux.
 > Provedor inicial: **Brasil NFe**, atrás de uma camada plugável.
-> Estado: **Fase 2 — backend de emissão/cancelamento/reenvio concluído**.
-> Os botões do PDV e a tela de pendências entram depois da homologação.
+> Estado: **Fases 1 e 2 concluídas e homologadas** (cadastro fiscal, emissão,
+> cancelamento, reenvio, XML/DANFE, botões do PDV e tela de Vendas).
+> Falta o go-live em produção — roteiro em
+> [`docs/fiscal-producao.md`](fiscal-producao.md).
 
 ## 1. Decisões fechadas
 
