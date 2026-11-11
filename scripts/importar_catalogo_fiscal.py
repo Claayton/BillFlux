@@ -37,6 +37,7 @@ from typing import Dict, List, Tuple
 
 from openpyxl import load_workbook
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
@@ -68,6 +69,16 @@ COLUNAS_BANCO = (
     "origem",
     "fiscal_unit",
 )
+
+
+def url_sem_senha(url: str) -> str:
+    """Mostra a URL do banco sem expor a senha no terminal/log."""
+
+    try:
+        return make_url(url).render_as_string(hide_password=True)
+    except Exception:
+        # URL inválida não deve vazar credencial nenhuma.
+        return "(URL do banco não exibida)"
 
 
 def somente_digitos(valor) -> str:
@@ -364,7 +375,7 @@ def main() -> int:
             return 0
 
         print(f"Planilha: {args.arquivo}")
-        print(f"Banco:    {url}")
+        print(f"Banco:    {url_sem_senha(url)}")
         print(f"Linhas com NCM: {len(registros)}")
         print(f"IDs não encontrados no banco: {len(faltantes)}")
         if faltantes:
