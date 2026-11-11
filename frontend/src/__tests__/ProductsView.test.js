@@ -30,6 +30,7 @@ vi.mock('element-plus', () => ({
 }))
 
 import ProductsView from '@/views/ProductsView.vue'
+import { ElMessage } from 'element-plus'
 
 const categories = [
   { id: 1, name: 'Doces', active: true, product_count: 1 },
@@ -417,5 +418,86 @@ describe('ProductsView', () => {
     await flushPromises()
     expect(wrapper.findAll('tbody tr:not(.empty-row)').length).toBe(2)
     expect(wrapper.text()).toContain('Inativo X')
+  })
+})
+
+describe('ProductsView — exportação do catálogo fiscal', () => {
+  let clickSpy
+
+  function exportButton(wrapper) {
+    return wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Exportar catálogo fiscal'))
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+    URL.createObjectURL = vi.fn(() => 'blob:mock')
+    URL.revokeObjectURL = vi.fn()
+    clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {})
+    ElMessage.success.mockReset()
+    ElMessage.error.mockReset()
+  })
+
+  afterEach(() => {
+    clickSpy.mockRestore()
+    vi.unstubAllGlobals()
+  })
+
+  it('baixa o xlsx usando o nome enviado pelo servidor', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(['conteudo']),
+      headers: {
+        get: () => 'attachment; filename=catalogo-fiscal-2026-11-11.xlsx',
+      },
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+    await exportButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(global.fetch).toHaveBeenCalledWith('/api/products/export', {
+      credentials: 'same-origin',
+    })
+    expect(URL.createObjectURL).toHaveBeenCalled()
+    expect(clickSpy).toHaveBeenCalled()
+    const anchor = clickSpy.mock.contexts[0]
+    expect(anchor.download).toBe('catalogo-fiscal-2026-11-11.xlsx')
+    expect(ElMessage.success).toHaveBeenCalled()
+    // volta ao estado normal depois do download
+    expect(exportButton(wrapper).text()).toContain('Exportar catálogo fiscal')
+  })
+
+  it('mostra mensagem clara quando a exportação falha', async () => {
+    global.fetch.mockRejectedValue(new Error('Falha de rede'))
+
+    const wrapper = mountView()
+    await flushPromises()
+    await exportButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(ElMessage.error).toHaveBeenCalledWith('Falha de rede')
+    expect(clickSpy).not.toHaveBeenCalled()
+  })
+
+  it('mostra erro quando o servidor responde com falha', async () => {
+    global.fetch.mockResolvedValue({
+      ok: false,
+      headers: { get: () => null },
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+    await exportButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(ElMessage.error).toHaveBeenCalledWith(
+      'Não foi possível exportar o catálogo fiscal.'
+    )
+    expect(clickSpy).not.toHaveBeenCalled()
   })
 })

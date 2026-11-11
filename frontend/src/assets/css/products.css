@@ -111,6 +111,7 @@
 /* Toolbar única: busca flexível + selects compactos + CTA */
 .products-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   margin-bottom: 16px;

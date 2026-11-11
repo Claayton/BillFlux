@@ -38,6 +38,7 @@ const stockFilter = ref('todos')
 const fiscalOnly = ref(false)
 const showInactive = ref(false)
 const openMenuId = ref(null)
+const exportingCatalog = ref(false)
 const page = ref(1)
 const PAGE_SIZE = 50
 const productSuppliers = ref([])
@@ -127,6 +128,35 @@ function fiscalWarnLabel(product) {
   const issues = missingFiscal(product)
   if (!issues.length) return ''
   return issues[0] === 'NCM' ? 'Sem NCM' : issues[0]
+}
+
+/** Baixa o catálogo completo em .xlsx para revisão fiscal. */
+async function exportCatalog() {
+  if (exportingCatalog.value) return
+  exportingCatalog.value = true
+  try {
+    const response = await fetch('/api/products/export', {
+      credentials: 'same-origin',
+    })
+    if (!response.ok) {
+      throw new Error('Não foi possível exportar o catálogo fiscal.')
+    }
+    const blob = await response.blob()
+    const disposition = response.headers.get('Content-Disposition') || ''
+    const match = disposition.match(/filename="?([^";]+)"?/)
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = match
+      ? match[1]
+      : `catalogo-fiscal-${new Date().toISOString().slice(0, 10)}.xlsx`
+    link.click()
+    URL.revokeObjectURL(link.href)
+    ElMessage.success('Catálogo exportado!')
+  } catch (error) {
+    ElMessage.error(error.message || 'Não foi possível exportar o catálogo fiscal.')
+  } finally {
+    exportingCatalog.value = false
+  }
 }
 
 /** Produtos ativos com pendência fiscal (para o contador/filtro). */
@@ -707,6 +737,16 @@ function onModalKeydown(event) {
           >
             <i class="fas fa-file-invoice-dollar"></i>
             Pendências fiscais ({{ fiscalPendingProducts.length }})
+          </button>
+          <button
+            type="button"
+            class="toolbar-export-btn"
+            :disabled="exportingCatalog"
+            title="Baixar todos os produtos em Excel para revisão fiscal"
+            @click="exportCatalog"
+          >
+            <i :class="['fas', exportingCatalog ? 'fa-circle-notch fa-spin' : 'fa-file-excel']"></i>
+            {{ exportingCatalog ? 'Exportando…' : 'Exportar catálogo fiscal' }}
           </button>
           <button type="button" class="btn-brand" @click="openNewProduct">
             <i class="fas fa-plus"></i> Novo produto
@@ -1422,7 +1462,8 @@ function onModalKeydown(event) {
   white-space: nowrap;
 }
 
-.toolbar-fiscal-btn {
+.toolbar-fiscal-btn,
+.toolbar-export-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1440,6 +1481,10 @@ function onModalKeydown(event) {
   border-color: #d97706;
   color: #b45309;
   background: rgba(245, 158, 11, 0.1);
+}
+.toolbar-export-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 .fiscal-block {

@@ -1,8 +1,9 @@
 """Endpoints de produtos (catálogo e estoque) da API JSON."""
 
 import re
+from io import BytesIO
 
-from flask import request
+from flask import current_app, request, send_file
 
 from billflux.api import bp, api_error, api_login_required, api_response, br_to_decimal
 from billflux.infra.repository.category_repository import CategoryRepository
@@ -10,6 +11,7 @@ from billflux.infra.repository.product_repository import ProductRepository
 from billflux.infra.repository.supplier_repository import SupplierRepository
 from billflux.infra.repository.product_unit_repository import ProductUnitRepository
 from billflux.services.audit import audit
+from billflux.services.catalog_export import catalog_filename, build_catalog_workbook
 from billflux.services.fiscal.ncm import is_valid_ncm
 from billflux.services.pdv_cache import bump_pdv_version
 
@@ -165,6 +167,32 @@ def _products_payload():
 def products_list():
     """Lista o catálogo completo de produtos."""
     return api_response(_products_payload())
+
+
+@bp.route("/products/export")
+@api_login_required
+def products_export():
+    """Exporta o catálogo completo em Excel para revisão fiscal (só leitura)."""
+
+    try:
+        products = ProductRepository().get_products()
+        units = ProductUnitRepository().get_units_for_products(
+            [product.id for product in products]
+        )
+        units_by_product = {}
+        for unit in units:
+            units_by_product.setdefault(unit.product_id, []).append(unit)
+        content = build_catalog_workbook(products, units_by_product)
+    except Exception:  # noqa: BLE001 - devolve erro amigável, sem vazar detalhes
+        current_app.logger.exception("Falha ao gerar a planilha do catálogo fiscal")
+        return api_error("Não foi possível gerar a planilha do catálogo.", 500)
+
+    return send_file(
+        BytesIO(content),
+        mimetype=("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        as_attachment=True,
+        download_name=catalog_filename(),
+    )
 
 
 @bp.route("/products", methods=["POST"])
