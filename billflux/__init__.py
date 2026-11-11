@@ -25,6 +25,7 @@ from billflux.api import purchases as api_purchases
 from billflux.api import schedule as api_schedule
 from billflux.api import product_units as api_product_units
 from billflux.api import settings as api_settings
+from billflux.api import fiscal as api_fiscal
 from billflux.api import audit as api_audit
 from billflux.api import reports as api_reports
 from billflux.api import inventory as api_inventory
@@ -125,6 +126,9 @@ def create_app():
     app.config["SESSION_COOKIE_SECURE"] = _as_bool(
         settings.get("session_cookie_secure", False)
     )
+    # XML de NF-e (e o JSON ao redor) fica muito abaixo disso. Limita o corpo
+    # para evitar consumo de memória por payload gigante.
+    app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
     csrf.init_app(app)
     _seed_default_user()
     _seed_default_accounts()

@@ -146,6 +146,7 @@ def test_session_config_24h(app):
     assert app.config["SESSION_COOKIE_HTTPONLY"] is True
     assert app.config["SESSION_COOKIE_SAMESITE"] == "Lax"
     assert app.config["SESSION_COOKIE_SECURE"] is False
+    assert app.config["MAX_CONTENT_LENGTH"] == 10 * 1024 * 1024
 
 
 def test_login_sets_sliding_cookie(client):

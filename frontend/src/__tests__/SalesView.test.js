@@ -107,6 +107,21 @@ function salesResponse(url) {
   return { ...payload, sales }
 }
 
+function withFiscal(saleId, fiscal) {
+  return (url) => {
+    if (String(url) === '/fiscal/pendentes') {
+      return Promise.resolve({ count: 0, documents: [] })
+    }
+    const base = salesResponse(url)
+    return Promise.resolve({
+      ...base,
+      sales: base.sales.map((sale) =>
+        sale.kind === 'pdv' && sale.id === saleId ? { ...sale, fiscal } : sale
+      ),
+    })
+  }
+}
+
 function mountView() {
   return mount(SalesView, {
     global: {
@@ -469,5 +484,118 @@ describe('SalesView', () => {
     expect(dividers.length).toBe(1)
     expect(dividers[0].text()).toContain('Caixa fechado')
     expect(dividers[0].text()).toContain('novo caixa aberto')
+  })
+
+  it('mostra badge fiscal e abre o modal com XML/DANFE', async () => {
+    apiMock.get.mockImplementation(
+      withFiscal(10, {
+        id: 4,
+        status: 'autorizada',
+        has_xml: true,
+        has_danfe: true,
+        error_message: '',
+      })
+    )
+    const wrapper = mountView()
+    await flushPromises()
+
+    const badge = wrapper.findAll('.sale-row')[0].find('.fiscal-badge')
+    expect(badge.text()).toContain('Autorizada')
+
+    await badge.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.fiscal-modal-body').exists()).toBe(true)
+    const footer = wrapper.find('.fiscal-modal-footer').text()
+    expect(footer).toContain('XML')
+    expect(footer).toContain('DANFE')
+    expect(footer).toContain('Cancelar nota')
+  })
+
+  it('emite a nota de uma venda sem nota pelo modal fiscal', async () => {
+    apiMock.post.mockResolvedValue({
+      ok: true,
+      status: 'autorizada',
+      message: '',
+      document: {
+        id: 9,
+        order_id: 10,
+        status: 'autorizada',
+        has_xml: true,
+        has_danfe: true,
+        error_message: '',
+      },
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.findAll('.sale-row')[0].find('.fiscal-badge').trigger('click')
+    await flushPromises()
+    await wrapper.find('.fiscal-modal-footer .btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith('/fiscal/emitir', { order_id: 10 })
+    expect(wrapper.find('.fiscal-badge').text()).toContain('Autorizada')
+  })
+
+  it('cancela a nota fiscal com justificativa', async () => {
+    apiMock.get.mockImplementation(
+      withFiscal(10, {
+        id: 4,
+        status: 'autorizada',
+        has_xml: true,
+        has_danfe: true,
+        error_message: '',
+      })
+    )
+    apiMock.post.mockResolvedValue({ ok: true })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.findAll('.sale-row')[0].find('.fiscal-badge').trigger('click')
+    await flushPromises()
+    await wrapper.find('.fiscal-modal-footer .btn-danger').trigger('click')
+    await flushPromises()
+
+    await wrapper.find('.confirm-input input').setValue('erro na emissao da nota')
+    await wrapper.findAll('.modal-footer .btn-danger').at(-1).trigger('click')
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith('/fiscal/4/cancelar', {
+      justificativa: 'erro na emissao da nota',
+    })
+  })
+
+  it('mostra o banner de notas pendentes e reenvia em lote', async () => {
+    apiMock.get.mockImplementation((url) => {
+      if (String(url) === '/fiscal/pendentes') {
+        return Promise.resolve({
+          count: 1,
+          documents: [
+            {
+              id: 3,
+              order_id: 10,
+              status: 'pendente',
+              error_message: 'SEFAZ fora do ar',
+              order: { id: 10, total: 50 },
+            },
+          ],
+        })
+      }
+      return Promise.resolve(salesResponse(url))
+    })
+    apiMock.post.mockResolvedValue({ authorized: 1, pending: 0 })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.fiscal-banner').text()).toContain('1 nota fiscal com problema')
+    expect(wrapper.find('.fiscal-banner').text()).toContain('Venda #10')
+    expect(wrapper.find('.fiscal-banner').text()).toContain('SEFAZ fora do ar')
+
+    await wrapper.find('.fiscal-banner-action').trigger('click')
+    await flushPromises()
+
+    expect(apiMock.post).toHaveBeenCalledWith('/fiscal/reenviar-pendentes', { limit: 50 })
   })
 })
