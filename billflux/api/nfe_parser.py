@@ -30,6 +30,12 @@ def parse_nfe_xml(xml_content: str) -> Optional[dict]:
     """Parse NF-e XML and return structured dict or None on failure."""
     cleaned = _clean_xml(xml_content)
 
+    # NF-e legítima nunca traz DTD/entidades. Bloqueia "billion laughs" e
+    # expansão de entidades antes de entregar o texto ao ElementTree.
+    upper = cleaned.upper()
+    if "<!DOCTYPE" in upper or "<!ENTITY" in upper:
+        return None
+
     try:
         root = ET.fromstring(cleaned)
     except ET.ParseError:

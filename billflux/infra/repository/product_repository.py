@@ -99,6 +99,13 @@ class ProductRepository:
         category_id: Optional[int] = None,
         suppliers: Optional[str] = None,
         supplier_id: Optional[int] = None,
+        ncm: Optional[str] = None,
+        cest: Optional[str] = None,
+        cfop: Optional[str] = None,
+        csosn: Optional[str] = None,
+        cst: Optional[str] = None,
+        origem: int = 0,
+        fiscal_unit: Optional[str] = None,
     ) -> Product:
         """Inserts a new product into the Product table."""
 
@@ -119,6 +126,13 @@ class ProductRepository:
                     ideal_stock=ideal_stock,
                     active=active,
                     obs=obs,
+                    ncm=ncm,
+                    cest=cest,
+                    cfop=cfop,
+                    csosn=csosn,
+                    cst=cst,
+                    origem=origem,
+                    fiscal_unit=fiscal_unit,
                 )
                 session.add(product)
                 session.flush()

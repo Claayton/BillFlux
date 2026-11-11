@@ -130,7 +130,7 @@ describe('ProductsView', () => {
     await openEdit(wrapper)
 
     const tabs = wrapper.findAll('.modal-tabs button')
-    await tabs[1].trigger('click')
+    await tabs.find((tab) => tab.text().includes('Transações')).trigger('click')
     await flushPromises()
 
     expect(apiMock.get).toHaveBeenCalledWith('/products/3/movements')
@@ -251,6 +251,59 @@ describe('ProductsView', () => {
         name: 'Doces arildo',
       })
     )
+  })
+
+  it('mostra pendência fiscal, filtra e envia os campos fiscais no salvar', async () => {
+    apiMock.put.mockResolvedValue({ products })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.prod-fiscal-warn').text()).toContain('Sem NCM')
+    expect(wrapper.find('.toolbar-fiscal-btn').text()).toContain('Pendências fiscais (1)')
+
+    await wrapper.find('.toolbar-fiscal-btn').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('tbody tr:not(.empty-row)').length).toBe(1)
+
+    await openEdit(wrapper)
+    await flushPromises()
+    const fiscalTab = wrapper
+      .findAll('.modal-tabs button')
+      .find((button) => button.text().includes('Fiscal'))
+    expect(fiscalTab).toBeTruthy()
+    await fiscalTab.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('#product_ncm').exists()).toBe(true)
+    expect(wrapper.find('#product_cfop').exists()).toBe(true)
+
+    await wrapper.find('#product_ncm').setValue('12345678')
+    await wrapper.find('#product_cfop').setValue('5102')
+    await wrapper.find('#product_csosn').setValue('102')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(apiMock.put).toHaveBeenCalledWith(
+      '/products/3',
+      expect.objectContaining({ ncm: '12345678', cfop: '5102', csosn: '102' })
+    )
+  })
+
+  it('marca NCM fora da tabela da Siscomex como pendência', async () => {
+    apiMock.get.mockImplementation((url) => {
+      if (String(url).includes('/categories')) return Promise.resolve({ categories })
+      if (String(url).includes('/products')) {
+        return Promise.resolve({
+          products: [{ ...products[0], ncm: '12345678', ncm_valid: false }],
+          suppliers: [{ id: 1, name: 'Fornecedor X', active: true }],
+        })
+      }
+      return Promise.resolve({})
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('.prod-fiscal-warn').text()).toContain('NCM inválido')
+    expect(wrapper.find('.toolbar-fiscal-btn').text()).toContain('Pendências fiscais (1)')
   })
 
   it('toolbar única com busca, selects e CTA, sem chips', async () => {

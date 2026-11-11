@@ -35,6 +35,7 @@ const deleteTarget = ref(null)
 const searchQuery = ref('')
 const activeCategoryId = ref(null)
 const stockFilter = ref('todos')
+const fiscalOnly = ref(false)
 const showInactive = ref(false)
 const openMenuId = ref(null)
 const page = ref(1)
@@ -57,6 +58,10 @@ const baseProducts = computed(() => {
 const filteredProducts = computed(() => {
   if (!data.value) return []
   let list = baseProducts.value
+  if (fiscalOnly.value) {
+    // Mesma regra do /api/fiscal/pending-products: só produtos ativos.
+    list = list.filter(p => p.active && missingFiscal(p).length > 0)
+  }
   if (activeCategoryId.value !== null) {
     list = list.filter(p => p.category_id === activeCategoryId.value)
   }
@@ -109,6 +114,26 @@ const catsWithCount = computed(() => {
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 })
 
+/** Campos que bloqueiam a emissão da NFC-e (só o NCM; o resto usa padrão). */
+function missingFiscal(product) {
+  const ncm = (product.ncm || '').trim()
+  if (!ncm) return ['NCM']
+  // O backend confere o código contra a tabela vigente da Siscomex.
+  return product.ncm_valid === false ? ['NCM inválido'] : []
+}
+
+/** Texto curto do aviso fiscal exibido na lista. */
+function fiscalWarnLabel(product) {
+  const issues = missingFiscal(product)
+  if (!issues.length) return ''
+  return issues[0] === 'NCM' ? 'Sem NCM' : issues[0]
+}
+
+/** Produtos ativos com pendência fiscal (para o contador/filtro). */
+const fiscalPendingProducts = computed(() =>
+  baseProducts.value.filter(p => p.active && missingFiscal(p).length > 0)
+)
+
 /** Rótulo do estoque: zero sem controle vira "—" (neutro, não "0 un."). */
 function stockLabel(p) {
   const stock = p.stock_quantity || 0
@@ -133,7 +158,7 @@ const pageNumbers = computed(() => {
   return [...set].filter(n => n >= 1 && n <= total).sort((a, b) => a - b)
 })
 
-watch([searchQuery, activeCategoryId, stockFilter, showInactive], () => {
+watch([searchQuery, activeCategoryId, stockFilter, showInactive, fiscalOnly], () => {
   page.value = 1
 })
 
@@ -187,6 +212,13 @@ function blankProduct() {
     ideal_stock: 0,
     obs: '',
     active: true,
+    ncm: '',
+    cest: '',
+    cfop: '',
+    csosn: '',
+    cst: '',
+    origem: 0,
+    fiscal_unit: '',
   }
 }
 
@@ -218,6 +250,13 @@ function openEditProduct(product) {
     ideal_stock: product.ideal_stock || 0,
     obs: product.obs || '',
     active: product.active,
+    ncm: product.ncm || '',
+    cest: product.cest || '',
+    cfop: product.cfop || '',
+    csosn: product.csosn || '',
+    cst: product.cst || '',
+    origem: product.origem ?? 0,
+    fiscal_unit: product.fiscal_unit || '',
   }
   detailsTab.value = 'dados'
   movementsList.value = []
@@ -446,9 +485,17 @@ async function saveProduct() {
       suppliers: productForm.value.suppliers,
       supplier_id: productForm.value.supplier_id,
       min_stock: Number(productForm.value.min_stock) || 0,
+      ideal_stock: Number(productForm.value.ideal_stock) || 0,
       obs: productForm.value.obs,
       active: productForm.value.active,
       stock_quantity: Number(productForm.value.stock_quantity) || 0,
+      ncm: productForm.value.ncm,
+      cest: productForm.value.cest,
+      cfop: productForm.value.cfop,
+      csosn: productForm.value.csosn,
+      cst: productForm.value.cst,
+      origem: Number(productForm.value.origem) || 0,
+      fiscal_unit: productForm.value.fiscal_unit,
     }
     if (editingProduct.value) {
       data.value = await api.put(`/products/${editingProduct.value.id}`, payload)
@@ -495,6 +542,13 @@ function cloneProduct() {
     ideal_stock: product.ideal_stock || 0,
     obs: product.obs || '',
     active: product.active,
+    ncm: product.ncm || '',
+    cest: product.cest || '',
+    cfop: product.cfop || '',
+    csosn: product.csosn || '',
+    cst: product.cst || '',
+    origem: product.origem ?? 0,
+    fiscal_unit: product.fiscal_unit || '',
   }
   detailsTab.value = 'dados'
   movementsList.value = []
@@ -553,6 +607,9 @@ function deleteMessage() {
 }
 
 onMounted(async () => {
+  if (new URLSearchParams(window.location.search).get('fiscal') === 'pending') {
+    fiscalOnly.value = true
+  }
   load()
   try {
     const res = await api.get('/categories')
@@ -641,6 +698,16 @@ function onModalKeydown(event) {
             <input v-model="showInactive" type="checkbox" />
             Mostrar inativos
           </label>
+          <button
+            type="button"
+            class="toolbar-fiscal-btn"
+            :class="{ 'is-active': fiscalOnly }"
+            :title="fiscalPendingProducts.length ? 'Produtos sem NCM para emitir NFC-e' : 'Nenhuma pendência fiscal'"
+            @click="fiscalOnly = !fiscalOnly"
+          >
+            <i class="fas fa-file-invoice-dollar"></i>
+            Pendências fiscais ({{ fiscalPendingProducts.length }})
+          </button>
           <button type="button" class="btn-brand" @click="openNewProduct">
             <i class="fas fa-plus"></i> Novo produto
           </button>
@@ -681,6 +748,13 @@ function onModalKeydown(event) {
                     </span>
                     <span v-if="product.barcode || product.secondary_code" class="cell-sub cell-barcode">
                       {{ product.barcode || product.secondary_code }}
+                    </span>
+                    <span
+                      v-if="missingFiscal(product).length"
+                      class="prod-fiscal-warn"
+                      :title="`Pendência para NFC-e: ${missingFiscal(product).join(', ')}`"
+                    >
+                      <i class="fas fa-exclamation-triangle"></i> {{ fiscalWarnLabel(product) }}
                     </span>
                   </td>
                   <td class="col-cat">
@@ -818,6 +892,14 @@ function onModalKeydown(event) {
             @click="detailsTab = 'dados'"
           >
             <i class="fas fa-box"></i> Dados
+          </button>
+          <button
+            type="button"
+            role="tab"
+            :class="{ 'is-active': detailsTab === 'fiscal' }"
+            @click="detailsTab = 'fiscal'"
+          >
+            <i class="fas fa-file-invoice-dollar"></i> Fiscal
           </button>
           <button
             type="button"
@@ -978,6 +1060,62 @@ function onModalKeydown(event) {
             <input id="product_active" v-model="productForm.active" type="checkbox" />
             <span>Produto ativo (aparece no PDV)</span>
           </label>
+        </form>
+
+        <form
+          v-show="detailsTab === 'fiscal'"
+          class="modal-form"
+          @submit.prevent="saveProduct"
+          @keydown.enter.prevent
+        >
+          <div class="fiscal-block">
+            <div class="fiscal-block-head">
+              <h3><i class="fas fa-file-invoice-dollar"></i> Dados fiscais (NFC-e)</h3>
+              <span class="field-hint">Só o NCM é obrigatório. CFOP, CSOSN/CST, origem e unidade usam padrão (5102/5405, 102, 0, UN).</span>
+            </div>
+            <div class="form-grid fiscal-grid-3">
+              <div class="form-field">
+                <label for="product_ncm">NCM</label>
+                <input id="product_ncm" v-model="productForm.ncm" type="text" inputmode="numeric" maxlength="8" placeholder="8 dígitos" />
+              </div>
+              <div class="form-field">
+                <label for="product_cest">CEST (opcional)</label>
+                <input id="product_cest" v-model="productForm.cest" type="text" inputmode="numeric" maxlength="7" placeholder="7 dígitos" />
+              </div>
+              <div class="form-field">
+                <label for="product_cfop">CFOP</label>
+                <input id="product_cfop" v-model="productForm.cfop" type="text" inputmode="numeric" maxlength="4" placeholder="Ex: 5102" />
+              </div>
+            </div>
+            <div class="form-grid fiscal-grid-4">
+              <div class="form-field">
+                <label for="product_csosn">CSOSN (Simples)</label>
+                <input id="product_csosn" v-model="productForm.csosn" type="text" inputmode="numeric" maxlength="3" placeholder="Ex: 102" />
+              </div>
+              <div class="form-field">
+                <label for="product_cst">CST (Regime Normal)</label>
+                <input id="product_cst" v-model="productForm.cst" type="text" inputmode="numeric" maxlength="2" placeholder="Ex: 00" />
+              </div>
+              <div class="form-field">
+                <label for="product_origem">Origem</label>
+                <select id="product_origem" v-model.number="productForm.origem">
+                  <option :value="0">0 — Nacional</option>
+                  <option :value="1">1 — Estrangeira (importação direta)</option>
+                  <option :value="2">2 — Estrangeira (mercado interno)</option>
+                  <option :value="3">3 — Nacional &gt; 40% importação</option>
+                  <option :value="4">4 — Nacional (processos produtivos básicos)</option>
+                  <option :value="5">5 — Nacional &lt; 40% importação</option>
+                  <option :value="6">6 — Estrangeira (importação direta, sem similar)</option>
+                  <option :value="7">7 — Estrangeira (mercado interno, sem similar)</option>
+                  <option :value="8">8 — Nacional &gt; 70% importação</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="product_fiscal_unit">Unidade fiscal</label>
+                <input id="product_fiscal_unit" v-model="productForm.fiscal_unit" type="text" maxlength="6" placeholder="UN" />
+              </div>
+            </div>
+          </div>
 
         </form>
 
@@ -1270,6 +1408,65 @@ function onModalKeydown(event) {
   font-weight: 700;
   color: var(--primary, #4f46e5);
   background: color-mix(in srgb, var(--primary, #4f46e5) 12%, transparent);
+}
+
+.prod-fiscal-warn {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.14);
+  white-space: nowrap;
+}
+
+.toolbar-fiscal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.toolbar-fiscal-btn.is-active {
+  border-color: #d97706;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.fiscal-block {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-hover, #f9fafb);
+}
+.fiscal-block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.fiscal-block-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.fiscal-grid-3 {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.fiscal-grid-4 {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
 .day-checks {

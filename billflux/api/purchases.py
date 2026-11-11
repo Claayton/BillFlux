@@ -1,5 +1,6 @@
 """Endpoints de compras (purchase orders) da API JSON."""
 
+import re
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
@@ -43,6 +44,8 @@ def _serialize_item(item):
         "total": str(item.total),
         "barcode": item.barcode or "",
         "unit_com": item.unit_com or "",
+        "ncm": getattr(item, "ncm", None) or "",
+        "cfop": getattr(item, "cfop", None) or "",
         "factor": item.factor or 1,
     }
 
@@ -75,6 +78,8 @@ def _parse_items(items_data):
                 "barcode": (item.get("barcode") or "").strip() or None,
                 "product_name": (item.get("product_name") or "").strip() or None,
                 "unit_com": (item.get("unit_com") or "").strip() or None,
+                "ncm": re.sub(r"\D", "", str(item.get("ncm") or "")) or None,
+                "cfop": re.sub(r"\D", "", str(item.get("cfop") or "")) or None,
                 "factor": int(item.get("factor") or 1),
             }
         )

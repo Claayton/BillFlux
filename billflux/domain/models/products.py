@@ -21,5 +21,12 @@ Product = namedtuple(
         "ideal_stock",
         "active",
         "obs",
+        "ncm",
+        "cest",
+        "cfop",
+        "csosn",
+        "cst",
+        "origem",
+        "fiscal_unit",
     ],
 )

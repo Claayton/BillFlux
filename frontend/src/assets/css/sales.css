@@ -310,8 +310,8 @@
 }
 
 .sales-list {
-  --sales-cols: 56px 150px 90px 170px minmax(160px, 1fr) 120px;
-  min-width: 760px;
+  --sales-cols: 56px 150px 90px 120px 170px minmax(160px, 1fr) 120px;
+  min-width: 900px;
 }
 
 .sales-list-header {
@@ -383,6 +383,7 @@
 /* Colunas centradas; Valor e Itens ficam alinhados à esquerda (padrão). */
 .sale-id,
 .sale-origin-cell,
+.sale-fiscal-cell,
 .sale-date,
 .sale-actions {
   justify-self: center;

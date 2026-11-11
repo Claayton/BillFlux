@@ -81,6 +81,12 @@ flask --app run run --debug              # API em http://localhost:5000
 ```
 
 > Dica: para usar um banco separado do de produção, defina `BILLFLUX_DATABASE__URL=sqlite:///billflux_dev.db`.
+>
+> O `flask run` carrega automaticamente o `.env` da raiz (via `python-dotenv`,
+> incluído no `requirements.txt`). Crie o seu a partir do `.env.example`:
+> `cp .env.example .env` e preencha os valores reais. Scripts rodados fora do
+> Flask (ex.: `scripts/fiscal_reenviar.py`) precisam do `.env` carregado na
+> mão: `set -a; . ./.env; set +a`.
 
 ### Frontend (SPA)
 

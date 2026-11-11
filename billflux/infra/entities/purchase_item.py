@@ -29,5 +29,9 @@ class PurchaseItem(SQLModel, table=True):
     barcode: Optional[str] = Field(nullable=True)
     product_name: Optional[str] = Field(nullable=True)
     unit_com: Optional[str] = Field(nullable=True)
+    # Dados fiscais lidos do XML da NF-e de compra (usados para completar o
+    # cadastro fiscal do produto quando ele ainda não tem NCM/CFOP).
+    ncm: Optional[str] = Field(default=None, nullable=True)
+    cfop: Optional[str] = Field(default=None, nullable=True)
     # Quantas unidades-base a apresentação comprada representa (ex.: caixa c/ 6).
     factor: int = Field(default=1, nullable=False)

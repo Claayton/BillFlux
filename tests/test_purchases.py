@@ -977,6 +977,22 @@ class TestPurchaseAPI:
         assert data["duplicate"] is False
         assert data["purchase"]["nf_number"] == "100"
 
+    def test_nfe_import_rejects_dtd_and_entities(self, logged_client):
+        token = _csrf(logged_client)
+        bomb = (
+            '<?xml version="1.0"?>'
+            '<!DOCTYPE lolz [<!ENTITY lol "lol">]>'
+            '<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe">'
+            '<infNFe Id="NFe1">&lol;</infNFe></nfeProc>'
+        )
+        resp = logged_client.post(
+            "/api/purchases/nfe-import",
+            json={"xml": bomb},
+            headers={"X-CSRFToken": token},
+        )
+        assert resp.status_code == 400
+        assert "processar o XML" in resp.get_json()["error"]
+
     def test_nfe_import_duplicate(self, logged_client):
         token = _csrf(logged_client)
         DUPLICATE_XML = (
@@ -1248,3 +1264,43 @@ class TestProductBarcodeSearchAPI:
         assert "Coca Cola 2L XYZSEARCH" in names
         assert "Fanta Laranja 2L XYZSEARCH" in names
         assert len(data["products"]) == 2
+
+
+def test_confirm_fills_product_fiscal_data_from_nfe():
+    """A NF-e de compra completa o NCM do produto sem sobrescrever.
+
+    O CFOP da nota de compra é o do fornecedor (saída dele) e não é copiado:
+    a venda usa o padrão 5102/5405 do emissor.
+    """
+
+    _open_register()
+    product_id = _make_product()
+    from billflux.infra.repository.purchase_repository import PurchaseRepository
+
+    repo = PurchaseRepository()
+    po = repo.insert_purchase(
+        items=[
+            {
+                "product_id": product_id,
+                "quantity": 2,
+                "unit_cost": Decimal("5"),
+                "total": Decimal("10"),
+                "product_name": "Produto X",
+                "ncm": "22021000",
+                "cfop": "5102",
+            }
+        ],
+        total=Decimal("10"),
+        net_total=Decimal("10"),
+    )
+    result = repo.confirm_purchase(po.id, create_bill=False, paid=False)
+    assert result.status == "confirmada"
+
+    from billflux.infra.config.database import get_session
+    from billflux.infra.entities.product import Product
+
+    session = get_session()
+    updated = session.get(Product, product_id)
+    assert updated.ncm == "22021000"
+    assert updated.cfop is None
+    session.close()

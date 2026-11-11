@@ -6,6 +6,18 @@ from sqlmodel import select
 from billflux.infra.config.database import get_session
 from billflux.infra.entities.setting import Setting as SettingModel
 
+#: Valores iniciais das chaves fiscais (usados quando ainda não gravadas).
+FISCAL_DEFAULTS = {
+    "fiscal.provider": "brasilnfe",
+    "fiscal.environment": "homologacao",
+    "fiscal.crt": "1",
+    "fiscal.print_mode": "thermal",
+    "fiscal.auto_retry": "true",
+    "fiscal.ie": "",
+    "fiscal.nfce_series": "",
+    "fiscal.nfce_last_number": "",
+}
+
 #: Chaves que a API permite ler/escrever. Todo o resto é ignorado,
 #: e segredos (ex.: secret_key) nunca passam por aqui.
 ALLOWED_KEYS = frozenset(
@@ -24,6 +36,7 @@ ALLOWED_KEYS = frozenset(
         "receipt.show_customer",
         "pdv.auto_print",
         "stock.default_min",
+        *FISCAL_DEFAULTS.keys(),
     }
 )
 
@@ -40,7 +53,10 @@ class SettingsRepository:
                 stored = {r.key: (r.value or "") for r in rows}
         finally:
             session.close()
-        return {key: stored.get(key, "") for key in sorted(ALLOWED_KEYS)}
+        return {
+            key: stored.get(key, FISCAL_DEFAULTS.get(key, ""))
+            for key in sorted(ALLOWED_KEYS)
+        }
 
     def set_many(self, values: Dict[str, str]) -> Dict[str, str]:
         """Grava somente chaves permitidas; ignora o resto."""

@@ -31,3 +31,11 @@ class Product(SQLModel, table=True):
     ideal_stock: int = Field(default=0, nullable=False)
     active: bool = Field(default=True)
     obs: Optional[str] = Field(nullable=True)
+    # Dados fiscais (NFC-e). Opcionais no cadastro; obrigatórios para emitir.
+    ncm: Optional[str] = Field(default=None, nullable=True, index=True)
+    cest: Optional[str] = Field(default=None, nullable=True)
+    cfop: Optional[str] = Field(default=None, nullable=True)
+    csosn: Optional[str] = Field(default=None, nullable=True)
+    cst: Optional[str] = Field(default=None, nullable=True)
+    origem: int = Field(default=0, nullable=False)
+    fiscal_unit: Optional[str] = Field(default=None, nullable=True)

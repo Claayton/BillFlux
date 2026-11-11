@@ -34,6 +34,7 @@ from billflux.infra.entities.product_unit import (
 from billflux.infra.entities.cash_movement import CashMovement  # noqa: F401
 from billflux.infra.entities.audit_event import AuditEvent  # noqa: F401
 from billflux.infra.entities.setting import Setting  # noqa: F401
+from billflux.infra.entities.fiscal_document import FiscalDocument  # noqa: F401
 from billflux.infra.entities.receivable import Receivable  # noqa: F401
 from billflux.infra.entities.receivable_payment import (  # noqa: F401
     ReceivablePayment,
