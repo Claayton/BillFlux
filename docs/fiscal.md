@@ -214,6 +214,7 @@ Convênio ICMS 142/18.
 |---|---|---|
 | `GET` | `/api/fiscal/status` | Configuração atual + pendências + `ready` + `pending_documents` |
 | `GET` | `/api/fiscal/pending-products` | Produtos ativos sem NCM ou com NCM inválido |
+| `GET` | `/api/products/export` | Baixa o catálogo completo em `.xlsx` (revisão fiscal; só leitura) |
 | `POST` | `/api/fiscal/emitir` | Emite/reaproveita a NFC-e de uma venda (`{"order_id": 1}`) |
 | `POST` | `/api/fiscal/<id>/reenviar` | Reenvia uma nota pendente (consulta antes) |
 | `POST` | `/api/fiscal/reenviar-pendentes` | Reenvio em lote (botão manual; `{"limit": 50}`) |
@@ -250,6 +251,12 @@ O roteiro completo de go-live está em
 
 - **Produtos → Dados → aba Fiscal**: NCM (obrigatório), CEST, CFOP, CSOSN/CST, origem, unidade. CFOP/CSOSN/origem/unidade usam padrão quando vazios.
 - **Produtos**: badge "Sem NCM"/"NCM inválido" e filtro **"Pendências fiscais"**.
+- **Produtos → "Exportar catálogo fiscal"**: baixa **todos** os produtos (inclusive
+  inativos e com campos fiscais vazios) em Excel, para revisão/classificação
+  fiscal. É somente leitura: não altera o cadastro. Colunas: ID, Nome, Categoria,
+  Código de barras/EAN, Unidade, NCM, CEST, CFOP, CSOSN, CST, Origem, Unidade
+  fiscal, Status e Preço. O arquivo sai em memória, com o nome
+  `catalogo-fiscal-AAAA-MM-DD.xlsx`.
 - **Config → Fiscal**: provedor, ambiente, regime, IE, impressão, reenvio,
   série/último número, status do token e botão **"Testar conexão"**.
 - **PDV → modal de pagamento**: **Finalizar** e **Emitir nota**.
