@@ -102,6 +102,37 @@ curl -s -b cookies.txt https://seu-dominio/api/fiscal/status
 > produto (ou por script de importação). Não copie o banco do dev para
 > produção.
 
+### Importar a planilha fiscal revisada
+
+Use `scripts/importar_catalogo_fiscal.py`. Ele casa pelo **ID**, valida
+NCM/CEST/CFOP/CSOSN/CST/origem, altera **só campos fiscais** e, por padrão,
+**não grava nada** (dry-run).
+
+```bash
+# 1. leve a planilha revisada para o servidor
+scp catalogo-fiscal-preenchido-2026-11-11.xlsx usuario@servidor:/tmp/
+
+# 2. dry-run dentro do container da API (usa BILLFLUX_DATABASE__URL)
+docker compose -f docker-compose-prod.yml exec -T api \
+  python scripts/importar_catalogo_fiscal.py \
+  --arquivo /tmp/catalogo-fiscal-preenchido-2026-11-11.xlsx
+
+# 3. confira o resumo e o diff; se os IDs/nomes não baterem, ele aborta
+
+# 4. backup e aplicação
+docker compose -f docker-compose-prod.yml exec -T postgres \
+  pg_dump -U "${POSTGRES_USER:-billflux}" "${POSTGRES_DB:-billflux}" \
+  | gzip > "backup-antes-fiscal-$(date +%Y%m%d-%H%M).sql.gz"
+
+docker compose -f docker-compose-prod.yml exec -T api \
+  python scripts/importar_catalogo_fiscal.py \
+  --arquivo /tmp/catalogo-fiscal-preenchido-2026-11-11.xlsx \
+  --aplicar --backup-feito
+```
+
+Depois, confira em **Produtos → Pendências fiscais** (ou
+`GET /api/fiscal/status`) que sobrou só o esperado.
+
 ---
 
 ## 4. Deploy
