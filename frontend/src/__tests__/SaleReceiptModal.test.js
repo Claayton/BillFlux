@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { nextTick } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 
 const { apiMock, printDanfeMock } = vi.hoisted(() => ({
@@ -184,7 +185,7 @@ describe('SaleReceiptModal', () => {
       expect(wrapper.emitted('close')).toBeUndefined()
     })
 
-    it('F3 emite a NFC-e e mostra o número e a série', async () => {
+    it('F3 emite a NFC-e e pergunta se imprime o DANFE', async () => {
       const wrapper = mountModal({ mode: 'post-sale' })
       await flushPromises()
 
@@ -193,12 +194,45 @@ describe('SaleReceiptModal', () => {
 
       expect(apiMock.post).toHaveBeenCalledWith('/fiscal/emitir', { order_id: 42 })
       expect(wrapper.text()).toContain('NFC-e autorizada')
-      expect(wrapper.text()).toContain('251')
-      expect(wrapper.text()).toContain('série 1')
+      expect(wrapper.text()).toContain('Deseja imprimir o DANFE')
       expect(wrapper.find('.sale-receipt-actions .btn-primary').text()).toContain(
         'Imprimir DANFE'
       )
-      // emitir não fecha o modal
+      // emitir não fecha: pergunta antes se imprime o DANFE
+      expect(wrapper.emitted('close')).toBeUndefined()
+    })
+
+    it('setas escolhem a ação e Enter executa a escolhida', async () => {
+      const wrapper = mountModal({ mode: 'post-sale' })
+      await flushPromises()
+
+      expect(wrapper.find('.sale-receipt-actions .btn-outline').classes()).toContain(
+        'is-selected'
+      )
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }))
+      await nextTick()
+      expect(wrapper.find('.sale-receipt-actions .btn-primary').classes()).toContain(
+        'is-selected'
+      )
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+      await flushPromises()
+
+      expect(apiMock.post).toHaveBeenCalledWith('/fiscal/emitir', { order_id: 42 })
+      expect(wrapper.text()).toContain('Deseja imprimir o DANFE')
+    })
+
+    it('passar o mouse destaca a ação sem executar', async () => {
+      const wrapper = mountModal({ mode: 'post-sale' })
+      await flushPromises()
+
+      await wrapper.find('.sale-receipt-actions .btn-ghost').trigger('mouseenter')
+
+      expect(wrapper.find('.sale-receipt-actions .btn-ghost').classes()).toContain(
+        'is-selected'
+      )
+      expect(apiMock.post).not.toHaveBeenCalled()
       expect(wrapper.emitted('close')).toBeUndefined()
     })
 
@@ -220,17 +254,80 @@ describe('SaleReceiptModal', () => {
       expect(wrapper.emitted('close')).toBeUndefined()
     })
 
-    it('depois de autorizada imprime o DANFE e fecha', async () => {
+    it('depois de autorizada, confirmar imprime o DANFE e fecha', async () => {
       printDanfeMock.mockResolvedValue(undefined)
       const wrapper = mountModal({ mode: 'post-sale' })
       await flushPromises()
 
       await wrapper.find('.sale-receipt-actions .btn-primary').trigger('click')
       await flushPromises()
-      await wrapper.find('.sale-receipt-actions .btn-primary').trigger('click')
+      expect(wrapper.find('.confirm-body').exists()).toBe(true)
+
+      await wrapper.find('.modal-footer .btn-primary').trigger('click')
       await flushPromises()
 
       expect(printDanfeMock).toHaveBeenCalledWith(9, { widthMm: 80 })
+      expect(wrapper.emitted('close')).toHaveLength(1)
+    })
+
+    it('depois de autorizada, recusar a impressão só fecha', async () => {
+      const wrapper = mountModal({ mode: 'post-sale' })
+      await flushPromises()
+
+      await wrapper.find('.sale-receipt-actions .btn-primary').trigger('click')
+      await flushPromises()
+
+      await wrapper.find('.modal-footer .modal-cancel').trigger('click')
+      await flushPromises()
+
+      expect(printDanfeMock).not.toHaveBeenCalled()
+      expect(wrapper.emitted('close')).toHaveLength(1)
+    })
+
+    it('depois de autorizada, Enter no diálogo imprime o DANFE e fecha', async () => {
+      printDanfeMock.mockResolvedValue(undefined)
+      const wrapper = mountModal({ mode: 'post-sale' })
+      await flushPromises()
+
+      await wrapper.find('.sale-receipt-actions .btn-primary').trigger('click')
+      await flushPromises()
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+      await flushPromises()
+
+      expect(printDanfeMock).toHaveBeenCalledWith(9, { widthMm: 80 })
+      expect(wrapper.emitted('close')).toHaveLength(1)
+    })
+
+    it('depois de autorizada, Esc no diálogo não imprime e fecha', async () => {
+      const wrapper = mountModal({ mode: 'post-sale' })
+      await flushPromises()
+
+      await wrapper.find('.sale-receipt-actions .btn-primary').trigger('click')
+      await flushPromises()
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      await flushPromises()
+
+      expect(printDanfeMock).not.toHaveBeenCalled()
+      expect(wrapper.emitted('close')).toHaveLength(1)
+    })
+
+    it('no diálogo, setas escolhem e Enter executa a escolha', async () => {
+      const wrapper = mountModal({ mode: 'post-sale' })
+      await flushPromises()
+
+      await wrapper.find('.sale-receipt-actions .btn-primary').trigger('click')
+      await flushPromises()
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }))
+      await nextTick()
+      expect(wrapper.find('.modal-footer .modal-cancel').classes()).toContain('is-selected')
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+      await flushPromises()
+
+      expect(printDanfeMock).not.toHaveBeenCalled()
       expect(wrapper.emitted('close')).toHaveLength(1)
     })
 

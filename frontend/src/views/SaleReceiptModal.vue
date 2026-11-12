@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import ThermalCoupon from '@/components/ThermalCoupon.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { printDanfe } from '@/utils/danfe'
 import { printElementWithAgent } from '@/utils/printBridge'
 
@@ -23,6 +24,10 @@ const fiscalDocument = ref(null)
 const fiscalMessage = ref('')
 const fiscalBusy = ref(false)
 const printing = ref(false)
+/** Ação destacada no pós-venda (navegação por setas). */
+const selectedAction = ref('print')
+/** Pergunta pós-emissão: "imprimir o DANFE agora?". */
+const askPrintDanfe = ref(false)
 let pageStyleEl = null
 
 const isPostSale = computed(() => props.mode === 'post-sale')
@@ -41,6 +46,43 @@ const hasFiscalError = computed(
 )
 const printLabel = computed(() => (canPrintDanfe.value ? 'Imprimir DANFE' : 'Imprimir cupom'))
 const needsRetry = computed(() => Boolean(fiscal.value) && !isAuthorized.value)
+
+/** Ações selecionáveis no modal pós-venda, na ordem exibida. */
+const selectableActions = computed(() => {
+  const keys = ['print']
+  if (canPrintDanfe.value) keys.push('danfe')
+  else if (!isAuthorized.value) keys.push('emit')
+  keys.push('close')
+  return keys
+})
+
+// Se a lista muda (autorizou a nota, por exemplo), mantém a seleção válida.
+watch(selectableActions, (keys) => {
+  if (!keys.includes(selectedAction.value)) selectedAction.value = keys[0]
+})
+
+function actionDisabled(key) {
+  if (key === 'close') return false
+  if (loading.value || !order.value) return true
+  if (key === 'print') return printing.value
+  if (key === 'danfe') return printing.value
+  if (key === 'emit') return fiscalBusy.value || printing.value
+  return false
+}
+
+function moveSelection(step) {
+  const keys = selectableActions.value
+  const index = keys.indexOf(selectedAction.value)
+  selectedAction.value = keys[(index + step + keys.length) % keys.length]
+}
+
+function runAction(key) {
+  if (actionDisabled(key)) return
+  if (key === 'print') return printCouponAndClose()
+  if (key === 'danfe') return printDocumentAndClose()
+  if (key === 'emit') return emitirNota()
+  return close()
+}
 const fiscalBadge = computed(() => {
   if (isAuthorized.value) return { label: 'NFC-e autorizada', icon: 'fa-circle-check', tone: 'ok' }
   if (fiscal.value?.status === 'cancelada') {
@@ -158,6 +200,12 @@ async function emitirNota() {
     if (result.ok) {
       const number = result.document?.number ? ` (nº ${result.document.number})` : ''
       ElMessage.success(`NFC-e autorizada${number}.`)
+      if (result.document?.has_danfe && result.document?.id) {
+        // Pergunta antes de fechar: imprimir o DANFE agora?
+        askPrintDanfe.value = true
+      } else {
+        close()
+      }
     } else {
       fiscalMessage.value =
         result.message || 'A SEFAZ não autorizou a nota. Confira e tente novamente.'
@@ -213,13 +261,32 @@ function close() {
   emit('close')
 }
 
-// P imprime, F3 emite (pós-venda), F2 nova venda e Esc fecha o modal.
+// P imprime, F3 emite/imprime DANFE, F2 conclui, Esc fecha.
+// Setas escolhem a ação; Enter/Espaço executam a escolhida.
 function onKeydown(event) {
+  // Pergunta "imprimir o DANFE?": o ConfirmDialog cuida das teclas.
+  if (askPrintDanfe.value) return
+
   if (event.key === 'Escape') {
     event.preventDefault()
     close()
     return
   }
+
+  if (isPostSale.value) {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+      event.preventDefault()
+      moveSelection(event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1)
+      return
+    }
+    if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+      if (event.repeat) return
+      event.preventDefault()
+      runAction(selectedAction.value)
+      return
+    }
+  }
+
   if (event.key === 'p' || event.key === 'P') {
     // Não sequestra o "p" de quem está digitando num campo (busca do PDV).
     const tag = event.target?.tagName
@@ -230,23 +297,28 @@ function onKeydown(event) {
     event.preventDefault()
     if (printing.value || loading.value || !order.value) return
     if (isPostSale.value) {
+      selectedAction.value = 'print'
       printCouponAndClose()
     } else {
       printDocumentAndClose()
     }
     return
   }
+
   if (isPostSale.value) {
     if (event.key === 'F3') {
       event.preventDefault()
       if (printing.value || fiscalBusy.value || loading.value || !order.value) return
       if (canPrintDanfe.value) {
+        selectedAction.value = 'danfe'
         printDocumentAndClose()
       } else if (!isAuthorized.value) {
+        selectedAction.value = 'emit'
         emitirNota()
       }
     } else if (event.key === 'F2') {
       event.preventDefault()
+      selectedAction.value = 'close'
       close()
     }
     return
@@ -255,6 +327,12 @@ function onKeydown(event) {
     event.preventDefault()
     printDocumentAndClose()
   }
+}
+
+/** Resposta ao diálogo: imprime o DANFE e fecha. */
+function confirmPrintDanfe() {
+  askPrintDanfe.value = false
+  printDocumentAndClose()
 }
 
 watch(thermalWidth, async () => {
@@ -365,8 +443,11 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="btn btn-outline"
+              :class="{ 'is-selected': selectedAction === 'print' }"
               :disabled="printing || loading || !order"
-              @click="printCouponAndClose"
+              @mouseenter="selectedAction = 'print'"
+              @focus="selectedAction = 'print'"
+              @click="runAction('print')"
             >
               <i :class="['fas', printing ? 'fa-circle-notch fa-spin' : 'fa-receipt']"></i>
               {{ printing ? 'Preparando…' : 'Imprimir comprovante' }} <kbd>P</kbd>
@@ -376,8 +457,11 @@ onBeforeUnmount(() => {
               v-if="canPrintDanfe"
               type="button"
               class="btn btn-primary"
+              :class="{ 'is-selected': selectedAction === 'danfe' }"
               :disabled="printing"
-              @click="printDocumentAndClose"
+              @mouseenter="selectedAction = 'danfe'"
+              @focus="selectedAction = 'danfe'"
+              @click="runAction('danfe')"
             >
               <i :class="['fas', printing ? 'fa-circle-notch fa-spin' : 'fa-file-invoice']"></i>
               {{ printing ? 'Preparando…' : 'Imprimir DANFE' }} <kbd>F3</kbd>
@@ -394,8 +478,11 @@ onBeforeUnmount(() => {
               v-else
               type="button"
               class="btn btn-primary"
+              :class="{ 'is-selected': selectedAction === 'emit' }"
               :disabled="fiscalBusy || loading || !order"
-              @click="emitirNota"
+              @mouseenter="selectedAction = 'emit'"
+              @focus="selectedAction = 'emit'"
+              @click="runAction('emit')"
             >
               <i
                 :class="[
@@ -407,12 +494,22 @@ onBeforeUnmount(() => {
               <kbd>F3</kbd>
             </button>
 
-            <button type="button" class="btn btn-ghost" @click="close">
+            <button
+              type="button"
+              class="btn btn-ghost"
+              :class="{ 'is-selected': selectedAction === 'close' }"
+              @mouseenter="selectedAction = 'close'"
+              @focus="selectedAction = 'close'"
+              @click="runAction('close')"
+            >
               <i class="fas fa-check"></i> Concluir <kbd>F2</kbd>
             </button>
           </div>
 
-          <p class="sale-receipt-hint"><kbd>Esc</kbd> também conclui e volta ao PDV</p>
+          <p class="sale-receipt-hint">
+            <kbd>←</kbd> <kbd>→</kbd> escolhem · <kbd>Enter</kbd> confirma ·
+            <kbd>Esc</kbd> conclui
+          </p>
         </template>
       </div>
 
@@ -432,6 +529,18 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </div>
+
+    <!-- Depois de autorizar: pergunta se imprime o DANFE (Sim/Não) -->
+    <ConfirmDialog
+      v-if="askPrintDanfe"
+      title="NFC-e autorizada"
+      :message="`Deseja imprimir o DANFE da nota ${fiscal?.number || ''} agora?`"
+      confirm-label="Imprimir DANFE"
+      cancel-label="Não imprimir"
+      keyboard
+      @confirm="confirmPrintDanfe"
+      @cancel="close"
+    />
   </div>
 </template>
 
@@ -608,6 +717,15 @@ onBeforeUnmount(() => {
   flex: 1 1 190px;
   justify-content: center;
   white-space: nowrap;
+}
+.sale-receipt-actions .btn.is-selected {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--primary-soft);
+}
+.sale-receipt-actions .btn:disabled.is-selected {
+  outline-color: var(--border);
+  box-shadow: none;
 }
 
 @media (max-width: 560px) {
