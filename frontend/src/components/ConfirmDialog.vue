@@ -1,18 +1,52 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 
-defineProps({
+const props = defineProps({
   title: { type: String, required: true },
   message: { type: String, default: '' },
   confirmLabel: { type: String, default: 'Confirmar' },
+  cancelLabel: { type: String, default: 'Voltar' },
   danger: { type: Boolean, default: false },
   summary: { type: Array, default: () => null },
   inputLabel: { type: String, default: '' },
   inputPlaceholder: { type: String, default: '' },
+  /**
+   * Navegação por teclado: ←/↑ escolhem "não", →/↓ escolhem o confirmar,
+   * Enter/Espaço executam a escolha e Esc cancela.
+   */
+  keyboard: { type: Boolean, default: false },
 })
 const emit = defineEmits(['confirm', 'cancel'])
 const inputText = ref('')
+const selected = ref('confirm')
 
+function onKeydown(event) {
+  if (!props.keyboard) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    emit('cancel')
+  } else if (
+    event.key === 'ArrowLeft' ||
+    event.key === 'ArrowUp' ||
+    event.key === 'ArrowRight' ||
+    event.key === 'ArrowDown'
+  ) {
+    event.preventDefault()
+    selected.value =
+      event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? 'cancel' : 'confirm'
+  } else if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+    event.preventDefault()
+    if (selected.value === 'confirm') emit('confirm', inputText.value)
+    else emit('cancel')
+  }
+}
+
+onMounted(() => {
+  if (props.keyboard) document.addEventListener('keydown', onKeydown)
+})
+onBeforeUnmount(() => {
+  if (props.keyboard) document.removeEventListener('keydown', onKeydown)
+})
 </script>
 
 <template>
@@ -41,8 +75,22 @@ const inputText = ref('')
         </dl>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-ghost modal-cancel" @click="emit('cancel')">Voltar</button>
-        <button type="button" class="btn" :class="danger ? 'btn-danger' : 'btn-primary'" @click="emit('confirm', inputText)">
+        <button
+          type="button"
+          class="btn btn-ghost modal-cancel"
+          :class="{ 'is-selected': keyboard && selected === 'cancel' }"
+          @mouseenter="selected = 'cancel'"
+          @focus="selected = 'cancel'"
+          @click="emit('cancel')"
+        >{{ cancelLabel }}</button>
+        <button
+          type="button"
+          class="btn"
+          :class="[danger ? 'btn-danger' : 'btn-primary', { 'is-selected': keyboard && selected === 'confirm' }]"
+          @mouseenter="selected = 'confirm'"
+          @focus="selected = 'confirm'"
+          @click="emit('confirm', inputText)"
+        >
           {{ confirmLabel }}
         </button>
       </div>
@@ -115,5 +163,10 @@ const inputText = ref('')
 .modal-footer {
   margin-top: 0;
   padding: 16px 24px 20px;
+}
+.modal-footer .btn.is-selected {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--primary-soft);
 }
 </style>
