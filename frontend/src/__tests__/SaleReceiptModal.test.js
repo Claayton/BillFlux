@@ -66,6 +66,8 @@ let wrapper = null
 function mountModal(props = {}) {
   wrapper = mount(SaleReceiptModal, {
     props: { sale: { id: 42, kind: 'pdv' }, ...props },
+    // O cupom é buscado por id no documento na hora de imprimir.
+    attachTo: document.body,
   })
   return wrapper
 }
@@ -147,8 +149,11 @@ describe('SaleReceiptModal', () => {
 
       expect(wrapper.find('.modal-close').exists()).toBe(false)
       expect(wrapper.text()).toContain('Venda #42 finalizada')
-      expect(wrapper.find('#sale-receipt-print').exists()).toBe(false)
+      // Sem preview visual, mas com o cupom real escondido para imprimir.
       expect(wrapper.find('.sale-receipt-body').exists()).toBe(false)
+      expect(wrapper.find('#sale-receipt-print').exists()).toBe(true)
+      expect(wrapper.find('.sale-receipt-print-hidden').exists()).toBe(true)
+      expect(wrapper.find('.sale-receipt-print-hidden').attributes('aria-hidden')).toBe('true')
       expect(wrapper.find('.sale-receipt-actions.is-horizontal').exists()).toBe(true)
       expect(wrapper.find('.sale-receipt-actions').text()).toContain('Imprimir comprovante')
       expect(wrapper.find('.sale-receipt-actions').text()).toContain('Emitir NFC-e')
@@ -160,7 +165,11 @@ describe('SaleReceiptModal', () => {
       expect(wrapper.emitted('close')).toHaveLength(1)
     })
 
-    it('P imprime o cupom e fecha', async () => {
+    it('P imprime o cupom real (não uma folha em branco) e fecha', async () => {
+      let printedText = ''
+      printSpy.mockImplementation(() => {
+        printedText = document.querySelector('.receipt-print-clone')?.textContent || ''
+      })
       const wrapper = mountModal({ mode: 'post-sale' })
       await flushPromises()
 
@@ -168,6 +177,8 @@ describe('SaleReceiptModal', () => {
       await flushPromises()
 
       expect(printSpy).toHaveBeenCalledTimes(1)
+      expect(printedText).toContain('Coca-Cola 2L')
+      expect(printedText).toContain('TOTAL')
       expect(wrapper.emitted('close')).toHaveLength(1)
     })
 

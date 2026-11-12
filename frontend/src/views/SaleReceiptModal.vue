@@ -106,6 +106,23 @@ const companyPhone = computed(() => settings.value['company.phone'] || '')
 const receiptMessage = computed(() => settings.value['receipt.message'] || '')
 const isOn = (key) => settings.value[key] === 'true'
 
+/** Dados do cupom, compartilhados entre a reimpressão e o cupom oculto do pós-venda. */
+const couponProps = computed(() => ({
+  width: thermalWidth.value,
+  company: companyLine.value,
+  headerLines: headerLines.value,
+  footerLines: footerLines.value,
+  order: order.value,
+  companyCnpj: companyCnpj.value,
+  companyAddress: companyAddress.value,
+  companyPhone: companyPhone.value,
+  showCnpj: isOn('receipt.show_cnpj'),
+  showAddress: isOn('receipt.show_address'),
+  showPhone: isOn('receipt.show_phone'),
+  showCustomer: isOn('receipt.show_customer'),
+  message: receiptMessage.value,
+}))
+
 function splitLines(text) {
   return (text || '').split('\n').map((l) => l.trim()).filter(Boolean)
 }
@@ -138,10 +155,8 @@ async function load() {
  */
 async function printWithClone() {
   const el = document.getElementById('sale-receipt-print')
-  if (!el) {
-    if (typeof window.print === 'function') window.print()
-    return
-  }
+  // Sem cupom no DOM não há o que imprimir: melhor não soltar folha em branco.
+  if (!el) return
 
   if (await printElementWithAgent(el, { widthMm: paperWidthMm.value })) return
 
@@ -398,22 +413,7 @@ onBeforeUnmount(() => {
             <p v-else-if="fiscalMessage" class="fiscal-result-message">{{ fiscalMessage }}</p>
           </div>
 
-          <ThermalCoupon
-            id="sale-receipt-print"
-            :width="thermalWidth"
-            :company="companyLine"
-            :header-lines="headerLines"
-            :footer-lines="footerLines"
-            :order="order"
-            :company-cnpj="companyCnpj"
-            :company-address="companyAddress"
-            :company-phone="companyPhone"
-            :show-cnpj="isOn('receipt.show_cnpj')"
-            :show-address="isOn('receipt.show_address')"
-            :show-phone="isOn('receipt.show_phone')"
-            :show-customer="isOn('receipt.show_customer')"
-            :message="receiptMessage"
-          />
+          <ThermalCoupon id="sale-receipt-print" v-bind="couponProps" />
         </template>
 
         <div v-else class="muted">Cupom não encontrado.</div>
@@ -511,6 +511,15 @@ onBeforeUnmount(() => {
             <kbd>Esc</kbd> conclui
           </p>
         </template>
+      </div>
+
+      <!-- Pós-venda: sem preview, mas com o cupom real fora da tela para imprimir -->
+      <div
+        v-if="isPostSale && order"
+        class="sale-receipt-print-hidden"
+        aria-hidden="true"
+      >
+        <ThermalCoupon id="sale-receipt-print" v-bind="couponProps" />
       </div>
 
       <!-- Reimpressão (Vendas) -->
@@ -726,6 +735,16 @@ onBeforeUnmount(() => {
 .sale-receipt-actions .btn:disabled.is-selected {
   outline-color: var(--border);
   box-shadow: none;
+}
+
+/* Cupom real escondido fora da tela: o pós-venda não mostra preview,
+   mas o P/Imprimir comprovante precisa do nó para gerar a via. */
+.sale-receipt-print-hidden {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 @media (max-width: 560px) {

@@ -450,8 +450,10 @@ describe('PdvView', () => {
     await completeSale(wrapper, 21)
 
     expect(wrapper.find('.sale-receipt-modal').exists()).toBe(true)
-    expect(wrapper.find('#sale-receipt-print').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('Pago (Dinheiro)')
+    // O cupom não aparece, mas fica escondido no DOM para a impressão funcionar.
+    expect(wrapper.find('.sale-receipt-body').exists()).toBe(false)
+    expect(wrapper.find('.sale-receipt-print-hidden #sale-receipt-print').exists()).toBe(true)
+    expect(wrapper.find('.sale-receipt-quick').text()).not.toContain('Pago (Dinheiro)')
     expect(wrapper.find('.sale-receipt-actions').text()).toContain('Imprimir comprovante')
     expect(wrapper.find('.sale-receipt-actions').text()).toContain('Emitir NFC-e')
     expect(wrapper.find('.sale-receipt-actions').text()).toContain('Concluir')
