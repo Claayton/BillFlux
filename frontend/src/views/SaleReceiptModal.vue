@@ -8,9 +8,8 @@ import { printDanfe } from '@/utils/danfe'
 const props = defineProps({
   sale: { type: Object, required: true },
   /**
-   * 'post-sale': modal pós-venda do PDV — exige uma escolha
-   * (emitir, imprimir cupom ou nova venda) e não fecha no Esc.
-   * 'reprint': reimpressão em Vendas — fecha normalmente.
+   * 'post-sale': modal pós-venda do PDV (emitir, imprimir cupom ou nova venda);
+   * Esc fecha como "nova venda". 'reprint': reimpressão em Vendas.
    */
   mode: { type: String, default: 'reprint' },
 })
@@ -203,8 +202,26 @@ function close() {
   emit('close')
 }
 
-// F3 emite (pós-venda), F2 imprime/nova venda. Esc só fecha na reimpressão.
+// P imprime, F3 emite (pós-venda), F2 nova venda e Esc fecha o modal.
 function onKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    close()
+    return
+  }
+  if (event.key === 'p' || event.key === 'P') {
+    // Não sequestra o "p" de quem está digitando num campo (busca do PDV).
+    const tag = event.target?.tagName
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || event.target?.isContentEditable) {
+      return
+    }
+    if (event.repeat) return
+    event.preventDefault()
+    if (!printing.value && !loading.value && order.value) {
+      printDocumentAndClose()
+    }
+    return
+  }
   if (isPostSale.value) {
     if (event.key === 'F3' && !isAuthorized.value) {
       event.preventDefault()
@@ -212,17 +229,12 @@ function onKeydown(event) {
     } else if (event.key === 'F2') {
       event.preventDefault()
       close()
-    } else if (event.key === 'Escape') {
-      event.preventDefault()
     }
     return
   }
   if (event.key === 'F2') {
     event.preventDefault()
     printDocumentAndClose()
-  } else if (event.key === 'Escape') {
-    event.preventDefault()
-    close()
   }
 }
 
@@ -310,7 +322,7 @@ onBeforeUnmount(() => {
         <div v-else class="muted">Cupom não encontrado.</div>
       </div>
 
-      <!-- Pós-venda: exige uma escolha (sem X, sem Esc) -->
+      <!-- Pós-venda: sem X; Esc fecha e volta pro PDV -->
       <div v-if="isPostSale" class="modal-footer sale-receipt-actions">
         <template v-if="isAuthorized">
           <button
@@ -320,7 +332,7 @@ onBeforeUnmount(() => {
             @click="printDocumentAndClose"
           >
             <i :class="['fas', printing ? 'fa-circle-notch fa-spin' : 'fa-print']"></i>
-            {{ printing ? 'Preparando…' : printLabel }}
+            {{ printing ? 'Preparando…' : printLabel }} <kbd>P</kbd>
           </button>
           <button type="button" class="btn btn-ghost" @click="close">
             <i class="fas fa-plus"></i> Nova venda <kbd>F2</kbd>
@@ -350,13 +362,15 @@ onBeforeUnmount(() => {
               :disabled="loading || !order"
               @click="printCouponAndClose"
             >
-              <i class="fas fa-receipt"></i> Imprimir cupom
+              <i class="fas fa-receipt"></i> Imprimir cupom <kbd>P</kbd>
             </button>
             <button type="button" class="btn btn-ghost" @click="close">
               <i class="fas fa-plus"></i> Nova venda <kbd>F2</kbd>
             </button>
           </div>
         </template>
+
+        <p class="sale-receipt-hint"><kbd>Esc</kbd> fecha e volta ao PDV</p>
       </div>
 
       <!-- Reimpressão (Vendas) -->
@@ -371,7 +385,7 @@ onBeforeUnmount(() => {
           @click="printDocumentAndClose"
         >
           <i :class="['fas', printing ? 'fa-circle-notch fa-spin' : 'fa-print']"></i>
-          {{ printing ? 'Preparando…' : printLabel }} <kbd>F2</kbd>
+          {{ printing ? 'Preparando…' : printLabel }} <kbd>P</kbd>
         </button>
       </div>
     </div>
@@ -476,5 +490,11 @@ onBeforeUnmount(() => {
 .sale-receipt-actions .action-row .btn {
   flex: 1;
   justify-content: center;
+}
+.sale-receipt-hint {
+  margin: 2px 0 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 </style>

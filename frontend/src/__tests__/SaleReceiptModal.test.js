@@ -137,7 +137,7 @@ describe('SaleReceiptModal', () => {
   })
 
   describe('modo pós-venda', () => {
-    it('exige uma escolha: sem X e sem fechar no Esc', async () => {
+    it('sem X, mas fecha no Esc como nova venda', async () => {
       const wrapper = mountModal({ mode: 'post-sale' })
       await flushPromises()
 
@@ -146,9 +146,35 @@ describe('SaleReceiptModal', () => {
       expect(wrapper.find('.sale-receipt-actions').text()).toContain('Emitir nota')
       expect(wrapper.find('.sale-receipt-actions').text()).toContain('Imprimir cupom')
       expect(wrapper.find('.sale-receipt-actions').text()).toContain('Nova venda')
+      expect(wrapper.find('.sale-receipt-hint').text()).toContain('Esc')
 
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
       await flushPromises()
+      expect(wrapper.emitted('close')).toHaveLength(1)
+    })
+
+    it('P imprime o cupom e fecha', async () => {
+      const wrapper = mountModal({ mode: 'post-sale' })
+      await flushPromises()
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'p' }))
+      await flushPromises()
+
+      expect(printSpy).toHaveBeenCalledTimes(1)
+      expect(wrapper.emitted('close')).toHaveLength(1)
+    })
+
+    it('P digitado num campo de texto não imprime', async () => {
+      const wrapper = mountModal({ mode: 'post-sale' })
+      await flushPromises()
+
+      const input = document.createElement('input')
+      document.body.appendChild(input)
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', bubbles: true }))
+      await flushPromises()
+      input.remove()
+
+      expect(printSpy).not.toHaveBeenCalled()
       expect(wrapper.emitted('close')).toBeUndefined()
     })
 
@@ -227,6 +253,17 @@ describe('SaleReceiptModal', () => {
   })
 
   describe('reimpressão em Vendas', () => {
+    it('P imprime o cupom e fecha', async () => {
+      const wrapper = mountModal()
+      await flushPromises()
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'P' }))
+      await flushPromises()
+
+      expect(printSpy).toHaveBeenCalledTimes(1)
+      expect(wrapper.emitted('close')).toHaveLength(1)
+    })
+
     it('F2 imprime o cupom e fecha', async () => {
       const wrapper = mountModal()
       await flushPromises()

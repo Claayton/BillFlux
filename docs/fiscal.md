@@ -262,10 +262,11 @@ O roteiro completo de go-live está em
   reservada para opções futuras.
 - **PDV → modal de pagamento**: só **Finalizar**. A emissão não acontece mais
   no fechamento.
-- **PDV → modal pós-venda** (bloqueante, sem Esc/X): mostra o cupom e exige uma
-  escolha — **Emitir nota** (`F3`), **Imprimir cupom** ou **Nova venda** (`F2`).
-  Autorizada → **Imprimir DANFE** + **Nova venda**; pendente/rejeitada → motivo,
-  **Tentar de novo** (`F3`) + **Imprimir cupom** + **Nova venda** (`F2`).
+- **PDV → modal pós-venda** (sem X): mostra o cupom e oferece as ações —
+  **Emitir nota** (`F3`), **Imprimir cupom** (`P`) ou **Nova venda** (`F2`);
+  `Esc` fecha e volta ao PDV. Autorizada → **Imprimir DANFE** (`P`) + **Nova
+  venda** (`F2`); pendente/rejeitada → motivo, **Tentar de novo** (`F3`) +
+  **Imprimir cupom** (`P`) + **Nova venda** (`F2`).
 - **Vendas**: badge por venda (`Sem nota`, `Pendente`, `Autorizada`, `Cancelada`),
   ações (emitir, reenviar, cancelar nota, XML/DANFE) e banner de pendências. O
   ícone de impressão usa o **DANFE** quando a nota está autorizada; senão, o cupom.

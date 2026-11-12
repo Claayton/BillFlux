@@ -469,14 +469,14 @@ describe('PdvView', () => {
     delete window.print
   })
 
-  it('recibo: Esc não fecha o modal pós-venda', async () => {
+  it('recibo: Esc fecha o modal pós-venda e volta ao PDV', async () => {
     const wrapper = mountView()
     await flushPromises()
     await completeSale(wrapper, 10)
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await nextTick()
-    expect(wrapper.find('.sale-receipt-modal').exists()).toBe(true)
+    expect(wrapper.find('.sale-receipt-modal').exists()).toBe(false)
   })
 
   it('não quebra a busca quando existe produto sem código de barras', async () => {
