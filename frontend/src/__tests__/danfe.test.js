@@ -15,16 +15,25 @@ const HTML_DANFE = `<html><head><style>td { border: 1px solid #000; }</style></h
 <body><div class="container" style="max-width:300px;padding:5px">
 <script>alert('xss')</script>
 <table><tbody><tr><td>NFC-e</td></tr></tbody></table>
-<img src="${DATA_URL}" alt="">
+<img src="${DATA_URL}" alt="" style="max-width:150px;">
 <a href="javascript:alert(1)">chave</a>
 </div></body></html>`
 
 let printSpy
+let captured
 
 describe('printDanfe', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    printSpy = vi.fn()
+    captured = null
+    printSpy = vi.fn(() => {
+      const root = document.getElementById('danfe-print-root')
+      const shadow = root?.shadowRoot
+      captured = {
+        css: shadow?.querySelector('style')?.textContent || '',
+        img: shadow?.querySelector('img') || null,
+      }
+    })
     window.print = printSpy
   })
 
@@ -44,6 +53,9 @@ describe('printDanfe', () => {
 
     expect(apiMock.getBlob).toHaveBeenCalledWith('/fiscal/9/danfe')
     expect(printSpy).toHaveBeenCalledTimes(1)
+    // o tamanho do QR Code do provedor (style inline) precisa prevalecer
+    expect(captured.img?.getAttribute('style')).toContain('max-width:150px')
+    expect(captured.css).not.toMatch(/img\s*\{[^}]*max-width:\s*100%\s*!important/)
     // limpa tudo depois de imprimir
     expect(document.getElementById('danfe-print-root')).toBeNull()
     expect(document.getElementById('danfe-print-style')).toBeNull()

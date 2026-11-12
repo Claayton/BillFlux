@@ -212,7 +212,9 @@ const SHADOW_BASE_CSS = `
     padding: 0 !important;
     box-sizing: border-box;
   }
-  img { max-width: 100% !important; height: auto !important; }
+  /* Sem !important: o provedor limita o QR Code no style inline
+     (ex.: max-width:150px) e essa medida precisa prevalecer. */
+  img { max-width: 100%; height: auto; }
   table { width: 100% !important; border-collapse: collapse; }
 `
 
@@ -257,32 +259,43 @@ async function printHtml(html, widthMm) {
   baseStyle.textContent = buildHtmlBaseStyle(widthMm)
   document.head.appendChild(baseStyle)
 
-  const heightPx = root.getBoundingClientRect().height
-  let heightMm = heightPx > 0 ? Math.ceil((heightPx * 25.4) / 96) + 4 : widthMm
-  if (heightMm < widthMm) heightMm = widthMm
-
-  const printStyle = document.createElement('style')
-  printStyle.id = PRINT_STYLE_ID
-  printStyle.textContent = buildHtmlPrintStyle(widthMm, heightMm)
-  document.head.appendChild(printStyle)
-
+  let printStyle = null
   try {
+    const heightPx = root.getBoundingClientRect().height
+    let heightMm = heightPx > 0 ? Math.ceil((heightPx * 25.4) / 96) + 4 : widthMm
+    if (heightMm < widthMm) heightMm = widthMm
+
+    printStyle = document.createElement('style')
+    printStyle.id = PRINT_STYLE_ID
+    printStyle.textContent = buildHtmlPrintStyle(widthMm, heightMm)
+    document.head.appendChild(printStyle)
+
     await waitForImages([...shadow.querySelectorAll('img')])
     await delay(50)
     callPrint()
   } finally {
     root.remove()
     baseStyle.remove()
-    printStyle.remove()
+    printStyle?.remove()
   }
 }
 
 function waitForImages(nodes) {
   return Promise.all(
-    nodes.map((img) =>
-      typeof img.decode === 'function'
-        ? img.decode().catch(() => undefined)
-        : Promise.resolve()
+    nodes.map(
+      (img) =>
+        new Promise((resolve) => {
+          if (img.complete) {
+            resolve()
+            return
+          }
+          // `img.decode()` pode ficar pendente no Chromium quando a imagem
+          // está num shadow DOM fora da tela; load/error + timeout é seguro.
+          const done = () => resolve()
+          img.addEventListener('load', done, { once: true })
+          img.addEventListener('error', done, { once: true })
+          window.setTimeout(done, 2000)
+        })
     )
   )
 }
