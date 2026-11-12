@@ -23,13 +23,14 @@ const RENDER_DPI = 203
 const MM_PER_INCH = 25.4
 const PRINT_ROOT_ID = 'danfe-print-root'
 const PRINT_STYLE_ID = 'danfe-print-style'
+const PRINT_BASE_STYLE_ID = 'danfe-print-base-style'
 
 /**
- * Renderiza o DANFE (PDF) em imagens e abre a caixa de impressão no clique.
+ * Renderiza o DANFE e abre a caixa de impressão no clique.
  *
- * Rasterizamos com `pdf.js` para controlar a largura do papel: o DANFE da
- * NFC-e já vem em formato cupom, então ele sai na largura configurada
- * (padrão 80 mm) sem depender do visualizador de PDF do navegador.
+ * O provedor pode devolver o DANFE em PDF (rasterizamos com pdf.js) ou em HTML
+ * (cupom pronto). Nos dois casos a impressão respeita a largura configurada,
+ * padrão 80 mm, sem depender do visualizador do navegador.
  *
  * @param {number|string} documentId id do documento fiscal
  * @param {{ widthMm?: number }} options largura do papel em milímetros
@@ -40,14 +41,25 @@ export async function printDanfe(documentId, { widthMm = 80 } = {}) {
     throw new Error('O DANFE desta nota ainda não está disponível.')
   }
 
-  const header = await blob.slice(0, 4).text()
-  if (!header.toLowerCase().startsWith('%pdf')) {
-    throw new Error(
-      'O DANFE desta nota não veio em PDF. Baixe o arquivo em Vendas → Nota fiscal.'
-    )
+  const buffer = await blob.arrayBuffer()
+  const head = new TextDecoder('utf-8').decode(buffer.slice(0, 8)).trimStart().toLowerCase()
+
+  if (head.startsWith('%pdf')) {
+    await printPdf(buffer, widthMm)
+    return
+  }
+  if (head.startsWith('<')) {
+    await printHtml(new TextDecoder('utf-8').decode(buffer), widthMm)
+    return
   }
 
-  const pdf = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise
+  throw new Error(
+    'O DANFE desta nota não veio em um formato imprimível. Baixe o arquivo em Vendas → Nota fiscal.'
+  )
+}
+
+async function printPdf(buffer, widthMm) {
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
   const images = []
   let heightMm = widthMm
   try {
@@ -72,7 +84,7 @@ export async function printDanfe(documentId, { widthMm = 80 } = {}) {
   await printImages(images, widthMm, heightMm)
 }
 
-function buildPrintStyle(widthMm, heightMm) {
+function buildPdfPrintStyle(widthMm, heightMm) {
   return `
     @page { size: ${widthMm}mm ${heightMm}mm; margin: 0; }
     #${PRINT_ROOT_ID} { display: none; }
@@ -117,29 +129,171 @@ async function printImages(images, widthMm, heightMm) {
 
   const style = document.createElement('style')
   style.id = PRINT_STYLE_ID
-  style.textContent = buildPrintStyle(widthMm, heightMm)
+  style.textContent = buildPdfPrintStyle(widthMm, heightMm)
   document.head.appendChild(style)
 
-  const cleanup = () => {
+  try {
+    await waitForImages(nodes)
+    await delay(50)
+    callPrint()
+  } finally {
     root.remove()
     style.remove()
   }
+}
+
+/**
+ * Extrai o conteúdo imprimível do HTML do provedor, removendo scripts e
+ * mantendo apenas o CSS do próprio documento (necessário pro cupom).
+ */
+function extractHtmlDanfe(html) {
+  const parsed = new DOMParser().parseFromString(html, 'text/html')
+  parsed
+    .querySelectorAll('script, iframe, object, embed, link, meta, base, form')
+    .forEach((node) => node.remove())
+
+  const css = [...parsed.querySelectorAll('style')]
+    .map((node) => node.textContent || '')
+    .join('\n')
+  parsed.querySelectorAll('style').forEach((node) => node.remove())
+
+  parsed.querySelectorAll('*').forEach((element) => {
+    for (const attr of [...element.attributes]) {
+      const name = attr.name.toLowerCase()
+      if (name.startsWith('on')) {
+        element.removeAttribute(attr.name)
+      } else if (
+        (name === 'href' || name === 'src') &&
+        /^\s*javascript:/i.test(attr.value)
+      ) {
+        element.removeAttribute(attr.name)
+      }
+    }
+  })
+
+  // O provedor às vezes escreve "data: image / png;base64,..." com espaços:
+  // normaliza o MIME pra o QR Code não sumir na impressão.
+  parsed.querySelectorAll('img[src^="data:"]').forEach((img) => {
+    const src = img.getAttribute('src') || ''
+    img.setAttribute(
+      'src',
+      src.replace(/^data:\s*([^,]*?)\s*,/i, (_, meta) => `data:${meta.replace(/\s+/g, '')},`)
+    )
+  })
+
+  return { css, body: parsed.body.innerHTML }
+}
+
+function buildHtmlBaseStyle(widthMm) {
+  return `
+    #${PRINT_ROOT_ID} {
+      position: absolute;
+      left: -10000px;
+      top: 0;
+      width: ${widthMm}mm;
+      background: #fff;
+    }
+  `
+}
+
+/** Regras do cupom dentro do shadow DOM (isoladas do resto do app). */
+const SHADOW_BASE_CSS = `
+  :host {
+    display: block;
+    width: 100%;
+    background: #fff;
+    color: #000;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9px;
+  }
+  .container {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 0 !important;
+    box-sizing: border-box;
+  }
+  img { max-width: 100% !important; height: auto !important; }
+  table { width: 100% !important; border-collapse: collapse; }
+`
+
+function buildHtmlPrintStyle(widthMm, heightMm) {
+  return `
+    @page { size: ${widthMm}mm ${heightMm}mm; margin: 0; }
+    @media print {
+      body > *:not(#${PRINT_ROOT_ID}) { display: none !important; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #fff;
+        visibility: visible !important;
+      }
+      #${PRINT_ROOT_ID} {
+        position: static !important;
+        display: block !important;
+        visibility: visible !important;
+        width: ${widthMm}mm !important;
+      }
+      #${PRINT_ROOT_ID} * {
+        visibility: visible !important;
+      }
+    }
+  `
+}
+
+async function printHtml(html, widthMm) {
+  const { css, body } = extractHtmlDanfe(html)
+
+  const root = document.createElement('div')
+  root.id = PRINT_ROOT_ID
+  root.setAttribute('aria-hidden', 'true')
+  // Shadow DOM: o CSS do provedor fica isolado e não vaza pro app.
+  const shadow = root.attachShadow({ mode: 'open' })
+  shadow.innerHTML = `<style>${css}\n${SHADOW_BASE_CSS}</style>${body}`
+  document.body.appendChild(root)
+
+  // Posiciona o cupom fora da tela pra medirmos a altura real do papel.
+  const baseStyle = document.createElement('style')
+  baseStyle.id = PRINT_BASE_STYLE_ID
+  baseStyle.textContent = buildHtmlBaseStyle(widthMm)
+  document.head.appendChild(baseStyle)
+
+  const heightPx = root.getBoundingClientRect().height
+  let heightMm = heightPx > 0 ? Math.ceil((heightPx * 25.4) / 96) + 4 : widthMm
+  if (heightMm < widthMm) heightMm = widthMm
+
+  const printStyle = document.createElement('style')
+  printStyle.id = PRINT_STYLE_ID
+  printStyle.textContent = buildHtmlPrintStyle(widthMm, heightMm)
+  document.head.appendChild(printStyle)
 
   try {
-    // Garante que as imagens foram decodificadas antes de abrir a impressão.
-    await Promise.all(
-      nodes.map((img) =>
-        typeof img.decode === 'function'
-          ? img.decode().catch(() => undefined)
-          : Promise.resolve()
-      )
-    )
-    await new Promise((resolve) => window.setTimeout(resolve, 50))
-    if (typeof window.print !== 'function') {
-      throw new Error('Este navegador não permite imprimir.')
-    }
-    window.print()
+    await waitForImages([...shadow.querySelectorAll('img')])
+    await delay(50)
+    callPrint()
   } finally {
-    cleanup()
+    root.remove()
+    baseStyle.remove()
+    printStyle.remove()
   }
+}
+
+function waitForImages(nodes) {
+  return Promise.all(
+    nodes.map((img) =>
+      typeof img.decode === 'function'
+        ? img.decode().catch(() => undefined)
+        : Promise.resolve()
+    )
+  )
+}
+
+function delay(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+function callPrint() {
+  if (typeof window.print !== 'function') {
+    throw new Error('Este navegador não permite imprimir.')
+  }
+  window.print()
 }
