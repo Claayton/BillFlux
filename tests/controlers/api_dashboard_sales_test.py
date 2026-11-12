@@ -106,9 +106,7 @@ def test_sales_list_filters_by_custom_range(logged_client):
     SaleRepository().insert_sale(date(2026, 8, 15), Decimal("20.00"))
     SaleRepository().insert_sale(date(2026, 9, 2), Decimal("30.00"))
 
-    data = logged_client.get(
-        "/api/sales?start=2026-08-01&end=2026-08-31"
-    ).get_json()
+    data = logged_client.get("/api/sales?start=2026-08-01&end=2026-08-31").get_json()
 
     dates = {sale["date"] for sale in data["sales"]}
     assert dates == {"2026-08-01", "2026-08-15"}
