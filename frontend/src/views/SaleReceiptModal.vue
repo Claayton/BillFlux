@@ -199,7 +199,13 @@ async function printDocumentAndClose() {
 }
 
 async function printCouponAndClose() {
-  await printCoupon()
+  if (printing.value) return
+  printing.value = true
+  try {
+    await printCoupon()
+  } finally {
+    printing.value = false
+  }
   close()
 }
 
@@ -222,15 +228,23 @@ function onKeydown(event) {
     }
     if (event.repeat) return
     event.preventDefault()
-    if (!printing.value && !loading.value && order.value) {
+    if (printing.value || loading.value || !order.value) return
+    if (isPostSale.value) {
+      printCouponAndClose()
+    } else {
       printDocumentAndClose()
     }
     return
   }
   if (isPostSale.value) {
-    if (event.key === 'F3' && !isAuthorized.value) {
+    if (event.key === 'F3') {
       event.preventDefault()
-      emitirNota()
+      if (printing.value || fiscalBusy.value || loading.value || !order.value) return
+      if (canPrintDanfe.value) {
+        printDocumentAndClose()
+      } else if (!isAuthorized.value) {
+        emitirNota()
+      }
     } else if (event.key === 'F2') {
       event.preventDefault()
       close()
@@ -261,7 +275,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="modal is-open">
-    <div class="modal-content sale-receipt-modal">
+    <div class="modal-content sale-receipt-modal" :class="{ 'is-post-sale': isPostSale }">
       <div class="modal-header">
         <h2>
           {{ isPostSale ? `Venda #${sale.id} finalizada` : `Cupom #${sale.id}` }}
@@ -277,7 +291,7 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <div class="sale-receipt-body">
+      <div v-if="!isPostSale" class="sale-receipt-body">
         <div v-if="loading" class="muted">Carregando…</div>
 
         <template v-else-if="order">
@@ -327,55 +341,79 @@ onBeforeUnmount(() => {
         <div v-else class="muted">Cupom não encontrado.</div>
       </div>
 
-      <!-- Pós-venda: sem X; Esc fecha e volta pro PDV -->
-      <div v-if="isPostSale" class="modal-footer sale-receipt-actions">
-        <template v-if="isAuthorized">
-          <button
-            type="button"
-            class="btn btn-primary action-wide"
-            :disabled="printing"
-            @click="printDocumentAndClose"
-          >
-            <i :class="['fas', printing ? 'fa-circle-notch fa-spin' : 'fa-print']"></i>
-            {{ printing ? 'Preparando…' : printLabel }} <kbd>P</kbd>
-          </button>
-          <button type="button" class="btn btn-ghost" @click="close">
-            <i class="fas fa-plus"></i> Nova venda <kbd>F2</kbd>
-          </button>
-        </template>
+      <!-- Pós-venda: ações rápidas, sem preview do cupom -->
+      <div v-if="isPostSale" class="sale-receipt-quick">
+        <div v-if="loading" class="muted">Carregando…</div>
 
         <template v-else>
-          <button
-            type="button"
-            class="btn btn-primary action-wide"
-            :disabled="fiscalBusy || loading || !order"
-            @click="emitirNota"
+          <div
+            v-if="fiscalBadge"
+            class="post-sale-status"
+            :class="`is-${fiscalBadge.tone}`"
           >
-            <i
-              :class="[
-                'fas',
-                fiscalBusy ? 'fa-circle-notch fa-spin' : 'fa-file-invoice-dollar',
-              ]"
-            ></i>
-            {{ fiscalBusy ? 'Emitindo…' : needsRetry ? 'Tentar de novo' : 'Emitir nota' }}
-            <kbd>F3</kbd>
-          </button>
-          <div class="action-row">
+            <i class="fas" :class="fiscalBadge.icon"></i>
+            <strong>{{ fiscalBadge.label }}</strong>
+            <span v-if="isAuthorized && fiscal.number">
+              nº {{ fiscal.number }} · série {{ fiscal.series || '—' }}
+            </span>
+          </div>
+
+          <p v-if="fiscalMessage" class="post-sale-message">{{ fiscalMessage }}</p>
+          <p v-if="!order" class="muted">Cupom não encontrado.</p>
+
+          <div class="sale-receipt-actions is-horizontal">
             <button
               type="button"
               class="btn btn-outline"
-              :disabled="loading || !order"
+              :disabled="printing || loading || !order"
               @click="printCouponAndClose"
             >
-              <i class="fas fa-receipt"></i> Imprimir cupom <kbd>P</kbd>
+              <i :class="['fas', printing ? 'fa-circle-notch fa-spin' : 'fa-receipt']"></i>
+              {{ printing ? 'Preparando…' : 'Imprimir comprovante' }} <kbd>P</kbd>
             </button>
+
+            <button
+              v-if="canPrintDanfe"
+              type="button"
+              class="btn btn-primary"
+              :disabled="printing"
+              @click="printDocumentAndClose"
+            >
+              <i :class="['fas', printing ? 'fa-circle-notch fa-spin' : 'fa-file-invoice']"></i>
+              {{ printing ? 'Preparando…' : 'Imprimir DANFE' }} <kbd>F3</kbd>
+            </button>
+            <button
+              v-else-if="isAuthorized"
+              type="button"
+              class="btn btn-primary"
+              disabled
+            >
+              <i class="fas fa-circle-check"></i> NFC-e autorizada
+            </button>
+            <button
+              v-else
+              type="button"
+              class="btn btn-primary"
+              :disabled="fiscalBusy || loading || !order"
+              @click="emitirNota"
+            >
+              <i
+                :class="[
+                  'fas',
+                  fiscalBusy ? 'fa-circle-notch fa-spin' : 'fa-file-invoice-dollar',
+                ]"
+              ></i>
+              {{ fiscalBusy ? 'Emitindo…' : needsRetry ? 'Tentar de novo' : 'Emitir NFC-e' }}
+              <kbd>F3</kbd>
+            </button>
+
             <button type="button" class="btn btn-ghost" @click="close">
-              <i class="fas fa-plus"></i> Nova venda <kbd>F2</kbd>
+              <i class="fas fa-check"></i> Concluir <kbd>F2</kbd>
             </button>
           </div>
-        </template>
 
-        <p class="sale-receipt-hint"><kbd>Esc</kbd> fecha e volta ao PDV</p>
+          <p class="sale-receipt-hint"><kbd>Esc</kbd> também conclui e volta ao PDV</p>
+        </template>
       </div>
 
       <!-- Reimpressão (Vendas) -->
@@ -501,5 +539,86 @@ onBeforeUnmount(() => {
   text-align: center;
   font-size: 11px;
   color: var(--text-muted);
+}
+
+/* Modal pós-venda: horizontal, só as três ações (sem preview do cupom) */
+.sale-receipt-modal.is-post-sale {
+  max-width: 760px;
+}
+.sale-receipt-quick {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 24px 18px;
+}
+.post-sale-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-hover, #f8fafc);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.post-sale-status strong {
+  font-size: 12px;
+  color: var(--text);
+}
+.post-sale-status span {
+  color: var(--text-muted);
+}
+.post-sale-status.is-ok {
+  border-color: rgba(22, 163, 74, 0.35);
+  background: rgba(22, 163, 74, 0.08);
+}
+.post-sale-status.is-ok i,
+.post-sale-status.is-ok strong {
+  color: #15803d;
+}
+.post-sale-status.is-warn {
+  border-color: rgba(217, 119, 6, 0.35);
+  background: rgba(245, 158, 11, 0.09);
+}
+.post-sale-status.is-warn i,
+.post-sale-status.is-warn strong {
+  color: #b45309;
+}
+.post-sale-status.is-error {
+  border-color: rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.07);
+}
+.post-sale-status.is-error i,
+.post-sale-status.is-error strong {
+  color: #b91c1c;
+}
+.post-sale-message {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #b91c1c;
+}
+.sale-receipt-actions.is-horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.sale-receipt-actions.is-horizontal .btn {
+  flex: 1 1 190px;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .sale-receipt-modal.is-post-sale {
+    max-width: calc(100vw - 24px);
+  }
+  .sale-receipt-quick {
+    padding: 14px 16px 16px;
+  }
+  .sale-receipt-actions.is-horizontal .btn {
+    flex-basis: 100%;
+  }
 }
 </style>
