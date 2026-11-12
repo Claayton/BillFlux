@@ -19,6 +19,9 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush }),
 }))
 vi.mock('@/utils/danfe', () => ({ printDanfe: vi.fn() }))
+vi.mock('@/utils/printBridge', () => ({
+  printElementWithAgent: vi.fn(async () => false),
+}))
 
 import { ElMessage } from 'element-plus'
 import PdvView from '@/views/PdvView.vue'
@@ -176,8 +179,8 @@ describe('PdvView', () => {
     )
     expect(apiMock.post).not.toHaveBeenCalledWith('/fiscal/emitir', expect.anything())
     expect(wrapper.find('.emit-fiscal-btn').exists()).toBe(false)
-    expect(wrapper.find('.sale-receipt-actions').text()).toContain('Emitir nota')
-    expect(wrapper.find('.sale-receipt-actions').text()).toContain('Nova venda')
+    expect(wrapper.find('.sale-receipt-actions').text()).toContain('Emitir NFC-e')
+    expect(wrapper.find('.sale-receipt-actions').text()).toContain('Concluir')
   })
 
   it('venda fiada exige cliente selecionado e envia customer_id', async () => {
@@ -424,7 +427,7 @@ describe('PdvView', () => {
     await flushPromises()
   }
 
-  it('recibo mostra quanto foi pago em cada forma e o troco', async () => {
+  it('recibo pós-venda mostra só as ações, sem o cupom', async () => {
     apiMock.get.mockImplementation((url) => {
       if (String(url).startsWith('/pdv/recibo')) {
         return Promise.resolve({
@@ -447,10 +450,11 @@ describe('PdvView', () => {
     await completeSale(wrapper, 21)
 
     expect(wrapper.find('.sale-receipt-modal').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Pago (Dinheiro)')
-    expect(wrapper.text()).toContain('10,00')
-    expect(wrapper.text()).toContain('Troco')
-    expect(wrapper.text()).toContain('5,00')
+    expect(wrapper.find('#sale-receipt-print').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Pago (Dinheiro)')
+    expect(wrapper.find('.sale-receipt-actions').text()).toContain('Imprimir comprovante')
+    expect(wrapper.find('.sale-receipt-actions').text()).toContain('Emitir NFC-e')
+    expect(wrapper.find('.sale-receipt-actions').text()).toContain('Concluir')
   })
 
   it('recibo: F2 fecha como nova venda sem imprimir', async () => {

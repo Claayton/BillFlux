@@ -1,6 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { api } from '@/api/client'
+import { agentPrint } from '@/utils/printBridge'
 
 // pdf.js 4 usa Promise.withResolvers (Chrome 119+). Garante compatibilidade
 // com navegadores de caixa mais antigos.
@@ -114,6 +115,25 @@ function buildPdfPrintStyle(widthMm, heightMm) {
 }
 
 async function printImages(images, widthMm, heightMm) {
+  // Primeiro tenta o agente local (sem diálogo, sem cabeçalho/rodapé).
+  const agentCss = `
+    #${PRINT_ROOT_ID} img {
+      display: block;
+      width: 100%;
+      height: auto;
+      page-break-after: always;
+      break-after: page;
+    }
+    #${PRINT_ROOT_ID} img:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+  `
+  const agentBody = `<div id="${PRINT_ROOT_ID}">${images
+    .map((src) => `<img src="${src}" alt="">`)
+    .join('')}</div>`
+  if (await agentPrint({ bodyHtml: agentBody, css: agentCss, widthMm, heightMm })) return
+
   const root = document.createElement('div')
   root.id = PRINT_ROOT_ID
   root.setAttribute('aria-hidden', 'true')
@@ -264,6 +284,11 @@ async function printHtml(html, widthMm) {
     const heightPx = root.getBoundingClientRect().height
     let heightMm = heightPx > 0 ? Math.ceil((heightPx * 25.4) / 96) + 4 : widthMm
     if (heightMm < widthMm) heightMm = widthMm
+
+    // O agente renderiza o mesmo CSS num WebView2 e manda direto pro spooler.
+    const agentCss = `${css}\n${SHADOW_BASE_CSS.replace(/:host/g, '.danfe-print-root')}`
+    const agentBody = `<div class="danfe-print-root">${body}</div>`
+    if (await agentPrint({ bodyHtml: agentBody, css: agentCss, widthMm, heightMm })) return
 
     printStyle = document.createElement('style')
     printStyle.id = PRINT_STYLE_ID

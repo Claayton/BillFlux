@@ -13,6 +13,9 @@ const { apiMock, printDanfeMock } = vi.hoisted(() => ({
 
 vi.mock('@/api/client', () => ({ api: apiMock }))
 vi.mock('@/utils/danfe', () => ({ printDanfe: printDanfeMock }))
+vi.mock('@/utils/printBridge', () => ({
+  printElementWithAgent: vi.fn(async () => false),
+}))
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }))
@@ -137,15 +140,18 @@ describe('SaleReceiptModal', () => {
   })
 
   describe('modo pós-venda', () => {
-    it('sem X, mas fecha no Esc como nova venda', async () => {
+    it('sem X, sem preview do cupom e com as três ações na horizontal', async () => {
       const wrapper = mountModal({ mode: 'post-sale' })
       await flushPromises()
 
       expect(wrapper.find('.modal-close').exists()).toBe(false)
       expect(wrapper.text()).toContain('Venda #42 finalizada')
-      expect(wrapper.find('.sale-receipt-actions').text()).toContain('Emitir nota')
-      expect(wrapper.find('.sale-receipt-actions').text()).toContain('Imprimir cupom')
-      expect(wrapper.find('.sale-receipt-actions').text()).toContain('Nova venda')
+      expect(wrapper.find('#sale-receipt-print').exists()).toBe(false)
+      expect(wrapper.find('.sale-receipt-body').exists()).toBe(false)
+      expect(wrapper.find('.sale-receipt-actions.is-horizontal').exists()).toBe(true)
+      expect(wrapper.find('.sale-receipt-actions').text()).toContain('Imprimir comprovante')
+      expect(wrapper.find('.sale-receipt-actions').text()).toContain('Emitir NFC-e')
+      expect(wrapper.find('.sale-receipt-actions').text()).toContain('Concluir')
       expect(wrapper.find('.sale-receipt-hint').text()).toContain('Esc')
 
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
@@ -178,7 +184,7 @@ describe('SaleReceiptModal', () => {
       expect(wrapper.emitted('close')).toBeUndefined()
     })
 
-    it('F3 emite a NFC-e e mostra número, série e chave', async () => {
+    it('F3 emite a NFC-e e mostra o número e a série', async () => {
       const wrapper = mountModal({ mode: 'post-sale' })
       await flushPromises()
 
@@ -188,7 +194,7 @@ describe('SaleReceiptModal', () => {
       expect(apiMock.post).toHaveBeenCalledWith('/fiscal/emitir', { order_id: 42 })
       expect(wrapper.text()).toContain('NFC-e autorizada')
       expect(wrapper.text()).toContain('251')
-      expect(wrapper.text()).toContain('41260968596191000130650010000002511000002518')
+      expect(wrapper.text()).toContain('série 1')
       expect(wrapper.find('.sale-receipt-actions .btn-primary').text()).toContain(
         'Imprimir DANFE'
       )

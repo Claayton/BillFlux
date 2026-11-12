@@ -7,6 +7,8 @@ const { apiMock } = vi.hoisted(() => ({
 vi.mock('@/api/client', () => ({ api: apiMock }))
 vi.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: {}, getDocument: vi.fn() }))
 vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: 'worker.js' }))
+// Sem agente rodando durante os testes: cai sempre no window.print.
+vi.mock('@/utils/printBridge', () => ({ agentPrint: vi.fn(async () => false) }))
 
 import { printDanfe } from '@/utils/danfe'
 

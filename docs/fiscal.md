@@ -270,6 +270,9 @@ O roteiro completo de go-live está em
 - **Vendas**: badge por venda (`Sem nota`, `Pendente`, `Autorizada`, `Cancelada`),
   ações (emitir, reenviar, cancelar nota, XML/DANFE) e banner de pendências. O
   ícone de impressão usa o **DANFE** quando a nota está autorizada; senão, o cupom.
+- **Impressão no caixa**: com o [agente de impressão](impressao-agente.md)
+  aberto no Windows, cupom/DANFE saem direto na impressora (sem diálogo e sem
+  cabeçalho/rodapé). Sem o agente, tudo continua no `window.print()`.
 
 ## 7. Checklist de homologação (Fase 2)
 
