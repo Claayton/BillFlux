@@ -5,7 +5,7 @@ defineProps({
   /** Largura do papel em mm ('58' | '80'). */
   width: { type: String, default: '80' },
   /** Nome da empresa (fallback quando não há cabeçalho). */
-  company: { type: String, default: 'BeeFlux' },
+  company: { type: String, default: '' },
   /** Linhas do cabeçalho do cupom (já quebradas). */
   headerLines: { type: Array, default: () => [] },
   /** Linhas do rodapé do cupom (já quebradas). */

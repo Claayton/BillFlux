@@ -8,6 +8,7 @@ import AppShell from '@/components/AppShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import SaleEditModal from '@/views/SaleEditModal.vue'
 import SaleReceiptModal from '@/views/SaleReceiptModal.vue'
+import { printDanfe } from '@/utils/danfe'
 
 const periods = [
   { key: 'hoje', label: 'Hoje', icon: 'fas fa-calendar-day' },
@@ -484,7 +485,26 @@ async function submit() {
   }
 }
 
-function printSale(sale) {
+function saleHasDanfe(sale) {
+  return (
+    sale.kind === 'pdv' &&
+    sale.fiscal?.status === 'autorizada' &&
+    Boolean(sale.fiscal?.has_danfe)
+  )
+}
+
+async function printSale(sale) {
+  // Nota autorizada: o documento oficial é o DANFE (PDF em formato cupom).
+  if (saleHasDanfe(sale)) {
+    try {
+      const cfg = await api.get('/settings').catch(() => ({ settings: {} }))
+      const widthMm = cfg.settings?.['receipt.width'] === '58' ? 58 : 80
+      await printDanfe(sale.fiscal.id, { widthMm })
+    } catch (error) {
+      ElMessage.error(error.message)
+    }
+    return
+  }
   receiptSale.value = sale
 }
 
@@ -873,7 +893,7 @@ onBeforeUnmount(clearEyeTimer)
                   <button
                     type="button"
                     class="icon-btn"
-                    title="Imprimir recibo"
+                    :title="saleHasDanfe(sale) ? 'Imprimir DANFE' : 'Imprimir cupom'"
                     @click="printSale(sale)"
                   >
                     <i class="fas fa-print"></i>

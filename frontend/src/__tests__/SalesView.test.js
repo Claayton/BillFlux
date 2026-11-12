@@ -30,6 +30,7 @@ vi.mock('element-plus', () => ({
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush }),
 }))
+vi.mock('@/utils/danfe', () => ({ printDanfe: vi.fn() }))
 
 import SalesView from '@/views/SalesView.vue'
 
