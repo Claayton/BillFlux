@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl } from '@/utils/format'
 import { tabLabel } from '@/utils/tabs'
+import { printElementWithAgent } from '@/utils/printBridge'
 
 const props = defineProps({
   /** Detalhe da comanda (payload de GET /tabs/<id>), com itens. */
@@ -46,10 +47,15 @@ function formatDateTime(iso) {
 /**
  * Imprime um CLONE do ticket fora do #app (mesmo mecanismo do recibo de
  * venda): no print o #app some e só o clone sai no papel.
+ * Com o agente de impressão rodando, o clone vai por HTTP e imprime direto.
  */
-function printWithClone() {
-  if (typeof window.print !== 'function') return
+async function printWithClone() {
   const el = document.getElementById('tab-print')
+  if (el && (await printElementWithAgent(el, { widthMm: Number(thermalWidth.value) }))) {
+    return
+  }
+
+  if (typeof window.print !== 'function') return
   if (!el) {
     window.print()
     return
@@ -96,16 +102,16 @@ async function bumpPrintCount() {
   }
 }
 
-function printTicket() {
+async function printTicket() {
   applyPageRule()
-  printWithClone()
+  await printWithClone()
   bumpPrintCount()
 }
 
 /** Impressão automática ao abrir o modal (opção "Imprimir comanda"). */
-function autoPrint() {
+async function autoPrint() {
   applyPageRule()
-  printWithClone()
+  await printWithClone()
   bumpPrintCount()
 }
 

@@ -13,6 +13,9 @@ const { apiMock, printDanfeMock } = vi.hoisted(() => ({
 
 vi.mock('@/api/client', () => ({ api: apiMock }))
 vi.mock('@/utils/danfe', () => ({ printDanfe: printDanfeMock }))
+vi.mock('@/utils/printBridge', () => ({
+  printElementWithAgent: vi.fn(async () => false),
+}))
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }))

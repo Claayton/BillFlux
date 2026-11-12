@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import ThermalCoupon from '@/components/ThermalCoupon.vue'
 import { printDanfe } from '@/utils/danfe'
+import { printElementWithAgent } from '@/utils/printBridge'
 
 const props = defineProps({
   sale: { type: Object, required: true },
@@ -91,14 +92,18 @@ async function load() {
 /**
  * Imprime um CLONE do cupom fora do #app: no print o #app some (display:none)
  * e só o clone é paginado — sai 1 folha do tamanho certo.
+ * Com o agente de impressão rodando, o clone vai por HTTP e imprime direto.
  */
-function printWithClone() {
-  if (typeof window.print !== 'function') return
+async function printWithClone() {
   const el = document.getElementById('sale-receipt-print')
   if (!el) {
-    window.print()
+    if (typeof window.print === 'function') window.print()
     return
   }
+
+  if (await printElementWithAgent(el, { widthMm: paperWidthMm.value })) return
+
+  if (typeof window.print !== 'function') return
   const clone = el.cloneNode(true)
   clone.classList.add('receipt-print-clone')
   document.body.appendChild(clone)
@@ -112,9 +117,9 @@ function printWithClone() {
 }
 
 /** Imprime o cupom não fiscal com os dados das configurações. */
-function printCoupon() {
+async function printCoupon() {
   applyPageRule()
-  printWithClone()
+  await printWithClone()
 }
 
 /**
@@ -181,7 +186,7 @@ async function printDocument() {
     }
     return
   }
-  printCoupon()
+  await printCoupon()
 }
 
 async function printDocumentAndClose() {
@@ -193,8 +198,8 @@ async function printDocumentAndClose() {
   }
 }
 
-function printCouponAndClose() {
-  printCoupon()
+async function printCouponAndClose() {
+  await printCoupon()
   close()
 }
 

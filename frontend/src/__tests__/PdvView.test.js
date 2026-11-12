@@ -19,6 +19,9 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush }),
 }))
 vi.mock('@/utils/danfe', () => ({ printDanfe: vi.fn() }))
+vi.mock('@/utils/printBridge', () => ({
+  printElementWithAgent: vi.fn(async () => false),
+}))
 
 import { ElMessage } from 'element-plus'
 import PdvView from '@/views/PdvView.vue'
