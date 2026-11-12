@@ -28,5 +28,12 @@ billflux_dev.db
 frontend/node_modules/
 billflux/static/app/
 
+# Agente de impressão (.NET)
+desktop/**/bin/
+desktop/**/obj/
+desktop/**/*.user
+*.exe
+*.msi
+
 # Ignore dynaconf secret files
 .secrets.*
