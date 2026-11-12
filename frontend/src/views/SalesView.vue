@@ -15,7 +15,19 @@ const periods = [
   { key: '7d', label: '7 dias', icon: 'fas fa-calendar-week' },
   { key: 'mes', label: 'Este mês', icon: 'fas fa-calendar' },
   { key: 'mes_anterior', label: 'Mês passado', icon: 'fas fa-calendar-minus' },
+  { key: 'custom', label: 'Personalizado', icon: 'fas fa-calendar-days' },
 ]
+
+/** Data local no formato YYYY-MM-DD (sem deslocamento de fuso). */
+function isoDate(dateObj) {
+  const y = dateObj.getFullYear()
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0')
+  const d = String(dateObj.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+const TODAY_ISO = isoDate(new Date())
+const MONTH_START_ISO = isoDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
 
 /** Segundos que os valores do topo ficam visíveis antes de esconder sozinho. */
 const EYE_TIMEOUT_MS = 10000
@@ -26,6 +38,9 @@ const saleFilter = ref('todas')
 const onlyCaixa = ref(false)
 /** Usuário escolheu o filtro na mão → o padrão não deve sobrescrever. */
 const filterTouched = ref(false)
+const customStart = ref(MONTH_START_ISO)
+const customEnd = ref(TODAY_ISO)
+const customPanelOpen = ref(false)
 const search = ref('')
 const showAvulsa = ref(false)
 const data = ref(null)
@@ -81,9 +96,44 @@ const periodDays = computed(() => {
   if (active.value === 'hoje') return 1
   if (active.value === '7d') return 7
   if (active.value === 'mes') return now.getDate()
+  if (active.value === 'custom') {
+    const start = parseIso(customStart.value)
+    const end = parseIso(customEnd.value)
+    if (!start || !end || end < start) return 1
+    return Math.round((end - start) / 86400000) + 1
+  }
   const prev = new Date(now.getFullYear(), now.getMonth(), 0)
   return prev.getDate()
 })
+
+/** Intervalo YYYY-MM-DD de um período. `null` = sem filtro de data. */
+function periodRange(key) {
+  const now = new Date()
+  if (key === 'hoje') return { start: TODAY_ISO, end: TODAY_ISO }
+  if (key === '7d') {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6)
+    return { start: isoDate(start), end: TODAY_ISO }
+  }
+  if (key === 'mes') return { start: MONTH_START_ISO, end: TODAY_ISO }
+  if (key === 'mes_anterior') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const end = new Date(now.getFullYear(), now.getMonth(), 0)
+    return { start: isoDate(start), end: isoDate(end) }
+  }
+  if (key === 'custom' && customStart.value && customEnd.value) {
+    const start = customStart.value <= customEnd.value ? customStart.value : customEnd.value
+    const end = customStart.value <= customEnd.value ? customEnd.value : customStart.value
+    return { start, end }
+  }
+  return null
+}
+
+function parseIso(value) {
+  if (!value) return null
+  const [y, m, d] = String(value).split('-').map(Number)
+  if (!y || !m || !d) return null
+  return new Date(y, m - 1, d)
+}
 
 function brNum(value, digits = 1) {
   return Number(value).toFixed(digits).replace('.', ',')
@@ -235,6 +285,17 @@ async function load() {
     params.set('per_page', String(perPage.value))
     if (saleFilter.value !== 'todas') params.set('status', saleFilter.value)
     if (search.value.trim()) params.set('q', search.value.trim())
+    if (onlyCaixa.value) {
+      params.set('caixa', '1')
+    } else if (filterTouched.value) {
+      // Só filtra o histórico quando o usuário escolheu um período (o padrão
+      // continua mostrando tudo, com os cards no período de referência).
+      const range = periodRange(active.value)
+      if (range) {
+        params.set('start', range.start)
+        params.set('end', range.end)
+      }
+    }
     data.value = await api.get('/sales?' + params.toString())
     page.value = data.value?.pagination?.page || 1
     if (!filterTouched.value) applyDefault()
@@ -602,6 +663,27 @@ function selectPeriod(key) {
   filterTouched.value = true
   onlyCaixa.value = false
   active.value = key
+  customPanelOpen.value = key === 'custom'
+  page.value = 1
+  load()
+}
+
+/** Aplica o intervalo escolhido no painel "Personalizado". */
+function applyCustomRange() {
+  if (!customStart.value || !customEnd.value) {
+    ElMessage.warning('Informe a data inicial e a data final.')
+    return
+  }
+  if (customStart.value > customEnd.value) {
+    ElMessage.warning('A data inicial precisa ser anterior à data final.')
+    return
+  }
+  filterTouched.value = true
+  onlyCaixa.value = false
+  active.value = 'custom'
+  customPanelOpen.value = true
+  page.value = 1
+  load()
 }
 
 function toggleCaixa() {
@@ -609,6 +691,9 @@ function toggleCaixa() {
   filterTouched.value = true
   onlyCaixa.value = !onlyCaixa.value
   active.value = onlyCaixa.value ? '' : 'hoje'
+  customPanelOpen.value = false
+  page.value = 1
+  load()
 }
 
 watch(
@@ -672,6 +757,29 @@ onBeforeUnmount(clearEyeTimer)
         >
           <i :class="showValues ? 'fas fa-eye' : 'fas fa-eye-slash'"></i>
           {{ showValues ? 'Ocultar valores' : 'Mostrar valores' }}
+        </button>
+      </div>
+
+      <!-- Período personalizado: filtra cards e histórico -->
+      <div
+        v-if="customPanelOpen"
+        class="custom-range"
+        role="group"
+        aria-label="Período personalizado"
+      >
+        <label class="custom-range-field">
+          <span>De</span>
+          <input v-model="customStart" type="date" :max="customEnd || undefined" />
+        </label>
+        <span class="custom-range-sep" aria-hidden="true">
+          <i class="fas fa-arrow-right-long"></i>
+        </span>
+        <label class="custom-range-field">
+          <span>Até</span>
+          <input v-model="customEnd" type="date" :min="customStart || undefined" />
+        </label>
+        <button type="button" class="btn btn-primary btn-sm" @click="applyCustomRange">
+          <i class="fas fa-filter"></i> Aplicar período
         </button>
       </div>
 
@@ -853,8 +961,10 @@ onBeforeUnmount(clearEyeTimer)
                     :title="sale.fiscal?.error_message || 'Abrir situação fiscal'"
                     @click="openFiscal(sale)"
                   >
-                    <i class="fas" :class="fiscalIcon(sale)"></i>
-                    {{ fiscalLabel(sale) }}
+                    <span class="fiscal-badge-icon">
+                      <i class="fas" :class="fiscalIcon(sale)"></i>
+                    </span>
+                    <span class="fiscal-badge-label">{{ fiscalLabel(sale) }}</span>
                   </button>
                   <span v-else class="sale-fiscal-empty">—</span>
                 </span>
@@ -1018,8 +1128,10 @@ onBeforeUnmount(clearEyeTimer)
         <div class="fiscal-modal-body">
           <div class="fiscal-modal-head">
             <span class="fiscal-badge" :class="fiscalBadgeClass(fiscalSale)">
-              <i class="fas" :class="fiscalIcon(fiscalSale)"></i>
-              {{ fiscalLabel(fiscalSale) }}
+              <span class="fiscal-badge-icon">
+                <i class="fas" :class="fiscalIcon(fiscalSale)"></i>
+              </span>
+              <span class="fiscal-badge-label">{{ fiscalLabel(fiscalSale) }}</span>
             </span>
             <span class="fiscal-modal-sale">
               Venda #{{ fiscalSale.id }} · {{ brl(fiscalSale.total) }}
@@ -1183,48 +1295,105 @@ onBeforeUnmount(clearEyeTimer)
   justify-content: center;
 }
 .fiscal-badge {
+  --badge-fg: #475569;
+  --badge-ring: rgba(148, 163, 184, 0.45);
+  --badge-icon-bg: linear-gradient(135deg, #cbd5e1, #94a3b8);
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 9px;
-  border: 1px solid transparent;
+  gap: 7px;
+  padding: 3px 11px 3px 3px;
+  border: 1px solid var(--badge-ring);
   border-radius: 999px;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  color: var(--badge-fg);
   font-family: inherit;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 11.5px;
+  font-weight: 750;
+  letter-spacing: 0.15px;
   line-height: 1.2;
   white-space: nowrap;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+.fiscal-badge-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--badge-icon-bg);
+  color: #fff;
+  font-size: 9.5px;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.fiscal-badge-icon i {
+  line-height: 1;
+}
+.fiscal-badge-label {
+  padding-right: 1px;
 }
 .sale-fiscal-btn {
   cursor: pointer;
-  transition: filter 150ms ease, transform 100ms ease;
+  transition:
+    transform 120ms ease,
+    box-shadow 150ms ease,
+    filter 150ms ease;
 }
 .sale-fiscal-btn:hover {
-  filter: brightness(0.96);
+  transform: translateY(-1px);
+  box-shadow:
+    0 4px 10px -2px var(--badge-ring),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  filter: saturate(1.05);
 }
 .sale-fiscal-btn:active {
-  transform: translateY(1px);
+  transform: translateY(0);
 }
-.fiscal-badge.is-none,
+.sale-fiscal-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.fiscal-badge.is-none {
+  --badge-fg: #64748b;
+  --badge-ring: #dbe3ec;
+  --badge-icon-bg: linear-gradient(135deg, #cbd5e1, #94a3b8);
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+}
 .fiscal-badge.is-cancelled {
-  background: #f3f4f6;
-  border-color: #e5e7eb;
-  color: #6b7280;
+  --badge-fg: #6b7280;
+  --badge-ring: #e5e7eb;
+  --badge-icon-bg: linear-gradient(135deg, #d1d5db, #9ca3af);
+  background: linear-gradient(180deg, #fafafa, #f3f4f6);
 }
 .fiscal-badge.is-pending {
-  background: #fffbeb;
-  border-color: #fcd34d;
-  color: #b45309;
+  --badge-fg: #92400e;
+  --badge-ring: #fde68a;
+  --badge-icon-bg: linear-gradient(135deg, #fbbf24, #f59e0b);
+  background: linear-gradient(180deg, #fffdf5, #fef3c7);
+  box-shadow:
+    0 1px 2px rgba(180, 83, 9, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 .fiscal-badge.is-authorized {
-  background: #ecfdf5;
-  border-color: #a7f3d0;
-  color: #047857;
+  --badge-fg: #047857;
+  --badge-ring: #a7f3d0;
+  --badge-icon-bg: linear-gradient(135deg, #34d399, #059669);
+  background: linear-gradient(180deg, #f3fef9, #d1fae5);
+  box-shadow:
+    0 1px 2px rgba(4, 120, 87, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 .fiscal-badge.is-rejected {
-  background: #fef2f2;
-  border-color: #fecaca;
-  color: #b91c1c;
+  --badge-fg: #b91c1c;
+  --badge-ring: #fecaca;
+  --badge-icon-bg: linear-gradient(135deg, #f87171, #dc2626);
+  background: linear-gradient(180deg, #fff7f7, #fee2e2);
+  box-shadow:
+    0 1px 2px rgba(185, 28, 28, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 .sale-fiscal-empty {
   color: var(--text-muted);

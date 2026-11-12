@@ -1,5 +1,6 @@
 """Tests for the dashboard and sales JSON API (SPA)."""
 
+from datetime import date
 from decimal import Decimal
 
 from billflux.infra.repository.payment_method_repository import (
@@ -96,6 +97,38 @@ def test_sales_list_combines_manual_and_pdv(logged_client):
     assert "manual" in kinds
     assert "pdv" in kinds
     assert set(data["periods"]) == {"hoje", "7d", "mes", "mes_anterior"}
+
+
+def test_sales_list_filters_by_custom_range(logged_client):
+    """start/end filtram o histórico e geram o resumo 'custom'."""
+
+    SaleRepository().insert_sale(date(2026, 8, 1), Decimal("10.00"))
+    SaleRepository().insert_sale(date(2026, 8, 15), Decimal("20.00"))
+    SaleRepository().insert_sale(date(2026, 9, 2), Decimal("30.00"))
+
+    data = logged_client.get(
+        "/api/sales?start=2026-08-01&end=2026-08-31"
+    ).get_json()
+
+    dates = {sale["date"] for sale in data["sales"]}
+    assert dates == {"2026-08-01", "2026-08-15"}
+    assert data["range"] == {"start": "2026-08-01", "end": "2026-08-31"}
+    assert data["periods"]["custom"] == {
+        "total": 30.0,
+        "count": 2,
+        "days": 2,
+        "avg": 15.0,
+    }
+    assert data["status_counts"]["todas"] == 2
+
+
+def test_sales_list_ignores_invalid_range(logged_client):
+    """Datas inválidas não quebram a listagem nem criam período custom."""
+
+    data = logged_client.get("/api/sales?start=abc&end=2026-13-99").get_json()
+
+    assert data["range"] == {"start": None, "end": None}
+    assert "custom" not in data["periods"]
 
 
 def test_sales_create_and_upsert(logged_client):

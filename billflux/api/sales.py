@@ -228,7 +228,26 @@ def _combine_sales(
     return sorted(combined, key=lambda item: item["date"], reverse=True)
 
 
-def _sales_payload(page=1, per_page=20, status=None, q=None):
+def _parse_iso_date(raw):
+    """Converte 'YYYY-MM-DD' em date; inválido/ausente vira None."""
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _sales_payload(
+    page=1,
+    per_page=20,
+    status=None,
+    q=None,
+    start=None,
+    end=None,
+    only_caixa=False,
+):
     """Dados da página de vendas com paginação server-side do histórico."""
     list_sales = SaleRepository().get_sales()
     orders = OrderRepository().get_orders()
@@ -247,6 +266,18 @@ def _sales_payload(page=1, per_page=20, status=None, q=None):
         key: {**p, "total": float(p["total"]), "avg": float(p["avg"])}
         for key, p in _build_periods(list_sales, orders, today).items()
     }
+    if start and end:
+        if start > end:
+            start, end = end, start
+        custom = _build_range_summary(list_sales, orders, start, end)
+        periods["custom"] = {
+            "total": float(custom["total"]),
+            "count": custom["count"],
+            "days": custom["days"],
+            "avg": float(custom["avg"]),
+        }
+    elif start or end:
+        start = end = None
 
     payment_names = {
         method.id: method.name for method in PaymentMethodRepository().get_methods()
@@ -262,10 +293,18 @@ def _sales_payload(page=1, per_page=20, status=None, q=None):
         with_details=False,
     )
 
+    # Base da tela: período escolhido (ou caixa atual). Os presets do topo
+    # mandam 'start'/'end'; o resumo de cada preset continua vindo de periods.
+    base = all_sales
+    if only_caixa:
+        base = [s for s in base if s["in_caixa"]]
+    if start and end:
+        base = [s for s in base if start <= s["date"] <= end]
+
     status_counts = {
-        "todas": len(all_sales),
-        "ativas": sum(1 for s in all_sales if not s["cancelled"]),
-        "canceladas": sum(1 for s in all_sales if s["cancelled"]),
+        "todas": len(base),
+        "ativas": sum(1 for s in base if not s["cancelled"]),
+        "canceladas": sum(1 for s in base if s["cancelled"]),
     }
     in_caixa = [s for s in all_sales if s["in_caixa"] and not s["cancelled"]]
     cx_total = sum(float(s["total"]) for s in in_caixa)
@@ -278,7 +317,7 @@ def _sales_payload(page=1, per_page=20, status=None, q=None):
     }
 
     # Filtros (status + busca por id/observação/forma de pagamento).
-    filtered = all_sales
+    filtered = base
     if status in ("ativas", "canceladas"):
         want_cancelled = status == "canceladas"
         filtered = [s for s in filtered if bool(s["cancelled"]) == want_cancelled]
@@ -309,8 +348,8 @@ def _sales_payload(page=1, per_page=20, status=None, q=None):
     except (TypeError, ValueError):
         page = 1
     page = min(max(page, 1), pages)
-    start = (page - 1) * per_page
-    page_sales = filtered[start : start + per_page]
+    offset = (page - 1) * per_page
+    page_sales = filtered[offset : offset + per_page]
 
     # Itens só das linhas da página atual.
     orders_by_id = {o.id: o for o in orders}
@@ -334,6 +373,10 @@ def _sales_payload(page=1, per_page=20, status=None, q=None):
         },
         "caixa_sessions": sessions,
         "periods": periods,
+        "range": {
+            "start": start.isoformat() if start else None,
+            "end": end.isoformat() if end else None,
+        },
         "caixa_summary": caixa_summary,
         "status_counts": status_counts,
         "pagination": {
@@ -384,6 +427,9 @@ def sales_list():
             per_page=request.args.get("per_page", default=20, type=int) or 20,
             status=(request.args.get("status") or "").strip() or None,
             q=(request.args.get("q") or "").strip() or None,
+            start=_parse_iso_date(request.args.get("start")),
+            end=_parse_iso_date(request.args.get("end")),
+            only_caixa=(request.args.get("caixa") or "") in ("1", "true"),
         )
     )
 
