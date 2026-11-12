@@ -12,16 +12,18 @@ afterEach(() => {
   document.querySelectorAll('.row-menu-panel').forEach((el) => el.remove())
 })
 
-const { apiMock } = vi.hoisted(() => ({
+const { apiMock, routeMock } = vi.hoisted(() => ({
   apiMock: {
     get: vi.fn(),
     post: vi.fn(),
     put: vi.fn(),
     del: vi.fn(),
   },
+  routeMock: { query: {} },
 }))
 
 vi.mock('@/api/client', () => ({ api: apiMock }))
+vi.mock('vue-router', () => ({ useRoute: () => routeMock }))
 vi.mock('@/components/AppShell.vue', () => ({
   default: { template: '<div><slot /></div>' },
 }))
@@ -254,6 +256,56 @@ describe('ProductsView', () => {
     )
   })
 
+  it('edição pré-preenche o estoque atual e não envia quando ele não muda', async () => {
+    apiMock.put.mockResolvedValue({ products })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await openEdit(wrapper)
+    await flushPromises()
+
+    expect(wrapper.find('#product_stock').element.value).toBe('9')
+
+    await wrapper.find('#product_min_stock').setValue('4')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    const payload = apiMock.put.mock.calls.at(-1)[1]
+    expect(payload).not.toHaveProperty('stock_quantity')
+  })
+
+  it('edição envia o estoque apenas quando o valor muda', async () => {
+    apiMock.put.mockResolvedValue({ products })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await openEdit(wrapper)
+    await flushPromises()
+
+    await wrapper.find('#product_stock').setValue('15')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    const payload = apiMock.put.mock.calls.at(-1)[1]
+    expect(payload.stock_quantity).toBe(15)
+  })
+
+  it('edição com estoque em branco mantém o estoque atual', async () => {
+    apiMock.put.mockResolvedValue({ products })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await openEdit(wrapper)
+    await flushPromises()
+
+    await wrapper.find('#product_stock').setValue('')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    const payload = apiMock.put.mock.calls.at(-1)[1]
+    expect(payload).not.toHaveProperty('stock_quantity')
+  })
+
   it('mostra pendência fiscal, filtra e envia os campos fiscais no salvar', async () => {
     apiMock.put.mockResolvedValue({ products })
     const wrapper = mountView()
@@ -427,7 +479,7 @@ describe('ProductsView — exportação do catálogo fiscal', () => {
   function exportButton(wrapper) {
     return wrapper
       .findAll('button')
-      .find((button) => button.text().includes('Exportar catálogo fiscal'))
+      .find((button) => button.text().includes('Exportar Excel'))
   }
 
   beforeEach(() => {
@@ -469,7 +521,7 @@ describe('ProductsView — exportação do catálogo fiscal', () => {
     expect(anchor.download).toBe('catalogo-fiscal-2026-11-11.xlsx')
     expect(ElMessage.success).toHaveBeenCalled()
     // volta ao estado normal depois do download
-    expect(exportButton(wrapper).text()).toContain('Exportar catálogo fiscal')
+    expect(exportButton(wrapper).text()).toContain('Exportar Excel')
   })
 
   it('mostra mensagem clara quando a exportação falha', async () => {
