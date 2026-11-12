@@ -12,7 +12,6 @@ const sidebarOpen = ref(false)
 const GROUPS_KEY = 'billflux.sidebar.groups'
 
 const nav = [
-  { kind: 'link', name: 'home', label: 'Visão geral', icon: 'fas fa-th-large', to: '/home' },
   { kind: 'link', name: 'sales', label: 'Vendas', icon: 'fas fa-cash-register', to: '/sales' },
   { kind: 'link', name: 'caixa', label: 'Caixa', icon: 'fas fa-money-bill-wave', to: '/caixa' },
   {
@@ -81,6 +80,13 @@ const nav = [
         active: () => route.name === 'config' && route.query.tab === 'fiscal',
       },
     ],
+  },
+  {
+    kind: 'link',
+    name: 'home',
+    label: 'Visão geral',
+    icon: 'fas fa-th-large',
+    to: '/home',
   },
   {
     kind: 'link',
