@@ -2,33 +2,62 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
-import { brl } from '@/utils/format'
 import ThermalCoupon from '@/components/ThermalCoupon.vue'
+import { printDanfe } from '@/utils/danfe'
+import { printElementWithAgent } from '@/utils/printBridge'
 
 const props = defineProps({
   sale: { type: Object, required: true },
+  /**
+   * 'post-sale': modal pós-venda do PDV (emitir, imprimir cupom ou nova venda);
+   * Esc fecha como "nova venda". 'reprint': reimpressão em Vendas.
+   */
+  mode: { type: String, default: 'reprint' },
 })
 const emit = defineEmits(['close'])
 
 const order = ref(null)
 const loading = ref(true)
 const settings = ref({})
-const view = ref('full')
-const autoPrinted = ref(false)
+const fiscalDocument = ref(null)
+const fiscalMessage = ref('')
+const fiscalBusy = ref(false)
+const printing = ref(false)
 let pageStyleEl = null
-let autoPrintTimer = null
 
-/** Largura térmica ativa ('58' | '80') ou null (modo recibo clássico). */
-const thermalWidth = computed(() => {
-  const w = settings.value['receipt.width']
-  return w === '58' || w === '80' ? w : null
+const isPostSale = computed(() => props.mode === 'post-sale')
+
+/** Largura térmica configurada; sem configuração assume 80 mm (cupom). */
+const thermalWidth = computed(() => (settings.value['receipt.width'] === '58' ? '58' : '80'))
+const paperWidthMm = computed(() => Number(thermalWidth.value))
+
+const fiscal = computed(() => fiscalDocument.value || props.sale.fiscal || null)
+const isAuthorized = computed(() => fiscal.value?.status === 'autorizada')
+const canPrintDanfe = computed(
+  () => isAuthorized.value && Boolean(fiscal.value?.has_danfe) && Boolean(fiscal.value?.id)
+)
+const hasFiscalError = computed(
+  () => Boolean(fiscalMessage.value) || ['rejeitada', 'denegada'].includes(fiscal.value?.status)
+)
+const printLabel = computed(() => (canPrintDanfe.value ? 'Imprimir DANFE' : 'Imprimir cupom'))
+const needsRetry = computed(() => Boolean(fiscal.value) && !isAuthorized.value)
+const fiscalBadge = computed(() => {
+  if (isAuthorized.value) return { label: 'NFC-e autorizada', icon: 'fa-circle-check', tone: 'ok' }
+  if (fiscal.value?.status === 'cancelada') {
+    return { label: 'Nota cancelada', icon: 'fa-ban', tone: 'muted' }
+  }
+  if (hasFiscalError.value) {
+    return { label: 'NFC-e não autorizada', icon: 'fa-triangle-exclamation', tone: 'error' }
+  }
+  if (fiscal.value?.status) {
+    return { label: 'NFC-e pendente', icon: 'fa-clock', tone: 'warn' }
+  }
+  return null
 })
-const showToggle = computed(() => thermalWidth.value !== null)
-const autoPrintEnabled = computed(() => settings.value['pdv.auto_print'] === 'true')
 
 const headerLines = computed(() => splitLines(settings.value['receipt.header']))
 const footerLines = computed(() => splitLines(settings.value['receipt.footer']))
-const companyLine = computed(() => settings.value['company.name'] || 'BeeFlux')
+const companyLine = computed(() => settings.value['company.name'] || '')
 const companyCnpj = computed(() => settings.value['company.cnpj'] || '')
 const companyAddress = computed(() => settings.value['company.address'] || '')
 const companyPhone = computed(() => settings.value['company.phone'] || '')
@@ -37,19 +66,6 @@ const isOn = (key) => settings.value[key] === 'true'
 
 function splitLines(text) {
   return (text || '').split('\n').map((l) => l.trim()).filter(Boolean)
-}
-
-function formatDateTime(iso) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 async function load() {
@@ -64,33 +80,30 @@ async function load() {
     ])
     order.value = data.order
     settings.value = cfg.settings || {}
-    if (thermalWidth.value) view.value = 'thermal'
   } catch (error) {
     ElMessage.error(error.message)
   } finally {
     loading.value = false
   }
-  // Mede o recibo SÓ depois que ele existe no DOM (loading já saiu).
   await nextTick()
   applyPageRule()
-  if (autoPrintEnabled.value && order.value && !autoPrinted.value) {
-    autoPrinted.value = true
-    autoPrintTimer = setTimeout(autoPrint, 250)
-  }
 }
 
 /**
- * Imprime um CLONE do recibo fora do #app: no print o #app some (display:none)
- * e só o clone é paginado — sai 1 folha do tamanho certo, sem cortes,
- * sem papel comprido e sem duplicar.
+ * Imprime um CLONE do cupom fora do #app: no print o #app some (display:none)
+ * e só o clone é paginado — sai 1 folha do tamanho certo.
+ * Com o agente de impressão rodando, o clone vai por HTTP e imprime direto.
  */
-function printWithClone() {
-  if (typeof window.print !== 'function') return
+async function printWithClone() {
   const el = document.getElementById('sale-receipt-print')
   if (!el) {
-    window.print()
+    if (typeof window.print === 'function') window.print()
     return
   }
+
+  if (await printElementWithAgent(el, { widthMm: paperWidthMm.value })) return
+
+  if (typeof window.print !== 'function') return
   const clone = el.cloneNode(true)
   clone.classList.add('receipt-print-clone')
   document.body.appendChild(clone)
@@ -103,17 +116,10 @@ function printWithClone() {
   }
 }
 
-function printReceipt() {
+/** Imprime o cupom não fiscal com os dados das configurações. */
+async function printCoupon() {
   applyPageRule()
-  // window.print() bloqueia até a caixa de impressão fechar; só então o modal fecha.
-  printWithClone()
-  emit('close')
-}
-
-/** Impressão automática pós-venda: não fecha o modal (dá pra reimprimir). */
-function autoPrint() {
-  applyPageRule()
-  printWithClone()
+  await printWithClone()
 }
 
 /**
@@ -122,7 +128,6 @@ function autoPrint() {
  */
 function applyPageRule() {
   removePageRule()
-  if (!thermalWidth.value || view.value !== 'thermal') return
   const el = document.getElementById('sale-receipt-print')
   const heightPx = el ? el.getBoundingClientRect().height : 0
   const w = thermalWidth.value
@@ -142,18 +147,117 @@ function removePageRule() {
   }
 }
 
-// F2 imprime, Esc fecha.
-function onKeydown(event) {
-  if (event.key === 'F2') {
-    event.preventDefault()
-    printReceipt()
-  } else if (event.key === 'Escape') {
-    event.preventDefault()
-    emit('close')
+/** Emite a NFC-e da venda já concluída (nunca desfaz a venda). */
+async function emitirNota() {
+  if (fiscalBusy.value) return
+  fiscalBusy.value = true
+  fiscalMessage.value = ''
+  try {
+    const result = await api.post('/fiscal/emitir', { order_id: props.sale.id })
+    fiscalDocument.value = result.document || null
+    if (result.ok) {
+      const number = result.document?.number ? ` (nº ${result.document.number})` : ''
+      ElMessage.success(`NFC-e autorizada${number}.`)
+    } else {
+      fiscalMessage.value =
+        result.message || 'A SEFAZ não autorizou a nota. Confira e tente novamente.'
+      ElMessage.warning('NFC-e não autorizada. Veja o motivo no modal.')
+    }
+  } catch (error) {
+    fiscalMessage.value = error.message
+    ElMessage.error(error.message)
+  } finally {
+    fiscalBusy.value = false
   }
 }
 
-watch([thermalWidth, view], async () => {
+/** Imprime o DANFE (quando autorizada) ou o cupom não fiscal. */
+async function printDocument() {
+  if (printing.value) return
+  if (canPrintDanfe.value) {
+    printing.value = true
+    try {
+      await printDanfe(fiscal.value.id, { widthMm: paperWidthMm.value })
+    } catch (error) {
+      ElMessage.error(error.message)
+      throw error
+    } finally {
+      printing.value = false
+    }
+    return
+  }
+  await printCoupon()
+}
+
+async function printDocumentAndClose() {
+  try {
+    await printDocument()
+    close()
+  } catch {
+    /* o erro já foi avisado; mantém o modal aberto */
+  }
+}
+
+async function printCouponAndClose() {
+  if (printing.value) return
+  printing.value = true
+  try {
+    await printCoupon()
+  } finally {
+    printing.value = false
+  }
+  close()
+}
+
+function close() {
+  emit('close')
+}
+
+// P imprime, F3 emite (pós-venda), F2 nova venda e Esc fecha o modal.
+function onKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    close()
+    return
+  }
+  if (event.key === 'p' || event.key === 'P') {
+    // Não sequestra o "p" de quem está digitando num campo (busca do PDV).
+    const tag = event.target?.tagName
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || event.target?.isContentEditable) {
+      return
+    }
+    if (event.repeat) return
+    event.preventDefault()
+    if (printing.value || loading.value || !order.value) return
+    if (isPostSale.value) {
+      printCouponAndClose()
+    } else {
+      printDocumentAndClose()
+    }
+    return
+  }
+  if (isPostSale.value) {
+    if (event.key === 'F3') {
+      event.preventDefault()
+      if (printing.value || fiscalBusy.value || loading.value || !order.value) return
+      if (canPrintDanfe.value) {
+        printDocumentAndClose()
+      } else if (!isAuthorized.value) {
+        emitirNota()
+      }
+    } else if (event.key === 'F2') {
+      event.preventDefault()
+      close()
+    }
+    return
+  }
+  if (event.key === 'F2') {
+    event.preventDefault()
+    printDocumentAndClose()
+  }
+}
+
+watch(thermalWidth, async () => {
   await nextTick()
   applyPageRule()
 })
@@ -166,45 +270,59 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown)
   removePageRule()
-  if (autoPrintTimer) clearTimeout(autoPrintTimer)
 })
 </script>
 
 <template>
   <div class="modal is-open">
-    <div class="modal-content sale-receipt-modal">
+    <div class="modal-content sale-receipt-modal" :class="{ 'is-post-sale': isPostSale }">
       <div class="modal-header">
-        <h2>Recibo #{{ sale.id }}</h2>
-        <button type="button" class="modal-close" aria-label="Fechar" @click="emit('close')">&times;</button>
+        <h2>
+          {{ isPostSale ? `Venda #${sale.id} finalizada` : `Cupom #${sale.id}` }}
+        </h2>
+        <button
+          v-if="!isPostSale"
+          type="button"
+          class="modal-close"
+          aria-label="Fechar"
+          @click="close"
+        >
+          &times;
+        </button>
       </div>
 
-      <div class="sale-receipt-body">
-        <div v-if="loading" class="muted">Carregando recibo…</div>
+      <div v-if="!isPostSale" class="sale-receipt-body">
+        <div v-if="loading" class="muted">Carregando…</div>
 
         <template v-else-if="order">
-          <!-- Troca cupom térmico x recibo completo -->
-          <div v-if="showToggle" class="filter-segmented receipt-view-toggle no-print" role="group" aria-label="Formato de impressão">
-            <button
-              type="button"
-              :class="{ 'is-active': view === 'thermal' }"
-              @click="view = 'thermal'"
-            >
-              <i class="fas fa-receipt"></i> Cupom {{ thermalWidth }} mm
-            </button>
-            <button
-              type="button"
-              :class="{ 'is-active': view === 'full' }"
-              @click="view = 'full'"
-            >
-              <i class="fas fa-file-alt"></i> Recibo
-            </button>
+          <div v-if="fiscalBadge" class="fiscal-result" :class="`is-${fiscalBadge.tone}`">
+            <div class="fiscal-result-title">
+              <i class="fas" :class="fiscalBadge.icon"></i> {{ fiscalBadge.label }}
+            </div>
+
+            <template v-if="isAuthorized">
+              <div class="fiscal-result-grid">
+                <span>Número</span>
+                <strong>{{ fiscal.number || '—' }}</strong>
+                <span>Série</span>
+                <strong>{{ fiscal.series || '—' }}</strong>
+                <template v-if="fiscal.protocol">
+                  <span>Protocolo</span>
+                  <strong>{{ fiscal.protocol }}</strong>
+                </template>
+                <template v-if="fiscal.access_key">
+                  <span>Chave</span>
+                  <strong class="fiscal-key">{{ fiscal.access_key }}</strong>
+                </template>
+              </div>
+            </template>
+
+            <p v-else-if="fiscalMessage" class="fiscal-result-message">{{ fiscalMessage }}</p>
           </div>
 
-          <!-- Cupom térmico 58/80 mm -->
           <ThermalCoupon
-            v-if="view === 'thermal'"
             id="sale-receipt-print"
-            :width="thermalWidth || '80'"
+            :width="thermalWidth"
             :company="companyLine"
             :header-lines="headerLines"
             :footer-lines="footerLines"
@@ -218,82 +336,99 @@ onBeforeUnmount(() => {
             :show-customer="isOn('receipt.show_customer')"
             :message="receiptMessage"
           />
-
-          <!-- Recibo completo (formato atual) -->
-          <div v-else class="receipt" id="sale-receipt-print">
-            <div class="receipt-head">
-              <strong>BeeFlux</strong>
-              <span>Recibo de venda</span>
-            </div>
-
-            <div class="receipt-meta">
-              <span>Venda <strong>#{{ order.order_id }}</strong></span>
-              <span>{{ formatDateTime(order.date) }}</span>
-            </div>
-
-            <table class="receipt-table">
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th class="r-qty">Qtd</th>
-                  <th class="r-amount">Preço</th>
-                  <th class="r-amount">Subtotal</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(item, i) in order.items" :key="i">
-                  <td>{{ item.name }}</td>
-                  <td class="r-qty">{{ item.quantity }}</td>
-                  <td class="r-amount">{{ brl(item.unit_price) }}</td>
-                  <td class="r-amount">{{ brl(item.subtotal) }}</td>
-                </tr>
-              </tbody>
-            </table>
-
-            <div v-if="order.discount > 0" class="receipt-discount">
-              <span>Desconto</span>
-              <strong>&minus;{{ brl(order.discount) }}</strong>
-            </div>
-
-            <div class="receipt-total">
-              <span>TOTAL</span>
-              <strong>{{ brl(order.total) }}</strong>
-            </div>
-
-            <template v-if="order.payments && order.payments.length">
-              <div v-for="(payment, i) in order.payments" :key="'pay' + i" class="receipt-payment">
-                <span>Pago ({{ payment.name }})</span>
-                <strong>{{ brl(payment.amount) }}</strong>
-              </div>
-              <div v-if="order.troco > 0" class="receipt-payment receipt-troco">
-                <span>Troco</span>
-                <strong>{{ brl(order.troco) }}</strong>
-              </div>
-            </template>
-            <div v-else class="receipt-payment">
-              <span>Forma de pagamento</span>
-              <strong>{{ order.payment_method }}</strong>
-            </div>
-
-            <div v-if="order.obs" class="receipt-obs">
-              <span>Observações</span>
-              <p>{{ order.obs }}</p>
-            </div>
-
-            <div class="receipt-foot">
-              <span>Obrigado pela preferência!</span>
-              <span>BeeFlux — Clayton Garcia da Silva, Br.</span>
-            </div>
-          </div>
         </template>
 
-        <div v-else class="muted">Recibo não encontrado.</div>
+        <div v-else class="muted">Cupom não encontrado.</div>
       </div>
 
-      <div class="modal-footer">
-        <button type="button" class="btn btn-ghost modal-cancel" @click="emit('close')">Fechar <kbd>Esc</kbd></button>
-        <button type="button" class="btn btn-primary" :disabled="loading || !order" @click="printReceipt">
-          <i class="fas fa-print"></i> Imprimir recibo <kbd>F2</kbd>
+      <!-- Pós-venda: ações rápidas, sem preview do cupom -->
+      <div v-if="isPostSale" class="sale-receipt-quick">
+        <div v-if="loading" class="muted">Carregando…</div>
+
+        <template v-else>
+          <div
+            v-if="fiscalBadge"
+            class="post-sale-status"
+            :class="`is-${fiscalBadge.tone}`"
+          >
+            <i class="fas" :class="fiscalBadge.icon"></i>
+            <strong>{{ fiscalBadge.label }}</strong>
+            <span v-if="isAuthorized && fiscal.number">
+              nº {{ fiscal.number }} · série {{ fiscal.series || '—' }}
+            </span>
+          </div>
+
+          <p v-if="fiscalMessage" class="post-sale-message">{{ fiscalMessage }}</p>
+          <p v-if="!order" class="muted">Cupom não encontrado.</p>
+
+          <div class="sale-receipt-actions is-horizontal">
+            <button
+              type="button"
+              class="btn btn-outline"
+              :disabled="printing || loading || !order"
+              @click="printCouponAndClose"
+            >
+              <i :class="['fas', printing ? 'fa-circle-notch fa-spin' : 'fa-receipt']"></i>
+              {{ printing ? 'Preparando…' : 'Imprimir comprovante' }} <kbd>P</kbd>
+            </button>
+
+            <button
+              v-if="canPrintDanfe"
+              type="button"
+              class="btn btn-primary"
+              :disabled="printing"
+              @click="printDocumentAndClose"
+            >
+              <i :class="['fas', printing ? 'fa-circle-notch fa-spin' : 'fa-file-invoice']"></i>
+              {{ printing ? 'Preparando…' : 'Imprimir DANFE' }} <kbd>F3</kbd>
+            </button>
+            <button
+              v-else-if="isAuthorized"
+              type="button"
+              class="btn btn-primary"
+              disabled
+            >
+              <i class="fas fa-circle-check"></i> NFC-e autorizada
+            </button>
+            <button
+              v-else
+              type="button"
+              class="btn btn-primary"
+              :disabled="fiscalBusy || loading || !order"
+              @click="emitirNota"
+            >
+              <i
+                :class="[
+                  'fas',
+                  fiscalBusy ? 'fa-circle-notch fa-spin' : 'fa-file-invoice-dollar',
+                ]"
+              ></i>
+              {{ fiscalBusy ? 'Emitindo…' : needsRetry ? 'Tentar de novo' : 'Emitir NFC-e' }}
+              <kbd>F3</kbd>
+            </button>
+
+            <button type="button" class="btn btn-ghost" @click="close">
+              <i class="fas fa-check"></i> Concluir <kbd>F2</kbd>
+            </button>
+          </div>
+
+          <p class="sale-receipt-hint"><kbd>Esc</kbd> também conclui e volta ao PDV</p>
+        </template>
+      </div>
+
+      <!-- Reimpressão (Vendas) -->
+      <div v-else class="modal-footer">
+        <button type="button" class="btn btn-ghost modal-cancel" @click="close">
+          Fechar <kbd>Esc</kbd>
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          :disabled="loading || !order || printing"
+          @click="printDocumentAndClose"
+        >
+          <i :class="['fas', printing ? 'fa-circle-notch fa-spin' : 'fa-print']"></i>
+          {{ printing ? 'Preparando…' : printLabel }} <kbd>P</kbd>
         </button>
       </div>
     </div>
@@ -317,15 +452,173 @@ onBeforeUnmount(() => {
   padding: 14px 20px 18px;
 }
 
-.receipt-view-toggle {
-  display: flex;
-  width: 100%;
+/* Resultado fiscal da emissão */
+.fiscal-result {
   margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-hover, #f8fafc);
+}
+.fiscal-result.is-ok {
+  border-color: #16a34a;
+  background: rgba(22, 163, 74, 0.08);
+}
+.fiscal-result.is-error {
+  border-color: #dc2626;
+  background: rgba(220, 38, 38, 0.07);
+}
+.fiscal-result.is-warn {
+  border-color: #d97706;
+  background: rgba(245, 158, 11, 0.09);
+}
+.fiscal-result-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.fiscal-result.is-ok .fiscal-result-title {
+  color: #15803d;
+}
+.fiscal-result.is-error .fiscal-result-title {
+  color: #b91c1c;
+}
+.fiscal-result.is-warn .fiscal-result-title {
+  color: #b45309;
+}
+.fiscal-result-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.fiscal-result-grid span {
+  color: var(--text-muted);
+}
+.fiscal-result-grid strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+.fiscal-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.fiscal-result-message {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
 }
 
-.receipt-view-toggle button {
+/* Ações do modal pós-venda */
+.sale-receipt-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sale-receipt-actions .action-wide {
+  width: 100%;
+  justify-content: center;
+}
+.sale-receipt-actions .action-row {
+  display: flex;
+  gap: 8px;
+}
+.sale-receipt-actions .action-row .btn {
   flex: 1;
   justify-content: center;
 }
+.sale-receipt-hint {
+  margin: 2px 0 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+}
 
+/* Modal pós-venda: horizontal, só as três ações (sem preview do cupom) */
+.sale-receipt-modal.is-post-sale {
+  max-width: 760px;
+}
+.sale-receipt-quick {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 24px 18px;
+}
+.post-sale-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-hover, #f8fafc);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.post-sale-status strong {
+  font-size: 12px;
+  color: var(--text);
+}
+.post-sale-status span {
+  color: var(--text-muted);
+}
+.post-sale-status.is-ok {
+  border-color: rgba(22, 163, 74, 0.35);
+  background: rgba(22, 163, 74, 0.08);
+}
+.post-sale-status.is-ok i,
+.post-sale-status.is-ok strong {
+  color: #15803d;
+}
+.post-sale-status.is-warn {
+  border-color: rgba(217, 119, 6, 0.35);
+  background: rgba(245, 158, 11, 0.09);
+}
+.post-sale-status.is-warn i,
+.post-sale-status.is-warn strong {
+  color: #b45309;
+}
+.post-sale-status.is-error {
+  border-color: rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.07);
+}
+.post-sale-status.is-error i,
+.post-sale-status.is-error strong {
+  color: #b91c1c;
+}
+.post-sale-message {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #b91c1c;
+}
+.sale-receipt-actions.is-horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.sale-receipt-actions.is-horizontal .btn {
+  flex: 1 1 190px;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .sale-receipt-modal.is-post-sale {
+    max-width: calc(100vw - 24px);
+  }
+  .sale-receipt-quick {
+    padding: 14px 16px 16px;
+  }
+  .sale-receipt-actions.is-horizontal .btn {
+    flex-basis: 100%;
+  }
+}
 </style>

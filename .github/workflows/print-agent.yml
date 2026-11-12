@@ -1,0 +1,56 @@
+name: Print agent
+
+# Só roda quando o agente ou este workflow mudam — não atrasa backend/frontend.
+on:
+  push:
+    paths:
+      - "desktop/print-agent/**"
+      - ".github/workflows/print-agent.yml"
+  pull_request:
+    paths:
+      - "desktop/print-agent/**"
+      - ".github/workflows/print-agent.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Windows x64
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore desktop/print-agent/src/BillFlux.PrintAgent/BillFlux.PrintAgent.csproj
+
+      - name: Build
+        run: >
+          dotnet build desktop/print-agent/src/BillFlux.PrintAgent/BillFlux.PrintAgent.csproj
+          --configuration Release --no-restore
+
+      - name: Empacotar
+        run: |
+          $out = "desktop/print-agent/src/BillFlux.PrintAgent/bin/Release"
+          if (-not (Test-Path "$out/BillFlux.PrintAgent.exe")) {
+            throw "Executável não encontrado em $out"
+          }
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path "$out/*" -DestinationPath "dist/BillFlux-PrintAgent-win-x64.zip" -Force
+          Get-ChildItem dist
+
+      - name: Publicar artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: BillFlux-PrintAgent-win-x64
+          path: dist/BillFlux-PrintAgent-win-x64.zip
+          if-no-files-found: error

@@ -128,4 +128,23 @@ export const api = {
   post: (path, body) => apiRequest('POST', path, body),
   put: (path, body) => apiRequest('PUT', path, body),
   del: (path) => apiRequest('DELETE', path),
+  /** Baixa um arquivo binário (ex.: DANFE em PDF) mantendo a sessão. */
+  async getBlob(path) {
+    let res
+    try {
+      res = await fetch(`/api${path}`, { credentials: 'same-origin' })
+    } catch {
+      throw connectionError()
+    }
+    if (!res.ok) {
+      let data = null
+      try {
+        data = await res.json()
+      } catch {
+        data = null
+      }
+      throw toError(res, data)
+    }
+    return res.blob()
+  },
 }

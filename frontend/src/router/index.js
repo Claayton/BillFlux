@@ -99,12 +99,6 @@ const routes = [
     meta: { auth: true },
   },
   {
-    path: '/pdv/recibo/:id',
-    name: 'receipt',
-    component: () => import('@/views/ReceiptView.vue'),
-    meta: { auth: true },
-  },
-  {
     path: '/config',
     name: 'config',
     component: () => import('@/views/ConfigView.vue'),

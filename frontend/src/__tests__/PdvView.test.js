@@ -18,6 +18,10 @@ vi.mock('element-plus', () => ({
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush }),
 }))
+vi.mock('@/utils/danfe', () => ({ printDanfe: vi.fn() }))
+vi.mock('@/utils/printBridge', () => ({
+  printElementWithAgent: vi.fn(async () => false),
+}))
 
 import { ElMessage } from 'element-plus'
 import PdvView from '@/views/PdvView.vue'
@@ -151,20 +155,11 @@ describe('PdvView', () => {
     )
     // recibo abre como modal, sem sair do PDV
     expect(wrapper.find('.sale-receipt-modal').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Recibo #7')
+    expect(wrapper.text()).toContain('Venda #7 finalizada')
   })
 
-  it('emitir nota fecha a venda e emite a NFC-e', async () => {
-    apiMock.post.mockImplementation((url) => {
-      if (url === '/fiscal/emitir') {
-        return Promise.resolve({
-          ok: true,
-          status: 'autorizada',
-          document: { number: 42 },
-        })
-      }
-      return Promise.resolve({ order: { order_id: 7 } })
-    })
+  it('finalizar venda não emite nota: quem decide é o modal pós-venda', async () => {
+    apiMock.post.mockResolvedValue({ order: { order_id: 7 } })
     const wrapper = mountView()
     await flushPromises()
 
@@ -175,47 +170,17 @@ describe('PdvView', () => {
     await wrapper.find('#pdv-finish').trigger('click')
     await flushPromises()
     await wrapper.find('.pdv-payfield input').setValue('500')
-    await wrapper.find('.emit-fiscal-btn').trigger('click')
+    await wrapper.find('.pdv-checkout-modal .btn-primary').trigger('click')
     await flushPromises()
 
     expect(apiMock.post).toHaveBeenCalledWith(
       '/pdv/complete',
       expect.objectContaining({ payments: [{ method_id: 1, amount: '5.00' }] })
     )
-    expect(apiMock.post).toHaveBeenCalledWith('/fiscal/emitir', { order_id: 7 })
-    expect(ElMessage.success).toHaveBeenCalledWith(
-      expect.stringContaining('NFC-e autorizada')
-    )
-  })
-
-  it('falha na emissão não desfaz a venda e avisa que ficou pendente', async () => {
-    apiMock.post.mockImplementation((url) => {
-      if (url === '/fiscal/emitir') {
-        return Promise.resolve({
-          ok: false,
-          status: 'pendente',
-          message: 'SEFAZ fora do ar',
-        })
-      }
-      return Promise.resolve({ order: { order_id: 8 } })
-    })
-    const wrapper = mountView()
-    await flushPromises()
-
-    await wrapper.find('#pdv-search').setValue('arildo')
-    await wrapper.find('#pdv-search').trigger('keydown', { key: 'Enter' })
-    await nextTick()
-
-    await wrapper.find('#pdv-finish').trigger('click')
-    await flushPromises()
-    await wrapper.find('.pdv-payfield input').setValue('500')
-    await wrapper.find('.emit-fiscal-btn').trigger('click')
-    await flushPromises()
-
-    expect(ElMessage.warning).toHaveBeenCalledWith(
-      expect.stringContaining('NFC-e pendente')
-    )
-    expect(wrapper.find('.sale-receipt-modal').exists()).toBe(true)
+    expect(apiMock.post).not.toHaveBeenCalledWith('/fiscal/emitir', expect.anything())
+    expect(wrapper.find('.emit-fiscal-btn').exists()).toBe(false)
+    expect(wrapper.find('.sale-receipt-actions').text()).toContain('Emitir NFC-e')
+    expect(wrapper.find('.sale-receipt-actions').text()).toContain('Concluir')
   })
 
   it('venda fiada exige cliente selecionado e envia customer_id', async () => {
@@ -294,7 +259,7 @@ describe('PdvView', () => {
       })
     )
     expect(wrapper.find('.sale-receipt-modal').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Recibo #8')
+    expect(wrapper.text()).toContain('Venda #8 finalizada')
   })
 
   it('F2 abre com Dinheiro pré-preenchido e selecionado para digitar por cima', async () => {
@@ -462,7 +427,7 @@ describe('PdvView', () => {
     await flushPromises()
   }
 
-  it('recibo mostra quanto foi pago em cada forma e o troco', async () => {
+  it('recibo pós-venda mostra só as ações, sem o cupom', async () => {
     apiMock.get.mockImplementation((url) => {
       if (String(url).startsWith('/pdv/recibo')) {
         return Promise.resolve({
@@ -485,13 +450,14 @@ describe('PdvView', () => {
     await completeSale(wrapper, 21)
 
     expect(wrapper.find('.sale-receipt-modal').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Pago (Dinheiro)')
-    expect(wrapper.text()).toContain('10,00')
-    expect(wrapper.text()).toContain('Troco')
-    expect(wrapper.text()).toContain('5,00')
+    expect(wrapper.find('#sale-receipt-print').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Pago (Dinheiro)')
+    expect(wrapper.find('.sale-receipt-actions').text()).toContain('Imprimir comprovante')
+    expect(wrapper.find('.sale-receipt-actions').text()).toContain('Emitir NFC-e')
+    expect(wrapper.find('.sale-receipt-actions').text()).toContain('Concluir')
   })
 
-  it('recibo: F2 imprime e o modal fecha sozinho', async () => {
+  it('recibo: F2 fecha como nova venda sem imprimir', async () => {
     const printSpy = vi.fn()
     window.print = printSpy
     const wrapper = mountView()
@@ -501,12 +467,13 @@ describe('PdvView', () => {
     expect(wrapper.find('.sale-receipt-modal').exists()).toBe(true)
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2' }))
-    expect(printSpy).toHaveBeenCalled()
     await nextTick()
+    expect(printSpy).not.toHaveBeenCalled()
     expect(wrapper.find('.sale-receipt-modal').exists()).toBe(false)
+    delete window.print
   })
 
-  it('recibo: Esc fecha o modal voltando ao PDV', async () => {
+  it('recibo: Esc fecha o modal pós-venda e volta ao PDV', async () => {
     const wrapper = mountView()
     await flushPromises()
     await completeSale(wrapper, 10)
@@ -514,7 +481,6 @@ describe('PdvView', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await nextTick()
     expect(wrapper.find('.sale-receipt-modal').exists()).toBe(false)
-    expect(wrapper.find('#pdv-search').exists()).toBe(true)
   })
 
   it('não quebra a busca quando existe produto sem código de barras', async () => {
@@ -822,7 +788,7 @@ describe('PdvView — comandas abertas', () => {
     // contexto limpo + recibo comum da venda
     expect(wrapper.find('.pdv-tabbar').exists()).toBe(false)
     expect(sessionStorage.getItem('pdv.active_tab')).toBeNull()
-    expect(wrapper.find('.sale-receipt-modal').text()).toContain('Recibo #99')
+    expect(wrapper.find('.sale-receipt-modal').text()).toContain('Venda #99 finalizada')
     expect(ElMessage.success).toHaveBeenCalledWith('Comanda #0007 finalizada com sucesso.')
   })
 
