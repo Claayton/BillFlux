@@ -1,16 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
-const { apiMock } = vi.hoisted(() => ({
+const { apiMock, routeMock } = vi.hoisted(() => ({
   apiMock: {
     get: vi.fn(),
     post: vi.fn(),
     put: vi.fn(),
     del: vi.fn(),
   },
+  routeMock: { query: {} },
 }))
 
 vi.mock('@/api/client', () => ({ api: apiMock }))
+vi.mock('vue-router', () => ({ useRoute: () => routeMock }))
 vi.mock('@/components/AppShell.vue', () => ({
   default: { template: '<div><slot /></div>' },
 }))
@@ -136,24 +138,14 @@ describe('ConfigView', () => {
     expect(ElMessage.success).toHaveBeenCalledWith('Configurações salvas!')
   })
 
-  it('checkbox de auto-print grava true/false como string', async () => {
-    apiMock.put.mockResolvedValue(settingsPayload)
+  it('aba PDV fica reservada para opções futuras, sem auto-print', async () => {
     const wrapper = mountView()
     await flushPromises()
 
     await wrapper.findAll('.config-tabs button')[1].trigger('click')
-    const check = wrapper.find('.config-check input')
-    expect(check.element.checked).toBe(false)
-
-    await check.setValue(true)
-    expect(wrapper.vm.form['pdv.auto_print']).toBe('true')
-
-    await wrapper.find('form.config-panel').trigger('submit')
-    await flushPromises()
-
-    expect(apiMock.put).toHaveBeenCalledWith('/settings', {
-      settings: expect.objectContaining({ 'pdv.auto_print': 'true' }),
-    })
+    const pdvSection = wrapper.findAll('.config-section')[1]
+    expect(pdvSection.find('.config-empty').exists()).toBe(true)
+    expect(pdvSection.find('.config-check input').exists()).toBe(false)
   })
 
   it('erro de rede vira toast de erro', async () => {

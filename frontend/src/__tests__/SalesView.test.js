@@ -30,8 +30,10 @@ vi.mock('element-plus', () => ({
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush }),
 }))
+vi.mock('@/utils/danfe', () => ({ printDanfe: vi.fn() }))
 
 import SalesView from '@/views/SalesView.vue'
+import { ElMessage } from 'element-plus'
 
 const payload = {
   today: '2026-08-21',
@@ -398,6 +400,67 @@ describe('SalesView', () => {
     expect(active.length).toBe(1)
     expect(active[0].text()).toContain('Hoje')
   })
+
+  it('permite escolher um período personalizado e filtra o histórico', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    const custom = wrapper
+      .findAll('.stats-toolbar .filter-segmented button')
+      .find((b) => b.text().includes('Personalizado'))
+    await custom.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.custom-range').exists()).toBe(true)
+    const inputs = wrapper.findAll('.custom-range input')
+    expect(inputs).toHaveLength(2)
+    await inputs[0].setValue('2026-08-01')
+    await inputs[1].setValue('2026-08-15')
+
+    await wrapper.find('.custom-range .btn').trigger('click')
+    await flushPromises()
+
+    const calls = apiMock.get.mock.calls
+      .map((call) => String(call[0]))
+      .filter((url) => url.startsWith('/sales?'))
+    expect(calls.length).toBeGreaterThan(1)
+    expect(calls.at(-1)).toContain('start=2026-08-01')
+    expect(calls.at(-1)).toContain('end=2026-08-15')
+
+    // botão fica ativo e o painel continua aberto pra ajustes
+    expect(
+      wrapper
+        .findAll('.stats-toolbar .filter-segmented button')
+        .find((b) => b.text().includes('Personalizado'))
+        .classes()
+    ).toContain('is-active')
+    expect(wrapper.find('.custom-range').exists()).toBe(true)
+  })
+
+  it('avisa quando o período personalizado está invertido', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    const custom = wrapper
+      .findAll('.stats-toolbar .filter-segmented button')
+      .find((b) => b.text().includes('Personalizado'))
+    await custom.trigger('click')
+    await flushPromises()
+
+    const inputs = wrapper.findAll('.custom-range input')
+    await inputs[0].setValue('2026-08-20')
+    await inputs[1].setValue('2026-08-10')
+    const before = apiMock.get.mock.calls.length
+
+    await wrapper.find('.custom-range .btn').trigger('click')
+    await flushPromises()
+
+    expect(ElMessage.warning).toHaveBeenCalledWith(
+      expect.stringContaining('data inicial')
+    )
+    expect(apiMock.get.mock.calls.length).toBe(before)
+  })
+
 
   it('olho fecha sozinho 10s depois de revelar os valores', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })

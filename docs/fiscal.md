@@ -29,7 +29,7 @@
 | Padrões Simples | `CSOSN 102`, `origem 0`, `CFOP 5102` (ou `5405` com ST) — editáveis |
 | Pendências | Tela/filtro "Pendências fiscais" com o que falta por produto |
 | Token | Variável de ambiente `BRASILNFE_TOKEN` (nunca no banco) |
-| Impressão | Configurável: **térmico 80mm com QR** / **PDF do DANFE** / **não imprimir** |
+| Impressão | Decide no modal pós-venda: **imprimir DANFE** (nota autorizada) ou **cupom sem nota** |
 | Cancelamento | Cancelar a venda **cancela a nota junto**, exigindo justificativa |
 | Fora do prazo | Se a SEFAZ recusar o cancelamento, **bloqueia** o cancelamento da venda |
 | Reenvio | Automático (backoff) **+** botão manual |
@@ -78,7 +78,7 @@ class FiscalProvider(ABC):
 - `fiscal.environment` — `homologacao` | `producao`
 - `fiscal.crt` — `1` (Simples), `3` (Normal)
 - `fiscal.ie` — inscrição estadual
-- `fiscal.print_mode` — `thermal` | `pdf` | `none`
+- `fiscal.print_mode` — mantido no backend por compatibilidade; **não aparece mais na UI**
 - `fiscal.auto_retry` — `true` | `false`
 - `fiscal.nfce_series` / `fiscal.nfce_last_number` — referência para migração
   (a emissão atual omite `Serie`/`Numero`/`Lote` e deixa o provedor numerar)
@@ -257,11 +257,19 @@ O roteiro completo de go-live está em
   Código de barras/EAN, Unidade, NCM, CEST, CFOP, CSOSN, CST, Origem, Unidade
   fiscal, Status e Preço. O arquivo sai em memória, com o nome
   `catalogo-fiscal-AAAA-MM-DD.xlsx`.
-- **Config → Fiscal**: provedor, ambiente, regime, IE, impressão, reenvio,
-  série/último número, status do token e botão **"Testar conexão"**.
-- **PDV → modal de pagamento**: **Finalizar** e **Emitir nota**.
+- **Config → Fiscal**: provedor, ambiente, regime, IE, reenvio, série/último
+  número, status do token e botão **"Testar conexão"**. A aba **PDV** fica
+  reservada para opções futuras.
+- **PDV → modal de pagamento**: só **Finalizar**. A emissão não acontece mais
+  no fechamento.
+- **PDV → modal pós-venda** (sem X): mostra o cupom e oferece as ações —
+  **Emitir nota** (`F3`), **Imprimir cupom** (`P`) ou **Nova venda** (`F2`);
+  `Esc` fecha e volta ao PDV. Autorizada → **Imprimir DANFE** (`P`) + **Nova
+  venda** (`F2`); pendente/rejeitada → motivo, **Tentar de novo** (`F3`) +
+  **Imprimir cupom** (`P`) + **Nova venda** (`F2`).
 - **Vendas**: badge por venda (`Sem nota`, `Pendente`, `Autorizada`, `Cancelada`),
-  ações (emitir, reenviar, cancelar nota, XML/DANFE) e banner de pendências.
+  ações (emitir, reenviar, cancelar nota, XML/DANFE) e banner de pendências. O
+  ícone de impressão usa o **DANFE** quando a nota está autorizada; senão, o cupom.
 
 ## 7. Checklist de homologação (Fase 2)
 

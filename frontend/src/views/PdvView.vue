@@ -808,7 +808,7 @@ function usesFiadoPayment() {
   })
 }
 
-async function confirmCheckout(emitFiscal = false) {
+async function confirmCheckout() {
   if (finishing.value) return
   if (!methods.value.length) {
     ElMessage.warning('Nenhuma forma de pagamento ativa.')
@@ -875,29 +875,6 @@ async function confirmCheckout(emitFiscal = false) {
     return
   } finally {
     finishing.value = false
-  }
-  // A venda já está fechada: uma falha na nota nunca desfaz a venda.
-  if (emitFiscal && orderId) {
-    await emitFiscalNote(orderId)
-  }
-}
-
-/** Emite a NFC-e da venda recém-fechada e avisa o operador do resultado. */
-async function emitFiscalNote(orderId) {
-  try {
-    const result = await api.post('/fiscal/emitir', { order_id: orderId })
-    const document = result.document || {}
-    if (result.ok) {
-      const number = document.number ? ` (nº ${document.number})` : ''
-      ElMessage.success(`NFC-e autorizada${number}.`)
-    } else {
-      const reason = result.message || 'tente reenviar em Vendas.'
-      ElMessage.warning(`Venda finalizada. NFC-e pendente: ${reason}`)
-    }
-  } catch (error) {
-    ElMessage.warning(
-      `Venda finalizada, mas não foi possível emitir a NFC-e: ${error.message}`
-    )
   }
 }
 
@@ -1350,18 +1327,9 @@ onBeforeUnmount(() => {
           <button type="button" class="btn btn-ghost modal-cancel" @click="checkoutOpen = false">Cancelar <kbd>Esc</kbd></button>
           <button
             type="button"
-            class="btn btn-outline emit-fiscal-btn"
-            :disabled="finishing || !canConfirm"
-            title="Fecha a venda e emite a NFC-e"
-            @click="confirmCheckout(true)"
-          >
-            <i class="fas fa-file-invoice-dollar"></i> Emitir nota
-          </button>
-          <button
-            type="button"
             class="btn btn-primary"
             :disabled="finishing || !canConfirm"
-            @click="confirmCheckout(false)"
+            @click="confirmCheckout"
           >
             <i class="fas fa-check-circle"></i> {{ finishing ? 'Finalizando…' : (activeTab ? 'Finalizar comanda' : 'Finalizar venda') }}
             <kbd>F2</kbd>
@@ -1370,10 +1338,11 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Recibo da venda concluída -->
+    <!-- Cupom e ações pós-venda (emitir/imprimir/nova venda) -->
     <SaleReceiptModal
       v-if="receiptOrder"
       :sale="receiptOrder"
+      mode="post-sale"
       @close="closeReceipt"
     />
 

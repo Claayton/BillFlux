@@ -1,10 +1,12 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import AppShell from '@/components/AppShell.vue'
 import ThermalCoupon from '@/components/ThermalCoupon.vue'
 
+const route = useRoute()
 const loading = ref(true)
 const saving = ref(false)
 const activeTab = ref('company')
@@ -45,10 +47,6 @@ async function save() {
   }
 }
 
-function toggleAutoPrint(event) {
-  form.value['pdv.auto_print'] = event.target.checked ? 'true' : 'false'
-}
-
 /** Alterna uma flag booleana guardada como 'true'/'false'. */
 function isOn(key) {
   return form.value[key] === 'true'
@@ -83,7 +81,11 @@ const previewOrder = {
   customer_name: 'Maria Souza',
 }
 
-onMounted(load)
+onMounted(() => {
+  const tab = String(route.query.tab || '')
+  if (tabs.some((item) => item.id === tab)) activeTab.value = tab
+  load()
+})
 
 /** Consulta o status fiscal (token/emitente/pendências) sem emitir nada. */
 async function checkFiscal() {
@@ -101,6 +103,14 @@ async function checkFiscal() {
 watch(activeTab, (tab) => {
   if (tab === 'fiscal' && !fiscalStatus.value) checkFiscal()
 })
+
+// Menu lateral: /config?tab=fiscal cai direto na aba Fiscal.
+watch(
+  () => route.query.tab,
+  (tab) => {
+    if (tab && tabs.some((item) => item.id === tab)) activeTab.value = tab
+  }
+)
 </script>
 
 <template>
@@ -160,17 +170,13 @@ watch(activeTab, (tab) => {
           <div v-show="activeTab === 'pdv'" class="config-section">
             <h2>PDV</h2>
             <p class="config-hint">Como o caixa se comporta no balcão.</p>
-            <label class="config-check">
-              <input
-                type="checkbox"
-                :checked="form['pdv.auto_print'] === 'true'"
-                @change="toggleAutoPrint"
-              />
-              <span>
-                <strong>Imprimir cupom automaticamente</strong><br />
-                Abre a impressão sozinho após cada venda concluída.
-              </span>
-            </label>
+            <div class="config-empty">
+              <i class="fas fa-cash-register"></i>
+              <p>
+                <strong>Nenhuma opção por aqui ainda.</strong><br />
+                Este espaço fica reservado para futuros ajustes do PDV.
+              </p>
+            </div>
           </div>
 
           <!-- Estoque -->
@@ -196,7 +202,7 @@ watch(activeTab, (tab) => {
           <!-- Impressão -->
           <div v-show="activeTab === 'print'" class="config-section">
             <h2>Impressão</h2>
-            <p class="config-hint">Cupom térmico do PDV. O recibo completo continua disponível em Vendas.</p>
+            <p class="config-hint">Cupom térmico do PDV, com os dados fiscais da nota quando houver.</p>
             <div class="print-layout">
               <div class="print-fields">
                 <div class="form-field">
@@ -245,7 +251,7 @@ watch(activeTab, (tab) => {
                 <span class="preview-label"><i class="fas fa-eye"></i> Prévia ao vivo</span>
                 <ThermalCoupon
                   :width="previewWidth"
-                  :company="form['company.name'] || 'BeeFlux'"
+                  :company="form['company.name'] || ''"
                   :header-lines="previewHeaderLines"
                   :footer-lines="previewFooterLines"
                   :order="previewOrder"
@@ -349,33 +355,6 @@ watch(activeTab, (tab) => {
                 </button>
               </div>
               <small class="config-note">Homologação emite notas de teste, sem valor fiscal.</small>
-            </div>
-
-            <div class="form-field">
-              <span class="config-label">Impressão da NFC-e</span>
-              <div class="filter-segmented" role="group" aria-label="Impressão da NFC-e">
-                <button
-                  type="button"
-                  :class="{ 'is-active': (form['fiscal.print_mode'] || 'thermal') === 'thermal' }"
-                  @click="form['fiscal.print_mode'] = 'thermal'"
-                >
-                  Térmico (80 mm)
-                </button>
-                <button
-                  type="button"
-                  :class="{ 'is-active': form['fiscal.print_mode'] === 'pdf' }"
-                  @click="form['fiscal.print_mode'] = 'pdf'"
-                >
-                  PDF do DANFE
-                </button>
-                <button
-                  type="button"
-                  :class="{ 'is-active': form['fiscal.print_mode'] === 'none' }"
-                  @click="form['fiscal.print_mode'] = 'none'"
-                >
-                  Não imprimir
-                </button>
-              </div>
             </div>
 
             <label class="config-check">
@@ -508,6 +487,31 @@ watch(activeTab, (tab) => {
 }
 
 .config-check strong {
+  color: var(--text);
+}
+
+/* Aba sem opções (PDV) */
+.config-empty {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-hover, #f8fafc);
+  color: var(--text-muted);
+}
+.config-empty i {
+  font-size: 20px;
+  color: var(--primary);
+  margin-top: 2px;
+}
+.config-empty p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.config-empty strong {
   color: var(--text);
 }
 

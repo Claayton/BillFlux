@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
 import { brl, maskMoney, moneyToDecimal } from '@/utils/format'
@@ -8,6 +9,7 @@ import AppShell from '@/components/AppShell.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const data = ref(null)
+const route = useRoute()
 const categories = ref([])
 const suppliers = ref([])
 const loading = ref(false)
@@ -276,6 +278,7 @@ function openEditProduct(product) {
     category_id: product.category_id || null,
     suppliers: product.suppliers || '',
     supplier_id: product.supplier_id || null,
+    stock_quantity: product.stock_quantity ?? 0,
     min_stock: product.min_stock,
     ideal_stock: product.ideal_stock || 0,
     obs: product.obs || '',
@@ -503,6 +506,20 @@ async function saveProduct() {
     ElMessage.warning('Informe nome, preço e custo válidos.')
     return
   }
+  // Estoque: na edição só envia se o valor foi alterado (campo vazio mantém o atual).
+  let stockQuantity = null
+  const rawStock = productForm.value.stock_quantity
+  if (rawStock !== '' && rawStock !== null && rawStock !== undefined) {
+    const parsed = Number(rawStock)
+    if (!Number.isInteger(parsed) || parsed < 0) {
+      ElMessage.warning('Informe um estoque válido.')
+      return
+    }
+    const currentStock = editingProduct.value ? editingProduct.value.stock_quantity : null
+    if (!editingProduct.value || parsed !== currentStock) {
+      stockQuantity = parsed
+    }
+  }
   saving.value = true
   try {
     const payload = {
@@ -518,7 +535,6 @@ async function saveProduct() {
       ideal_stock: Number(productForm.value.ideal_stock) || 0,
       obs: productForm.value.obs,
       active: productForm.value.active,
-      stock_quantity: Number(productForm.value.stock_quantity) || 0,
       ncm: productForm.value.ncm,
       cest: productForm.value.cest,
       cfop: productForm.value.cfop,
@@ -527,6 +543,7 @@ async function saveProduct() {
       origem: Number(productForm.value.origem) || 0,
       fiscal_unit: productForm.value.fiscal_unit,
     }
+    if (stockQuantity !== null) payload.stock_quantity = stockQuantity
     if (editingProduct.value) {
       data.value = await api.put(`/products/${editingProduct.value.id}`, payload)
     } else {
@@ -636,10 +653,16 @@ function deleteMessage() {
   return 'Excluir o produto "' + (deleteTarget.value?.name || '') + '"? Essa ação não pode ser desfeita.'
 }
 
+// Abre o filtro de pendências fiscais vindo do menu (inclusive com a tela já montada).
+watch(
+  () => route.query.fiscal,
+  (value) => {
+    fiscalOnly.value = value === 'pending'
+  },
+  { immediate: true }
+)
+
 onMounted(async () => {
-  if (new URLSearchParams(window.location.search).get('fiscal') === 'pending') {
-    fiscalOnly.value = true
-  }
   load()
   try {
     const res = await api.get('/categories')
@@ -742,11 +765,11 @@ function onModalKeydown(event) {
             type="button"
             class="toolbar-export-btn"
             :disabled="exportingCatalog"
-            title="Baixar todos os produtos em Excel para revisão fiscal"
+            title="Baixar catálogo fiscal completo em Excel"
             @click="exportCatalog"
           >
             <i :class="['fas', exportingCatalog ? 'fa-circle-notch fa-spin' : 'fa-file-excel']"></i>
-            {{ exportingCatalog ? 'Exportando…' : 'Exportar catálogo fiscal' }}
+            <span class="export-label">{{ exportingCatalog ? 'Exportando…' : 'Exportar Excel' }}</span>
           </button>
           <button type="button" class="btn-brand" @click="openNewProduct">
             <i class="fas fa-plus"></i> Novo produto
@@ -1078,7 +1101,7 @@ function onModalKeydown(event) {
                 min="0"
               />
               <small v-if="editingProduct" class="field-hint">
-                Define o estoque absoluto (registra um ajuste).
+                Define o estoque absoluto (registra um ajuste). Deixe em branco para manter o atual.
               </small>
             </div>
             <div class="form-field">
@@ -1482,9 +1505,38 @@ function onModalKeydown(event) {
   color: #b45309;
   background: rgba(245, 158, 11, 0.1);
 }
+
+/* Exportar Excel: verde de planilha, mesma altura do "Novo produto" */
+.toolbar-export-btn {
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid #1e7a3c;
+  border-radius: var(--brand-radius-md);
+  background: #217346;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: var(--shadow-xs);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.toolbar-export-btn:hover:not(:disabled) {
+  background: #1b5e39;
+  border-color: #1b5e39;
+}
+.toolbar-export-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
 .toolbar-export-btn:disabled {
   opacity: 0.6;
   cursor: wait;
+}
+
+@media (max-width: 780px) {
+  .toolbar-export-btn {
+    padding: 0 12px;
+  }
+  .toolbar-export-btn .export-label {
+    display: none;
+  }
 }
 
 .fiscal-block {
