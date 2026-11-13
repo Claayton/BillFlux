@@ -137,7 +137,7 @@ def test_link_requires_at_least_one_day(logged_client):
     assert resp.status_code == 400
 
 
-def test_link_requires_ideal_stock(logged_client):
+def test_link_without_ideal_stock_is_allowed(logged_client):
     token = _csrf(logged_client)
     from billflux.infra.repository.product_repository import ProductRepository
 
@@ -150,7 +150,9 @@ def test_link_requires_ideal_stock(logged_client):
         json={"supplier_id": supplier.id, "delivery_days": [2]},
         headers={"X-CSRFToken": token},
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 201
+    # O vínculo não mexe no estoque atual.
+    assert ProductRepository().get_product(product.id).stock_quantity == 1
 
 
 def test_legacy_link_without_days_list(logged_client):

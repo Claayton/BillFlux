@@ -274,6 +274,23 @@ describe('ProductsView', () => {
     expect(payload).not.toHaveProperty('stock_quantity')
   })
 
+  it('vincular fornecedor na edição não envia estoque (não zera o atual)', async () => {
+    apiMock.put.mockResolvedValue({ products })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await openEdit(wrapper)
+    await flushPromises()
+
+    await wrapper.find('#product_supplier').setValue('1')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    const payload = apiMock.put.mock.calls.at(-1)[1]
+    expect(payload.supplier_id).toBe(1)
+    expect(payload).not.toHaveProperty('stock_quantity')
+  })
+
   it('edição envia o estoque apenas quando o valor muda', async () => {
     apiMock.put.mockResolvedValue({ products })
     const wrapper = mountView()
