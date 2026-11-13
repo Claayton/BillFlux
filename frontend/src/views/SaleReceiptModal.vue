@@ -189,9 +189,9 @@ function applyPageRule() {
   const heightPx = el ? el.getBoundingClientRect().height : 0
   const w = thermalWidth.value
   const wMm = Number(w)
-  let hMm = heightPx > 0 ? Math.ceil((heightPx * 25.4) / 96) + 3 : wMm
-  // Nunca paisagem (largura > altura): drivers térmicos giram o conteúdo.
-  if (hMm < wMm) hMm = wMm
+  // Altura medida do cupom (inclusive quando é mais curto que a largura: a
+  // bobina tem 80 mm, mas o comprimento é o do conteúdo).
+  const hMm = heightPx > 0 ? Math.ceil((heightPx * 25.4) / 96) + 3 : wMm
   pageStyleEl = document.createElement('style')
   pageStyleEl.textContent = `@page { size: ${w}mm ${hMm}mm; margin: 0; }`
   document.head.appendChild(pageStyleEl)

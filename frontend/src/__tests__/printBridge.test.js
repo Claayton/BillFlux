@@ -122,10 +122,12 @@ describe('printBridge', () => {
       expect(measureHeightMm(element, 80)).toBe(84)
     })
 
-    it('nunca devolve altura menor que a largura (evita paisagem)', () => {
+    it('usa a altura real mesmo quando o cupom é mais curto que a largura', () => {
       const element = { getBoundingClientRect: () => ({ height: 10 }) }
 
-      expect(measureHeightMm(element, 80)).toBe(80)
+      // 10 px ≈ 2,6 mm + 3 mm de folga — não força 80 mm (isso deixava
+      // um trecho grande em branco no cupom).
+      expect(measureHeightMm(element, 80)).toBe(6)
     })
   })
 
@@ -154,6 +156,23 @@ describe('printBridge', () => {
       expect(body.css).toContain('.receipt')
       expect(body.widthMm).toBe(80)
       expect(body.heightMm).toBeGreaterThanOrEqual(80)
+    })
+
+    it('cupom curto envia o comprimento real (sem página quadrada em branco)', async () => {
+      const element = document.createElement('div')
+      element.id = 'sale-receipt-print'
+      element.innerHTML = '<strong>Cupom curto</strong>'
+      element.getBoundingClientRect = () => ({ height: 219 })
+      document.body.appendChild(element)
+
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }))
+      vi.stubGlobal('fetch', fetchMock)
+
+      await printElementWithAgent(element, { widthMm: 80 })
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+      expect(body.widthMm).toBe(80)
+      expect(body.heightMm).toBe(61)
     })
 
     it('devolve false sem elemento', async () => {

@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -251,6 +252,15 @@ namespace BillFlux.PrintAgent
 
                 await WaitForPageAsync(core);
 
+                // Mede o conteúdo já renderizado dentro do WebView2: é a altura
+                // que o spooler realmente precisa, sem depender da medição do
+                // navegador (que pode divergir do CSS final).
+                var measuredMm = await MeasureContentHeightMmAsync(core);
+                if (measuredMm > 0)
+                {
+                    heightMm = Math.Min(1000, measuredMm + 2);
+                }
+
                 var settings = core.Environment.CreatePrintSettings();
                 settings.PrinterName = string.IsNullOrWhiteSpace(job.Printer)
                     ? string.Empty
@@ -294,6 +304,41 @@ namespace BillFlux.PrintAgent
                     }
                 }
             }
+        }
+
+        /// <summary>Altura real do conteúdo renderizado (px CSS → mm), ou 0.</summary>
+        private static async Task<int> MeasureContentHeightMmAsync(CoreWebView2 core)
+        {
+            const string script =
+                "(function(){"
+                + "  var body = document.body;"
+                + "  if (!body) return 0;"
+                + "  var rect = body.getBoundingClientRect ? body.getBoundingClientRect().height : 0;"
+                + "  var scroll = body.scrollHeight || 0;"
+                + "  return Math.ceil(Math.max(rect, scroll));"
+                + "})();";
+
+            try
+            {
+                var raw = await core.ExecuteScriptAsync(script);
+                if (
+                    int.TryParse(
+                        raw,
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out var px
+                    )
+                    && px > 0
+                )
+                {
+                    return (int)Math.Ceiling(px * 25.4 / 96.0);
+                }
+            }
+            catch
+            {
+                // medição é otimização: segue com a altura informada pelo app
+            }
+            return 0;
         }
 
         /// <summary>Espera imagens (QR Code) e fontes antes de mandar pro spooler.</summary>

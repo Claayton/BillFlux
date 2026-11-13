@@ -250,7 +250,9 @@ namespace BillFlux.PrintAgent
             if (width < 40 || width > 120) width = config.WidthMm;
 
             var height = GetInt(payload, "heightMm", width);
-            if (height < width) height = width;
+            // Não force altura = largura: cupom curto tem comprimento menor que
+            // a bobina e forçar isso deixava um trecho grande em branco.
+            if (height <= 0) height = width;
             if (height > 1000) height = 1000;
 
             var printer = GetString(payload, "printer");
