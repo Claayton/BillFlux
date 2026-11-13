@@ -310,6 +310,24 @@ describe('SaleReceiptModal', () => {
       expect(wrapper.emitted('close')).toHaveLength(1)
     })
 
+    it('depois de autorizada, P no diálogo imprime o DANFE e fecha', async () => {
+      printDanfeMock.mockResolvedValue(undefined)
+      const wrapper = mountModal({ mode: 'post-sale' })
+      await flushPromises()
+
+      await wrapper.find('.sale-receipt-actions .btn-primary').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.find('.modal-footer .modal-cancel').text()).toContain('Esc')
+      expect(wrapper.find('.modal-footer .btn-primary').text()).toContain('P')
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'p' }))
+      await flushPromises()
+
+      expect(printDanfeMock).toHaveBeenCalledWith(9, { widthMm: 80 })
+      expect(wrapper.emitted('close')).toHaveLength(1)
+    })
+
     it('depois de autorizada, Esc no diálogo não imprime e fecha', async () => {
       const wrapper = mountModal({ mode: 'post-sale' })
       await flushPromises()
