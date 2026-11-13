@@ -281,9 +281,14 @@ async function printHtml(html, widthMm) {
 
   let printStyle = null
   try {
+    // Espera o QR Code (imagem) carregar ANTES de medir: senão a altura sai
+    // curta e o QR é empurrado para outra folha, deixando um vão no cupom.
+    await waitForImages([...shadow.querySelectorAll('img')])
+
     const heightPx = root.getBoundingClientRect().height
-    let heightMm = heightPx > 0 ? Math.ceil((heightPx * 25.4) / 96) + 4 : widthMm
-    if (heightMm < widthMm) heightMm = widthMm
+    // Comprimento real do conteúdo; o DANFE pode ser mais curto ou mais longo
+    // que a largura da bobina — quem manda é a altura renderizada.
+    const heightMm = heightPx > 0 ? Math.ceil((heightPx * 25.4) / 96) + 4 : widthMm
 
     // O agente renderiza o mesmo CSS num WebView2 e manda direto pro spooler.
     const agentCss = `${css}\n${SHADOW_BASE_CSS.replace(/:host/g, '.danfe-print-root')}`
@@ -295,7 +300,6 @@ async function printHtml(html, widthMm) {
     printStyle.textContent = buildHtmlPrintStyle(widthMm, heightMm)
     document.head.appendChild(printStyle)
 
-    await waitForImages([...shadow.querySelectorAll('img')])
     await delay(50)
     callPrint()
   } finally {

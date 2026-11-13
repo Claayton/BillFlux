@@ -124,8 +124,10 @@ export function collectPageStyles(doc) {
 /** Altura real do elemento em mm, com uma folga de 3 mm (mesma regra do @page). */
 export function measureHeightMm(element, widthMm = 80) {
   const heightPx = element?.getBoundingClientRect?.().height || 0
-  let heightMm = heightPx > 0 ? Math.ceil((heightPx * 25.4) / 96) + 3 : widthMm
-  if (heightMm < widthMm) heightMm = widthMm
+  // Cupom curto tem altura menor que a largura — isso é normal no papel
+  // contínuo (a largura é a bobina). Não force a altura para a largura: isso
+  // deixava uma folha enorme em branco no topo do cupom.
+  const heightMm = heightPx > 0 ? Math.ceil((heightPx * 25.4) / 96) + 3 : widthMm
   return heightMm
 }
 
