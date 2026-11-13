@@ -547,6 +547,8 @@ onBeforeUnmount(() => {
       confirm-label="Imprimir DANFE"
       cancel-label="Não imprimir"
       keyboard
+      confirm-key="p"
+      cancel-key="Escape"
       @confirm="confirmPrintDanfe"
       @cancel="close"
     />
