@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
   title: { type: String, required: true },
@@ -15,16 +15,44 @@ const props = defineProps({
    * Enter/Espaço executam a escolha e Esc cancela.
    */
   keyboard: { type: Boolean, default: false },
+  /** Atalho direto para o botão de confirmar (ex.: "p"). */
+  confirmKey: { type: String, default: '' },
+  /** Atalho direto para o botão de cancelar (ex.: "Escape"). */
+  cancelKey: { type: String, default: '' },
 })
 const emit = defineEmits(['confirm', 'cancel'])
 const inputText = ref('')
 const selected = ref('confirm')
 
+const keyLabel = (key) => {
+  if (!key) return ''
+  if (key === 'Escape') return 'Esc'
+  if (key === ' ') return 'Espaço'
+  return key.toUpperCase()
+}
+const cancelKeyLabel = computed(() => keyLabel(props.cancelKey))
+const confirmKeyLabel = computed(() => keyLabel(props.confirmKey))
+
+function matches(event, key) {
+  if (!key) return false
+  return event.key.toLowerCase() === key.toLowerCase()
+}
+
 function onKeydown(event) {
   if (!props.keyboard) return
+  const tag = event.target?.tagName
+  const typing =
+    tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || event.target?.isContentEditable
+
   if (event.key === 'Escape') {
     event.preventDefault()
     emit('cancel')
+  } else if (!typing && matches(event, props.cancelKey)) {
+    event.preventDefault()
+    emit('cancel')
+  } else if (!typing && matches(event, props.confirmKey)) {
+    event.preventDefault()
+    emit('confirm', inputText.value)
   } else if (
     event.key === 'ArrowLeft' ||
     event.key === 'ArrowUp' ||
@@ -82,7 +110,7 @@ onBeforeUnmount(() => {
           @mouseenter="selected = 'cancel'"
           @focus="selected = 'cancel'"
           @click="emit('cancel')"
-        >{{ cancelLabel }}</button>
+        >{{ cancelLabel }} <kbd v-if="cancelKeyLabel">{{ cancelKeyLabel }}</kbd></button>
         <button
           type="button"
           class="btn"
@@ -91,7 +119,7 @@ onBeforeUnmount(() => {
           @focus="selected = 'confirm'"
           @click="emit('confirm', inputText)"
         >
-          {{ confirmLabel }}
+          {{ confirmLabel }} <kbd v-if="confirmKeyLabel">{{ confirmKeyLabel }}</kbd>
         </button>
       </div>
     </div>
