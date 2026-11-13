@@ -70,24 +70,6 @@ def _parse_delivery_days(data):
     return days, None
 
 
-def _validate_product_ideal(product_id):
-    """A agenda só funciona se o produto tiver estoque ideal definido."""
-    session = get_session()
-    try:
-        with session:
-            product = session.get(ProductModel, product_id)
-            if not product:
-                return "Produto não encontrado."
-            if (product.ideal_stock or 0) <= 0:
-                return (
-                    "Defina o 'Estoque ideal' do produto (maior que 0) "
-                    "antes de vincular o fornecedor."
-                )
-            return None
-    finally:
-        session.close()
-
-
 # ── CRUD de fornecedores por produto ──────────────────────────────
 
 
@@ -116,9 +98,6 @@ def add_product_supplier(product_id):
         return api_error("supplier_id e obrigatorio.", 400)
     if frequency not in ("semanal", "quinzenal", "mensal"):
         return api_error("frequency deve ser semanal, quinzenal ou mensal.", 400)
-    ideal_error = _validate_product_ideal(product_id)
-    if ideal_error:
-        return api_error(ideal_error, 400)
 
     repo = ProductSupplierRepository()
     link = repo.upsert(
