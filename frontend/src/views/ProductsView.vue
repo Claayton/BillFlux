@@ -18,6 +18,8 @@ const saving = ref(false)
 const showProductModal = ref(false)
 const editingProduct = ref(null)
 const productForm = ref({})
+// Só envia o estoque na edição se o operador realmente mexeu no campo.
+const stockTouched = ref(false)
 const cloneSource = ref(null)
 const detailsTab = ref('dados')
 const movementsLoading = ref(false)
@@ -257,6 +259,7 @@ function blankProduct() {
 function openNewProduct() {
   editingProduct.value = null
   productForm.value = blankProduct()
+  stockTouched.value = false
   cloneSource.value = null
   showNewCategory.value = false
   newCategoryName.value = ''
@@ -291,6 +294,7 @@ function openEditProduct(product) {
     origem: product.origem ?? 0,
     fiscal_unit: product.fiscal_unit || '',
   }
+  stockTouched.value = false
   detailsTab.value = 'dados'
   movementsList.value = []
   showProductModal.value = true
@@ -506,18 +510,20 @@ async function saveProduct() {
     ElMessage.warning('Informe nome, preço e custo válidos.')
     return
   }
-  // Estoque: na edição só envia se o valor foi alterado (campo vazio mantém o atual).
+  // Estoque: na edição só envia se o operador mexeu no campo (vazio mantém o atual).
   let stockQuantity = null
   const rawStock = productForm.value.stock_quantity
-  if (rawStock !== '' && rawStock !== null && rawStock !== undefined) {
-    const parsed = Number(rawStock)
-    if (!Number.isInteger(parsed) || parsed < 0) {
-      ElMessage.warning('Informe um estoque válido.')
-      return
-    }
-    const currentStock = editingProduct.value ? editingProduct.value.stock_quantity : null
-    if (!editingProduct.value || parsed !== currentStock) {
-      stockQuantity = parsed
+  if (!editingProduct.value || stockTouched.value) {
+    if (rawStock !== '' && rawStock !== null && rawStock !== undefined) {
+      const parsed = Number(rawStock)
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        ElMessage.warning('Informe um estoque válido.')
+        return
+      }
+      const currentStock = editingProduct.value ? editingProduct.value.stock_quantity : null
+      if (!editingProduct.value || parsed !== currentStock) {
+        stockQuantity = parsed
+      }
     }
   }
   saving.value = true
@@ -597,6 +603,7 @@ function cloneProduct() {
     origem: product.origem ?? 0,
     fiscal_unit: product.fiscal_unit || '',
   }
+  stockTouched.value = false
   detailsTab.value = 'dados'
   movementsList.value = []
   ElMessage.info('Altere as informações e salve o novo produto.')
@@ -1072,7 +1079,7 @@ function onModalKeydown(event) {
               <select id="product_supplier" v-model="productForm.supplier_id">
                 <option :value="null">Sem fornecedor</option>
                 <option
-                  v-for="sup in suppliers.filter(s => s.active)"
+                  v-for="sup in suppliers.filter(s => s.active !== false)"
                   :key="sup.id"
                   :value="sup.id"
                 >{{ sup.name }}</option>
@@ -1099,6 +1106,7 @@ function onModalKeydown(event) {
                 v-model="productForm.stock_quantity"
                 type="number"
                 min="0"
+                @input="stockTouched = true"
               />
               <small v-if="editingProduct" class="field-hint">
                 Define o estoque absoluto (registra um ajuste). Deixe em branco para manter o atual.
@@ -1290,6 +1298,11 @@ function onModalKeydown(event) {
                   </div>
                 </div>
               </div>
+              <p class="field-hint" style="margin-top:10px">
+                O vínculo funciona independente de estoque. Para o produto aparecer na
+                sugestão de reposição da Agenda, defina o <strong>Estoque ideal</strong>
+                (maior que 0) na aba Dados.
+              </p>
             </div>
           </div>
         </div>

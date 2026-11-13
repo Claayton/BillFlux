@@ -158,7 +158,9 @@ def _products_payload():
         "products": [
             _serialize_product(p, units_by_product.get(p.id)) for p in products
         ],
-        "suppliers": [{"id": s.id, "name": s.name} for s in suppliers],
+        "suppliers": [
+            {"id": s.id, "name": s.name, "active": bool(s.active)} for s in suppliers
+        ],
     }
 
 
